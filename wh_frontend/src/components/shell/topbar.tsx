@@ -1,3 +1,5 @@
+"use client";
+
 import { LogOut } from "lucide-react";
 import type { ReactNode } from "react";
 

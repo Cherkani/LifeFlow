@@ -56,7 +56,7 @@ export async function requireAppContext() {
   const account = await getPrimaryAccountForUser(user);
 
   if (!account) {
-    redirect("/settings?error=missing-account");
+    redirect("/login?error=missing-account");
   }
 
   return { supabase, user, account };

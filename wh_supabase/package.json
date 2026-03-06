@@ -1,17 +1,10 @@
 {
-  "name": "whatsapp-saas-backend",
+  "name": "lifeflow-supabase",
   "version": "1.0.0",
-  "description": "WhatsApp Payment Links SaaS - Supabase backend",
+  "description": "LifeFlow Supabase backend migrations and tooling",
   "type": "module",
   "scripts": {
-    "seed-admin": "node scripts/seed-admin.mjs",
-    "seed-demo": "node scripts/seed-demo-merchant.mjs",
-    "cleanup-admin": "node scripts/cleanup-admin.mjs",
-    "reset-app-data": "node scripts/reset-app-data.mjs",
-    "reset-db-full": "node scripts/reset-db-full.mjs",
-    "run-migrations": "node scripts/run-migrations.mjs",
-    "fix-rls": "node scripts/fix-rls.mjs",
-    "rls-test": "node scripts/rls-test.mjs"
+    "run-migrations": "node scripts/run-migrations.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.47.0",
