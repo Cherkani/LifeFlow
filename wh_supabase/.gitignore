@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.supabase.env
+supabase/.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# Supabase CLI temp files
+supabase/.temp/
+
+# IDE & OS
+.idea/
+.vscode/
+.DS_Store
