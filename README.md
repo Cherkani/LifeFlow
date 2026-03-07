@@ -96,3 +96,4 @@ In `wh_frontend`:
 In `wh_supabase`:
 
 - `npm run run-migrations`
+
