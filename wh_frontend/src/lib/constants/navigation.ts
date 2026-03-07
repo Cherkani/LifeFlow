@@ -1,19 +1,19 @@
 import {
   BookOpen,
+  CalendarDays,
   ChartNoAxesCombined,
   CircleDollarSign,
   LayoutDashboard,
   NotebookPen,
-  Repeat,
-  Settings
+  Repeat
 } from "lucide-react";
 
 export const appNavigation = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/knowledge", label: "Knowledge", icon: BookOpen },
+  { href: "/planning", label: "Planner", icon: NotebookPen },
   { href: "/habits", label: "Habits", icon: Repeat },
-  { href: "/planning", label: "Planning", icon: NotebookPen },
+  { href: "/events", label: "Calendar", icon: CalendarDays },
   { href: "/finance", label: "Finance", icon: CircleDollarSign },
-  { href: "/analytics", label: "Analytics", icon: ChartNoAxesCombined },
-  { href: "/settings", label: "Settings", icon: Settings }
+  { href: "/knowledge", label: "Knowledge", icon: BookOpen },
+  { href: "/analytics", label: "Analysis", icon: ChartNoAxesCombined }
 ] as const;

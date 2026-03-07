@@ -1,6 +1,6 @@
 # wh_frontend
 
-LifeFlow frontend application built with Next.js + Supabase.
+LifeFlow frontend application built with Next.js + Supabase, using a custom UI shell built from Tailwind and shadcn-style open-source components.
 
 ## Requirements
 
@@ -46,6 +46,12 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
 - Finance
 - Analytics
 - Settings
+
+## UI Notes
+
+- Legacy `volt-react-dashboard` template files were removed.
+- App shell is now implemented in `src/components/shell/app-shell.tsx`.
+- Shared primitives live in `src/components/ui/` (`button`, `input`, `select`, `tabs`, `card`, etc.).
 
 ## Production checklist
 

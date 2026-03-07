@@ -1,15 +1,20 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { requireAppContext } from "@/lib/server-context";
 
 const dateInputSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
 
-const ledgerSchema = z.object({
-  categoryId: z.preprocess((value) => (value === "" || value === null ? undefined : value), z.string().uuid().optional()),
-  entryType: z.enum(["income", "expense"]),
+const createCategorySchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  monthlyLimit: z.union([z.literal(""), z.coerce.number().min(0).max(100000000)]).optional()
+});
+
+const createExpenseSchema = z.object({
+  categoryId: z.string().uuid(),
   amount: z.coerce.number().positive().max(100000000),
   occurredOn: dateInputSchema,
   notes: z.string().max(1000).optional()
@@ -32,33 +37,62 @@ const debtPaymentSchema = z.object({
   notes: z.string().max(1000).optional()
 });
 
-const subscriptionSchema = z.object({
-  name: z.string().trim().min(2).max(140),
-  amount: z.coerce.number().positive().max(100000000),
-  recurrence: z.enum(["monthly", "yearly"]),
-  nextDueDate: z.union([z.literal(""), dateInputSchema]).optional(),
-  notes: z.string().max(1000).optional()
-});
+function getSafeReturnPath(raw: FormDataEntryValue | null) {
+  const value = typeof raw === "string" ? raw.trim() : "";
+  return value.startsWith("/finance") ? value : "/finance";
+}
 
-export async function createLedgerEntryAction(formData: FormData) {
-  const payload = ledgerSchema.safeParse({
+function redirectToPath(path: string): never {
+  redirect(path as Parameters<typeof redirect>[0]);
+}
+
+export async function createExpenseCategoryAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = createCategorySchema.safeParse({
+    name: formData.get("name"),
+    monthlyLimit: formData.get("monthlyLimit")
+  });
+
+  if (!payload.success) {
+    redirectToPath(returnPath);
+  }
+
+  const { supabase, account } = await requireAppContext();
+  const monthlyLimit =
+    payload.data.monthlyLimit === "" || typeof payload.data.monthlyLimit === "undefined"
+      ? null
+      : payload.data.monthlyLimit.toFixed(2);
+
+  await supabase.from("finance_categories").insert({
+    account_id: account.accountId,
+    name: payload.data.name,
+    kind: "expense",
+    monthly_limit: monthlyLimit
+  });
+
+  revalidatePath("/finance");
+  revalidatePath("/analytics");
+  redirectToPath(returnPath);
+}
+
+export async function createExpenseAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = createExpenseSchema.safeParse({
     categoryId: formData.get("categoryId"),
-    entryType: formData.get("entryType"),
     amount: formData.get("amount"),
     occurredOn: formData.get("occurredOn"),
     notes: formData.get("notes")
   });
 
   if (!payload.success) {
-    return;
+    redirectToPath(returnPath);
   }
 
   const { supabase, user, account } = await requireAppContext();
-
   await supabase.from("ledger_entries").insert({
     account_id: account.accountId,
-    category_id: payload.data.categoryId || null,
-    entry_type: payload.data.entryType,
+    category_id: payload.data.categoryId,
+    entry_type: "expense",
     amount: payload.data.amount.toFixed(2),
     currency_code: account.currencyCode,
     occurred_on: payload.data.occurredOn,
@@ -69,9 +103,11 @@ export async function createLedgerEntryAction(formData: FormData) {
   revalidatePath("/finance");
   revalidatePath("/dashboard");
   revalidatePath("/analytics");
+  redirectToPath(returnPath);
 }
 
 export async function createDebtAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = debtSchema.safeParse({
     type: formData.get("type"),
     name: formData.get("name"),
@@ -82,7 +118,7 @@ export async function createDebtAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    return;
+    redirectToPath(returnPath);
   }
 
   const { supabase, user, account } = await requireAppContext();
@@ -105,9 +141,11 @@ export async function createDebtAction(formData: FormData) {
   revalidatePath("/finance");
   revalidatePath("/dashboard");
   revalidatePath("/analytics");
+  redirectToPath(returnPath);
 }
 
 export async function createDebtPaymentAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = debtPaymentSchema.safeParse({
     debtId: formData.get("debtId"),
     amount: formData.get("amount"),
@@ -117,7 +155,7 @@ export async function createDebtPaymentAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    return;
+    redirectToPath(returnPath);
   }
 
   const { supabase, user, account } = await requireAppContext();
@@ -154,34 +192,5 @@ export async function createDebtPaymentAction(formData: FormData) {
   revalidatePath("/finance");
   revalidatePath("/dashboard");
   revalidatePath("/analytics");
-}
-
-export async function createSubscriptionAction(formData: FormData) {
-  const payload = subscriptionSchema.safeParse({
-    name: formData.get("name"),
-    amount: formData.get("amount"),
-    recurrence: formData.get("recurrence"),
-    nextDueDate: formData.get("nextDueDate"),
-    notes: formData.get("notes")
-  });
-
-  if (!payload.success) {
-    return;
-  }
-
-  const { supabase, account } = await requireAppContext();
-
-  await supabase.from("subscriptions").insert({
-    account_id: account.accountId,
-    name: payload.data.name,
-    amount: payload.data.amount.toFixed(2),
-    currency_code: account.currencyCode,
-    recurrence: payload.data.recurrence,
-    next_due_date: payload.data.nextDueDate === "" ? null : payload.data.nextDueDate,
-    notes: payload.data.notes?.trim() || null,
-    is_active: true
-  });
-
-  revalidatePath("/finance");
-  revalidatePath("/dashboard");
+  redirectToPath(returnPath);
 }

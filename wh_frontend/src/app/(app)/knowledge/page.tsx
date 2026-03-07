@@ -1,27 +1,55 @@
+import Link from "next/link";
+import type { Route } from "next";
+import { Plus, Search } from "lucide-react";
+
 import { SubmitButton } from "@/components/forms/submit-button";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ModalShell } from "@/components/ui/modal-shell";
 import { SectionHeader } from "@/components/ui/section-header";
 import { requireAppContext } from "@/lib/server-context";
 
-import { createCardAction, createKnowledgeSpaceAction, createNoteAction } from "./actions";
+import { createKnowledgeSpaceAction } from "./actions";
 
-type Note = {
+type KnowledgeSearchParams = Promise<{
+  q?: string;
+  error?: string;
+  success?: string;
+  modal?: string;
+}>;
+
+type KnowledgeItem = {
   id: string;
   space_id: string;
-  title: string;
-  position: number;
-  created_at: string;
+  kind: "link" | "note";
 };
 
-type BrainCard = {
-  id: string;
-  note_id: string;
-  content: string;
-  position: number;
-  created_at: string;
-};
+function buildKnowledgeSpaceHref(spaceId: string): Route {
+  return `/knowledge/${spaceId}` as Route;
+}
 
-export default async function KnowledgePage() {
+function buildKnowledgePageHref(query: string, modal?: string) {
+  const params = new URLSearchParams();
+  if (query.length > 0) {
+    params.set("q", query);
+  }
+  if (modal) {
+    params.set("modal", modal);
+  }
+  const queryString = params.toString();
+  return queryString.length > 0 ? `/knowledge?${queryString}` : "/knowledge";
+}
+
+export default async function KnowledgePage({
+  searchParams
+}: {
+  searchParams: KnowledgeSearchParams;
+}) {
+  const params = await searchParams;
   const { supabase, account } = await requireAppContext();
 
   const spacesRes = await supabase
@@ -32,143 +60,127 @@ export default async function KnowledgePage() {
 
   const spaces = spacesRes.data ?? [];
   const spaceIds = spaces.map((space) => space.id);
-  const notesRes =
+
+  const itemsRes =
     spaceIds.length > 0
       ? await supabase
-          .from("notes")
-          .select("id, space_id, title, position, created_at")
+          .from("knowledge_items")
+          .select("id, space_id, kind")
           .in("space_id", spaceIds)
-          .order("position", { ascending: true })
-      : { data: [] as Note[] };
+      : { data: [] as KnowledgeItem[] };
 
-  const notes = (notesRes.data ?? []) as Note[];
-  const noteIds = notes.map((note) => note.id);
-  const cardsRes =
-    noteIds.length > 0
-      ? await supabase
-          .from("cards")
-          .select("id, note_id, content, position, created_at")
-          .in("note_id", noteIds)
-          .order("position", { ascending: true })
-      : { data: [] as BrainCard[] };
-  const cards = (cardsRes.data ?? []) as BrainCard[];
+  const items = (itemsRes.data ?? []) as KnowledgeItem[];
 
-  const notesBySpace = new Map<string, Note[]>();
-  for (const note of notes) {
-    const collection = notesBySpace.get(note.space_id) ?? [];
-    collection.push(note);
-    notesBySpace.set(note.space_id, collection);
+  const countsBySpace = new Map<string, { total: number; links: number; notes: number }>();
+  for (const space of spaces) {
+    countsBySpace.set(space.id, { total: 0, links: 0, notes: 0 });
   }
 
-  const cardsByNote = new Map<string, BrainCard[]>();
-  for (const card of cards) {
-    const collection = cardsByNote.get(card.note_id) ?? [];
-    collection.push(card);
-    cardsByNote.set(card.note_id, collection);
+  for (const item of items) {
+    const current = countsBySpace.get(item.space_id) ?? { total: 0, links: 0, notes: 0 };
+    current.total += 1;
+    if (item.kind === "link") current.links += 1;
+    if (item.kind === "note") current.notes += 1;
+    countsBySpace.set(item.space_id, current);
   }
+
+  const query = params.q?.trim() ?? "";
+  const errorMessage = params.error?.trim();
+  const successMessage = params.success?.trim();
+  const modal = params.modal?.trim();
+  const createTopicHref = buildKnowledgePageHref(query, "new-topic");
+  const closeModalHref = buildKnowledgePageHref(query);
+
+  const sortedSpaces = [...spaces].sort((a, b) => {
+    const countDiff = (countsBySpace.get(b.id)?.total ?? 0) - (countsBySpace.get(a.id)?.total ?? 0);
+    if (countDiff !== 0) return countDiff;
+    return b.updated_at.localeCompare(a.updated_at);
+  });
+
+  const filteredSpaces =
+    query.length > 0
+      ? sortedSpaces.filter((space) => space.title.toLowerCase().includes(query.toLowerCase()))
+      : sortedSpaces;
 
   return (
     <div className="space-y-6">
       <SectionHeader
-        title="Knowledge"
-        description="Build strategic clarity with spaces, notes, and atomic cards."
+        title="Knowledge Topics"
+        description="Create a topic (space), then add simple link or note items inside it."
+        action={
+          <a
+            href={createTopicHref}
+            className="inline-flex items-center gap-2 rounded-lg bg-[#0b1f3b] px-3 py-2 text-sm font-medium text-white transition hover:bg-[#102a52]"
+          >
+            <Plus size={16} />
+            New topic
+          </a>
+        }
       />
+
+      {errorMessage ? <Alert variant="error">{errorMessage}</Alert> : null}
+      {successMessage ? <Alert variant="success">{successMessage}</Alert> : null}
 
       <Card>
         <CardHeader>
-          <CardTitle>New knowledge space</CardTitle>
+          <CardTitle>Topics</CardTitle>
         </CardHeader>
-        <CardContent>
-          <form action={createKnowledgeSpaceAction} className="flex flex-col gap-3 sm:flex-row">
-            <input
-              name="title"
-              required
-              placeholder="e.g. Master System Design"
-              className="h-10 flex-1 rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-blue-400"
-            />
-            <SubmitButton label="Create space" />
+        <CardContent className="space-y-4">
+          <form method="get" className="grid gap-2 sm:grid-cols-[1fr_auto]">
+            <div className="relative">
+              <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Input name="q" defaultValue={query} className="pl-9" placeholder="Filter topics" />
+            </div>
+            <Button type="submit" variant="secondary">
+              Apply
+            </Button>
           </form>
+
+          {filteredSpaces.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {filteredSpaces.map((space) => {
+                const counts = countsBySpace.get(space.id) ?? { total: 0, links: 0, notes: 0 };
+
+                return (
+                  <Link
+                    key={space.id}
+                    href={buildKnowledgeSpaceHref(space.id)}
+                    className="rounded-xl border border-[#c7d3e8] bg-[#f2f6fe] p-4 transition hover:border-[#9eb3d8] hover:shadow-sm"
+                  >
+                    <h3 className="mb-2 text-sm font-semibold text-[#0c1d3c]">{space.title}</h3>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge>{counts.total} items</Badge>
+                      <Badge variant="secondary">{counts.links} links</Badge>
+                      <Badge variant="secondary">{counts.notes} notes</Badge>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">
+              {spaces.length === 0 ? "No topics yet. Create one above." : "No topics matched your filter."}
+            </p>
+          )}
         </CardContent>
       </Card>
 
-      <div className="space-y-4">
-        {spaces.length > 0 ? (
-          spaces.map((space) => {
-            const spaceNotes = notesBySpace.get(space.id) ?? [];
-
-            return (
-              <Card key={space.id}>
-                <CardHeader className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <CardTitle>{space.title}</CardTitle>
-                    <p className="mt-1 text-xs text-slate-500">{spaceNotes.length} notes</p>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <form action={createNoteAction} className="flex flex-col gap-3 sm:flex-row">
-                    <input type="hidden" name="spaceId" value={space.id} />
-                    <input
-                      name="title"
-                      required
-                      placeholder="New note title"
-                      className="h-10 flex-1 rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-blue-400"
-                    />
-                    <SubmitButton label="Add note" pendingLabel="Adding..." />
-                  </form>
-
-                  <div className="space-y-3">
-                    {spaceNotes.length > 0 ? (
-                      spaceNotes.map((note) => {
-                        const noteCards = cardsByNote.get(note.id) ?? [];
-
-                        return (
-                          <div key={note.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                            <div className="mb-3 flex items-center justify-between">
-                              <h4 className="text-sm font-semibold text-slate-800">{note.title}</h4>
-                              <span className="text-xs text-slate-500">{noteCards.length} cards</span>
-                            </div>
-
-                            <form action={createCardAction} className="mb-3 flex flex-col gap-2 sm:flex-row">
-                              <input type="hidden" name="noteId" value={note.id} />
-                              <input
-                                name="content"
-                                required
-                                placeholder="Atomic insight"
-                                className="h-10 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-blue-400"
-                              />
-                              <SubmitButton label="Add card" pendingLabel="Adding..." />
-                            </form>
-
-                            {noteCards.length > 0 ? (
-                              <div className="space-y-2">
-                                {noteCards.map((card) => (
-                                  <p key={card.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                                    {card.content}
-                                  </p>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-slate-500">No cards yet.</p>
-                            )}
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <p className="text-sm text-slate-500">No notes yet. Add your first topic above.</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })
-        ) : (
-          <Card>
-            <CardContent>
-              <p className="text-sm text-slate-500">Create a space to start structuring your strategic knowledge.</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      {modal === "new-topic" ? (
+        <ModalShell
+          title="Create Topic"
+          description="Add a new topic, then open it to add links and notes."
+          closeHref={closeModalHref}
+        >
+          <form action={createKnowledgeSpaceAction} className="grid gap-3 sm:grid-cols-[1fr_auto]">
+            <input type="hidden" name="returnPath" value="/knowledge" />
+            <div className="space-y-2">
+              <Label htmlFor="spaceTitle">Topic title</Label>
+              <Input id="spaceTitle" name="title" required placeholder="e.g. AI Research, Marketing, Product Ideas" />
+            </div>
+            <SubmitButton label="Create topic" pendingLabel="Creating..." className="w-full self-end sm:w-auto" />
+          </form>
+        </ModalShell>
+      ) : null}
     </div>
   );
 }

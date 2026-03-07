@@ -4,6 +4,7 @@
 - Next.js 15 (App Router)
 - TypeScript strict mode
 - Tailwind CSS
+- Shadcn-style UI primitives (local components)
 - Supabase Auth + Postgres (RLS)
 
 ## App Topology
@@ -15,8 +16,8 @@ src/
 │   ├── (app)/          # protected workspace pages
 │   └── layout.tsx      # root styles + metadata
 ├── components/
-│   ├── shell/          # Volt-inspired shell (sidebar/topbar)
-│   ├── ui/             # cards, metrics, shared primitives
+│   ├── shell/          # App shell wrapper (sidebar/topbar/footer)
+│   ├── ui/             # shared UI primitives
 │   └── forms/          # generic submit button
 └── lib/
     ├── supabase/       # browser/server/middleware clients

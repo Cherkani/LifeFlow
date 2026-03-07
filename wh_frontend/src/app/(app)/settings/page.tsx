@@ -1,7 +1,10 @@
-import { SubmitButton } from "@/components/forms/submit-button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { SectionHeader } from "@/components/ui/section-header";
 import { updateProfileAction } from "@/app/(app)/actions";
+import { SubmitButton } from "@/components/forms/submit-button";
+import { Alert } from "@/components/ui/alert";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { SectionHeader } from "@/components/ui/section-header";
 import { requireAppContext } from "@/lib/server-context";
 
 export default async function SettingsPage({
@@ -18,96 +21,84 @@ export default async function SettingsPage({
     .eq("id", user.id)
     .maybeSingle();
 
+  const profileTab = (
+    <Card>
+      <CardHeader>
+        <CardTitle>Profile</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {params.error ? <Alert variant="error">{params.error}</Alert> : null}
+        {params.success ? <Alert variant="success">Profile updated.</Alert> : null}
+
+        <form action={updateProfileAction} className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="fullName">Full name</Label>
+              <Input id="fullName" name="fullName" required defaultValue={profile?.full_name ?? ""} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="timezone">Timezone</Label>
+              <Input id="timezone" name="timezone" required defaultValue={profile?.timezone ?? "UTC"} />
+            </div>
+          </div>
+          <SubmitButton label="Update profile" pendingLabel="Updating..." className="w-full" />
+        </form>
+      </CardContent>
+    </Card>
+  );
+
+  const workspaceTab = (
+    <Card>
+      <CardHeader>
+        <CardTitle>Workspace</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <dl className="grid gap-3 text-sm sm:grid-cols-[180px_1fr]">
+          <dt className="font-medium text-slate-500">Account</dt><dd>{account.accountName}</dd>
+          <dt className="font-medium text-slate-500">Role</dt><dd>{account.role}</dd>
+          <dt className="font-medium text-slate-500">Currency</dt><dd>{account.currencyCode}</dd>
+          <dt className="font-medium text-slate-500">Email</dt><dd>{profile?.email ?? user.email}</dd>
+          <dt className="font-medium text-slate-500">Active</dt><dd>{profile?.is_active ? "Yes" : "No"}</dd>
+          <dt className="font-medium text-slate-500">Joined</dt><dd>{profile?.created_at?.slice(0, 10) ?? "Unknown"}</dd>
+        </dl>
+      </CardContent>
+    </Card>
+  );
+
+  const checklistTab = (
+    <Card>
+      <CardHeader>
+        <CardTitle>Production checklist</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ul className="space-y-3 text-sm text-slate-700">
+          <li className="rounded-lg border border-slate-200 p-3">Set <code>.env.local</code> with production Supabase project URL + anon key.</li>
+          <li className="rounded-lg border border-slate-200 p-3">Enable HTTPS and secure cookies on deployment domain.</li>
+          <li className="rounded-lg border border-slate-200 p-3">Restrict CORS and auth redirect URLs in Supabase Auth settings.</li>
+          <li className="rounded-lg border border-slate-200 p-3">Run <code>npm run build</code> before deployment and monitor runtime logs.</li>
+        </ul>
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="space-y-6">
       <SectionHeader title="Settings" description="Profile configuration and workspace diagnostics." />
 
-      {params.error ? (
-        <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{params.error}</p>
-      ) : null}
+      <section className="space-y-2">
+        <h2 className="text-lg font-semibold text-slate-900">Profile</h2>
+        {profileTab}
+      </section>
 
-      {params.success ? (
-        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">Profile updated.</p>
-      ) : null}
+      <section className="space-y-2">
+        <h2 className="text-lg font-semibold text-slate-900">Workspace</h2>
+        {workspaceTab}
+      </section>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Profile</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form action={updateProfileAction} className="space-y-3">
-              <div className="space-y-1">
-                <label htmlFor="fullName" className="text-sm font-medium text-slate-700">
-                  Full name
-                </label>
-                <input
-                  id="fullName"
-                  name="fullName"
-                  required
-                  defaultValue={profile?.full_name ?? ""}
-                  className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-blue-400"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label htmlFor="timezone" className="text-sm font-medium text-slate-700">
-                  Timezone
-                </label>
-                <input
-                  id="timezone"
-                  name="timezone"
-                  required
-                  defaultValue={profile?.timezone ?? "UTC"}
-                  className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-blue-400"
-                />
-              </div>
-
-              <SubmitButton label="Update profile" pendingLabel="Updating..." />
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Workspace</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-slate-600">
-            <p>
-              <span className="font-medium text-slate-800">Account:</span> {account.accountName}
-            </p>
-            <p>
-              <span className="font-medium text-slate-800">Role:</span> {account.role}
-            </p>
-            <p>
-              <span className="font-medium text-slate-800">Currency:</span> {account.currencyCode}
-            </p>
-            <p>
-              <span className="font-medium text-slate-800">Email:</span> {profile?.email ?? user.email}
-            </p>
-            <p>
-              <span className="font-medium text-slate-800">Active user:</span> {profile?.is_active ? "Yes" : "No"}
-            </p>
-            <p>
-              <span className="font-medium text-slate-800">Joined:</span> {profile?.created_at?.slice(0, 10) ?? "Unknown"}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Production checklist</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="list-disc space-y-1 pl-4 text-sm text-slate-600">
-            <li>Set `.env.local` with production Supabase project URL + anon key.</li>
-            <li>Enable HTTPS + secure cookies on deployment domain.</li>
-            <li>Restrict CORS and Auth redirect URLs in Supabase Auth settings.</li>
-            <li>Run `npm run build` before deployment and monitor runtime logs.</li>
-          </ul>
-        </CardContent>
-      </Card>
+      <section className="space-y-2">
+        <h2 className="text-lg font-semibold text-slate-900">Checklist</h2>
+        {checklistTab}
+      </section>
     </div>
   );
 }

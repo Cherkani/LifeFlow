@@ -73,3 +73,45 @@ export async function signUpAction(formData: FormData) {
 
   redirect("/dashboard");
 }
+
+export async function forgotPasswordAction(formData: FormData) {
+  const email = formData.get("email");
+  if (!email || typeof email !== "string") {
+    redirect(`/forgot-password?error=${encodeURIComponent("Email is required")}`);
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/reset-password`
+  });
+
+  if (error) {
+    redirect(`/forgot-password?error=${encodeURIComponent(error.message)}`);
+  }
+
+  redirect("/forgot-password?success=email-sent");
+}
+
+export async function resetPasswordAction(formData: FormData) {
+  const password = formData.get("password");
+  const confirmPassword = formData.get("confirmPassword");
+
+  if (!password || typeof password !== "string") {
+    redirect(`/reset-password?error=${encodeURIComponent("Password is required")}`);
+  }
+  if (password !== confirmPassword) {
+    redirect(`/reset-password?error=${encodeURIComponent("Passwords do not match")}`);
+  }
+  if (password.length < 8) {
+    redirect(`/reset-password?error=${encodeURIComponent("Password must be at least 8 characters")}`);
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.auth.updateUser({ password });
+
+  if (error) {
+    redirect(`/reset-password?error=${encodeURIComponent(error.message)}`);
+  }
+
+  redirect("/login?success=password-reset");
+}

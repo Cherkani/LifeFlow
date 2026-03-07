@@ -110,79 +110,69 @@ export type Database = {
           updated_at?: string;
         };
       };
-      notes: {
+      knowledge_items: {
         Row: {
           id: string;
           space_id: string;
-          title: string;
-          position: number;
+          kind: "link" | "note";
+          title: string | null;
+          url: string | null;
+          content: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
           space_id: string;
-          title: string;
-          position?: number;
+          kind: "link" | "note";
+          title?: string | null;
+          url?: string | null;
+          content?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
           space_id?: string;
-          title?: string;
-          position?: number;
+          kind?: "link" | "note";
+          title?: string | null;
+          url?: string | null;
+          content?: string | null;
           created_at?: string;
           updated_at?: string;
         };
       };
-      cards: {
+      habit_objectives: {
         Row: {
           id: string;
-          note_id: string;
-          content: string;
-          position: number;
+          account_id: string;
+          title: string;
+          description: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
-          note_id: string;
-          content: string;
-          position?: number;
+          account_id: string;
+          title: string;
+          description?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
-          note_id?: string;
-          content?: string;
-          position?: number;
+          account_id?: string;
+          title?: string;
+          description?: string | null;
           created_at?: string;
           updated_at?: string;
-        };
-      };
-      card_links: {
-        Row: {
-          from_card_id: string;
-          to_card_id: string;
-          created_at: string;
-        };
-        Insert: {
-          from_card_id: string;
-          to_card_id: string;
-          created_at?: string;
-        };
-        Update: {
-          from_card_id?: string;
-          to_card_id?: string;
-          created_at?: string;
         };
       };
       habits: {
         Row: {
           id: string;
           account_id: string;
+          objective_id: string | null;
           title: string;
           type: "time_tracking" | "fixed_protocol" | "count" | "custom";
           weekly_target_minutes: number | null;
@@ -195,6 +185,7 @@ export type Database = {
         Insert: {
           id?: string;
           account_id: string;
+          objective_id?: string | null;
           title: string;
           type?: "time_tracking" | "fixed_protocol" | "count" | "custom";
           weekly_target_minutes?: number | null;
@@ -207,6 +198,7 @@ export type Database = {
         Update: {
           id?: string;
           account_id?: string;
+          objective_id?: string | null;
           title?: string;
           type?: "time_tracking" | "fixed_protocol" | "count" | "custom";
           weekly_target_minutes?: number | null;
@@ -262,6 +254,7 @@ export type Database = {
         Row: {
           id: string;
           account_id: string;
+          objective_id: string | null;
           name: string;
           created_at: string;
           updated_at: string;
@@ -269,6 +262,7 @@ export type Database = {
         Insert: {
           id?: string;
           account_id: string;
+          objective_id?: string | null;
           name: string;
           created_at?: string;
           updated_at?: string;
@@ -276,6 +270,7 @@ export type Database = {
         Update: {
           id?: string;
           account_id?: string;
+          objective_id?: string | null;
           name?: string;
           created_at?: string;
           updated_at?: string;
@@ -336,6 +331,38 @@ export type Database = {
           created_at?: string;
         };
       };
+      calendar_events: {
+        Row: {
+          id: string;
+          account_id: string;
+          title: string;
+          details: string | null;
+          event_date: string;
+          event_type: "meeting" | "important" | "general";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_id: string;
+          title: string;
+          details?: string | null;
+          event_date: string;
+          event_type?: "meeting" | "important" | "general";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          account_id?: string;
+          title?: string;
+          details?: string | null;
+          event_date?: string;
+          event_type?: "meeting" | "important" | "general";
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       finance_categories: {
         Row: {
           id: string;
@@ -343,6 +370,7 @@ export type Database = {
           name: string;
           kind: "income" | "expense" | "savings" | "debt_payment";
           color: string | null;
+          monthly_limit: string | null;
           created_at: string;
         };
         Insert: {
@@ -351,6 +379,7 @@ export type Database = {
           name: string;
           kind: "income" | "expense" | "savings" | "debt_payment";
           color?: string | null;
+          monthly_limit?: string | null;
           created_at?: string;
         };
         Update: {
@@ -359,6 +388,7 @@ export type Database = {
           name?: string;
           kind?: "income" | "expense" | "savings" | "debt_payment";
           color?: string | null;
+          monthly_limit?: string | null;
           created_at?: string;
         };
       };

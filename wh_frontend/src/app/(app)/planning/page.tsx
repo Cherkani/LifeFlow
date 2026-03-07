@@ -1,19 +1,42 @@
+import { Plus } from "lucide-react";
+
+import { createObjectiveAction } from "@/app/(app)/habits/actions";
 import { SubmitButton } from "@/components/forms/submit-button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ModalShell } from "@/components/ui/modal-shell";
 import { SectionHeader } from "@/components/ui/section-header";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { requireAppContext } from "@/lib/server-context";
 import { startOfIsoWeek, toDateInputValue } from "@/lib/utils";
 
-import { createTemplateAction, createTemplateEntryAction, generateWeekAction } from "./actions";
+import { createTemplateWithDailyTasksAction, generateWeekAction } from "./actions";
+import { TemplateTaskBuilder } from "./template-task-builder";
+
+type PlanningSearchParams = Promise<{
+  modal?: string;
+}>;
+
+type Objective = {
+  id: string;
+  title: string;
+  description: string | null;
+};
+
+type Task = {
+  id: string;
+  title: string;
+  objective_id: string | null;
+  metadata: unknown;
+};
 
 type Template = {
   id: string;
   name: string;
-};
-
-type Habit = {
-  id: string;
-  title: string;
+  objective_id: string | null;
 };
 
 type TemplateEntry = {
@@ -22,233 +45,286 @@ type TemplateEntry = {
   habit_id: string;
   day_of_week: number;
   planned_minutes: number;
-  minimum_minutes: number;
-  is_required: boolean;
 };
 
 const dayName = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-export default async function PlanningPage() {
+function buildPlanningHref(modal?: string) {
+  return modal ? `/planning?modal=${encodeURIComponent(modal)}` : "/planning";
+}
+
+function getStartTime(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const value = (metadata as { preferred_start_time?: unknown }).preferred_start_time;
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+export default async function PlanningPage({
+  searchParams
+}: {
+  searchParams: PlanningSearchParams;
+}) {
+  const params = await searchParams;
+  const modal = params.modal?.trim();
   const { supabase, account } = await requireAppContext();
 
-  const [templatesRes, habitsRes, weeksRes] = await Promise.all([
-    supabase.from("templates").select("id, name").eq("account_id", account.accountId).order("created_at", { ascending: false }),
+  const [objectivesRes, tasksRes, templatesRes, weeksRes] = await Promise.all([
+    supabase
+      .from("habit_objectives")
+      .select("id, title, description")
+      .eq("account_id", account.accountId)
+      .order("created_at", { ascending: false }),
     supabase
       .from("habits")
-      .select("id, title")
+      .select("id, title, objective_id, metadata")
       .eq("account_id", account.accountId)
       .eq("is_active", true)
       .order("created_at", { ascending: false }),
     supabase
+      .from("templates")
+      .select("id, name, objective_id")
+      .eq("account_id", account.accountId)
+      .order("created_at", { ascending: false }),
+    supabase
       .from("weeks")
-      .select("id, template_id, week_start_date, created_at")
+      .select("id, template_id, week_start_date")
       .eq("account_id", account.accountId)
       .order("week_start_date", { ascending: false })
-      .limit(10)
+      .limit(12)
   ]);
 
+  const objectives = (objectivesRes.data ?? []) as Objective[];
+  const tasks = (tasksRes.data ?? []) as Task[];
   const templates = (templatesRes.data ?? []) as Template[];
-  const habits = (habitsRes.data ?? []) as Habit[];
-  const templateIds = templates.map((template) => template.id);
-  const entriesRes =
-    templateIds.length > 0
-      ? await supabase
-          .from("template_entries")
-          .select("id, template_id, habit_id, day_of_week, planned_minutes, minimum_minutes, is_required")
-          .in("template_id", templateIds)
-          .order("created_at", { ascending: false })
-      : { data: [] as TemplateEntry[] };
-  const entries = (entriesRes.data ?? []) as TemplateEntry[];
   const weeks = weeksRes.data ?? [];
 
-  const habitNameById = new Map(habits.map((habit) => [habit.id, habit.title]));
+  const objectiveById = new Map(objectives.map((objective) => [objective.id, objective]));
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+
+  const entriesRes =
+    templates.length > 0
+      ? await supabase
+          .from("template_entries")
+          .select("id, template_id, habit_id, day_of_week, planned_minutes")
+          .in("template_id", templates.map((template) => template.id))
+          .order("day_of_week", { ascending: true })
+      : { data: [] as TemplateEntry[] };
+  const entries = (entriesRes.data ?? []) as TemplateEntry[];
 
   return (
     <div className="space-y-6">
-      <SectionHeader title="Weekly Planning" description="Build reusable week blueprints and generate execution sessions." />
-
-      <div className="grid gap-4 xl:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Create template</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form action={createTemplateAction} className="space-y-3">
-              <input
-                name="name"
-                required
-                placeholder="Template name"
-                className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-blue-400"
-              />
-              <SubmitButton label="Save template" pendingLabel="Saving..." />
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card className="xl:col-span-2">
-          <CardHeader>
-            <CardTitle>Add template entry</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form action={createTemplateEntryAction} className="grid gap-3 lg:grid-cols-3">
-              <select
-                name="templateId"
-                required
-                className="h-10 rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-blue-400"
-              >
-                <option value="">Template</option>
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                name="habitId"
-                required
-                className="h-10 rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-blue-400"
-              >
-                <option value="">Habit</option>
-                {habits.map((habit) => (
-                  <option key={habit.id} value={habit.id}>
-                    {habit.title}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                name="dayOfWeek"
-                defaultValue="1"
-                className="h-10 rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-blue-400"
-              >
-                <option value="1">Monday</option>
-                <option value="2">Tuesday</option>
-                <option value="3">Wednesday</option>
-                <option value="4">Thursday</option>
-                <option value="5">Friday</option>
-                <option value="6">Saturday</option>
-                <option value="7">Sunday</option>
-              </select>
-
-              <input
-                name="plannedMinutes"
-                type="number"
-                defaultValue={45}
-                min={0}
-                className="h-10 rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-blue-400"
-              />
-
-              <input
-                name="minimumMinutes"
-                type="number"
-                defaultValue={20}
-                min={0}
-                className="h-10 rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-blue-400"
-              />
-
-              <select
-                name="isRequired"
-                defaultValue="yes"
-                className="h-10 rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-blue-400"
-              >
-                <option value="yes">Required</option>
-                <option value="no">Optional</option>
-              </select>
-
-              <div className="lg:col-span-3">
-                <SubmitButton label="Add / update entry" pendingLabel="Saving..." />
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
+      <SectionHeader
+        title="Planner"
+        description="Simple setup: objective, one template with daily tasks, then generate a week."
+        action={
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={buildPlanningHref("objective")}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#0b1f3b] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#102a52]"
+            >
+              <Plus size={16} />
+              Objective
+            </a>
+            <a
+              href={buildPlanningHref("template")}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#1e3a6d] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#274881]"
+            >
+              <Plus size={16} />
+              Template
+            </a>
+            <a
+              href={buildPlanningHref("week")}
+              className="inline-flex items-center gap-2 rounded-lg border border-[#c7d3e8] bg-[#edf3ff] px-3 py-2 text-sm font-semibold text-[#23406d] transition hover:bg-[#e3ebf9]"
+            >
+              <Plus size={16} />
+              Generate Week
+            </a>
+          </div>
+        }
+      />
 
       <Card>
         <CardHeader>
-          <CardTitle>Generate week from template</CardTitle>
+          <CardTitle>Workflow</CardTitle>
         </CardHeader>
-        <CardContent>
-          <form action={generateWeekAction} className="grid gap-3 sm:grid-cols-3">
-            <select
-              name="templateId"
-              required
-              className="h-10 rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-blue-400"
-            >
-              <option value="">Template</option>
-              {templates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
-
-            <input
-              name="weekStartDate"
-              type="date"
-              defaultValue={toDateInputValue(startOfIsoWeek(new Date()))}
-              className="h-10 rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-blue-400"
-            />
-
-            <SubmitButton label="Generate week" pendingLabel="Generating..." />
-          </form>
+        <CardContent className="space-y-2 text-sm text-[#4a5f83]">
+          <p>1. Create objective.</p>
+          <p>2. Create one template with day tasks, purpose/objective, average minutes, and optional start times.</p>
+          <p>3. Generate a week. Execution appears in Habits as checkboxes + hours.</p>
         </CardContent>
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Template entries</CardTitle>
+            <CardTitle>Objectives</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {templates.length > 0 ? (
-              templates.map((template) => {
-                const templateEntries = entries.filter((entry) => entry.template_id === template.id);
-
+            {objectives.length > 0 ? (
+              objectives.map((objective) => {
+                const templateCount = templates.filter((template) => template.objective_id === objective.id).length;
                 return (
-                  <div key={template.id} className="rounded-xl border border-slate-200 p-3">
-                    <p className="text-sm font-semibold text-slate-900">{template.name}</p>
-                    <div className="mt-2 space-y-1">
-                      {templateEntries.length > 0 ? (
-                        templateEntries.map((entry) => (
-                          <p key={entry.id} className="text-xs text-slate-600">
-                            {dayName[entry.day_of_week - 1]} - {habitNameById.get(entry.habit_id) ?? "Habit"} ({entry.planned_minutes}/
-                            {entry.minimum_minutes} min{entry.is_required ? ", required" : ""})
-                          </p>
-                        ))
-                      ) : (
-                        <p className="text-xs text-slate-500">No entries yet.</p>
-                      )}
+                  <div key={objective.id} className="rounded-lg border border-[#c7d3e8] p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-[#0c1d3c]">{objective.title}</p>
+                      <Badge variant="secondary">{templateCount} template(s)</Badge>
                     </div>
+                    {objective.description ? <p className="mt-1 text-xs text-[#4a5f83]">{objective.description}</p> : null}
                   </div>
                 );
               })
             ) : (
-              <p className="text-sm text-slate-500">No templates yet.</p>
+              <p className="text-sm text-[#4a5f83]">No objectives yet.</p>
             )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Generated weeks</CardTitle>
+            <CardTitle>Template Stack</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {weeks.length > 0 ? (
-              weeks.map((week) => (
-                <div key={week.id} className="rounded-xl border border-slate-200 px-3 py-2">
-                  <p className="text-sm font-medium text-slate-900">
-                    {templates.find((template) => template.id === week.template_id)?.name ?? "Template"}
-                  </p>
-                  <p className="text-xs text-slate-500">Week starts {week.week_start_date}</p>
-                </div>
-              ))
+          <CardContent className="space-y-3">
+            {templates.length > 0 ? (
+              templates.map((template) => {
+                const templateEntries = entries.filter((entry) => entry.template_id === template.id);
+                return (
+                  <div key={template.id} className="rounded-lg border border-[#c7d3e8] p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-[#0c1d3c]">{template.name}</p>
+                      <Badge variant="secondary">Template</Badge>
+                    </div>
+                    {templateEntries.length > 0 ? (
+                      <ul className="space-y-1 text-sm text-[#4a5f83]">
+                        {templateEntries.map((entry) => {
+                          const task = taskById.get(entry.habit_id);
+                          const startTime = getStartTime(task?.metadata);
+                          const taskObjective = objectiveById.get(task?.objective_id ?? "")?.title ?? "Objective";
+                          return (
+                            <li key={entry.id}>
+                              {dayName[entry.day_of_week - 1]} · {task?.title ?? "Task"} ({entry.planned_minutes} min
+                              {startTime ? ` · ${startTime}` : ""}
+                              {taskObjective ? ` · ${taskObjective}` : ""})
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-[#4a5f83]">No day tasks yet.</p>
+                    )}
+                  </div>
+                );
+              })
             ) : (
-              <p className="text-sm text-slate-500">No weeks generated yet.</p>
+              <div className="space-y-2">
+                <p className="text-sm text-[#4a5f83]">No templates yet.</p>
+                <a
+                  href={buildPlanningHref("template")}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#0b1f3b] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#102a52]"
+                >
+                  <Plus size={16} />
+                  Create first template
+                </a>
+              </div>
             )}
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Generated Weeks</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {weeks.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {weeks.map((week) => {
+                const template = templates.find((item) => item.id === week.template_id);
+                return (
+                  <div key={week.id} className="rounded-lg border border-[#c7d3e8] p-3">
+                    <p className="text-sm font-semibold text-[#0c1d3c]">{template?.name ?? "Template"}</p>
+                    <div className="mt-2 flex items-center justify-between">
+                      <Badge variant="secondary">Week {week.week_start_date}</Badge>
+                      <a href={`/habits?week=${encodeURIComponent(week.week_start_date)}`} className="text-xs font-semibold text-[#0b1f3b]">
+                        Open in habits
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-[#4a5f83]">No weeks generated yet.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {modal === "objective" ? (
+        <ModalShell title="Create objective" description="Main result you want to achieve." closeHref={buildPlanningHref()}>
+          <form action={createObjectiveAction} className="space-y-4">
+            <input type="hidden" name="returnPath" value="/planning" />
+            <div className="space-y-2">
+              <Label htmlFor="objectiveTitle">Title</Label>
+              <Input id="objectiveTitle" name="title" required placeholder="e.g. Improve coding productivity" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="objectiveDescription">Description (optional)</Label>
+              <Textarea id="objectiveDescription" name="description" placeholder="Short context for this objective." />
+            </div>
+            <SubmitButton label="Save objective" pendingLabel="Saving..." className="w-full sm:w-auto" />
+          </form>
+        </ModalShell>
+      ) : null}
+
+      {modal === "template" ? (
+        <ModalShell
+          title="Create template"
+          description="Each day can have multiple tasks. Each task has its own objective."
+          closeHref={buildPlanningHref()}
+        >
+          {objectives.length === 0 ? (
+            <p className="text-sm text-[#4a5f83]">Create objective first.</p>
+          ) : (
+            <form action={createTemplateWithDailyTasksAction} className="space-y-4">
+              <input type="hidden" name="returnPath" value="/planning" />
+
+              <div className="space-y-2">
+                <Label htmlFor="templateName">Template name</Label>
+                <Input id="templateName" name="name" required placeholder="e.g. Focus Week, Exam Week" />
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-[#0c1d3c]">Daily tasks</p>
+                <TemplateTaskBuilder objectives={objectives.map((objective) => ({ id: objective.id, title: objective.title }))} />
+              </div>
+
+              <SubmitButton label="Save template" pendingLabel="Saving..." className="w-full sm:w-auto" />
+            </form>
+          )}
+        </ModalShell>
+      ) : null}
+
+      {modal === "week" ? (
+        <ModalShell title="Generate week" description="Pick template and week start date." closeHref={buildPlanningHref()}>
+          {templates.length === 0 ? (
+            <p className="text-sm text-[#4a5f83]">Create template first.</p>
+          ) : (
+            <form action={generateWeekAction} className="space-y-4">
+              <input type="hidden" name="returnPath" value="/planning" />
+              <Select name="templateId" required>
+                <option value="">Template</option>
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>{template.name}</option>
+                ))}
+              </Select>
+              <Input name="weekStartDate" type="date" defaultValue={toDateInputValue(startOfIsoWeek(new Date()))} />
+              <SubmitButton label="Generate week" pendingLabel="Generating..." className="w-full sm:w-auto" />
+            </form>
+          )}
+        </ModalShell>
+      ) : null}
     </div>
   );
 }
