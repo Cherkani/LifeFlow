@@ -11,7 +11,7 @@ import {
 export const appNavigation = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/planning", label: "Planner", icon: NotebookPen },
-  { href: "/habits", label: "Habits", icon: Repeat },
+  { href: "/habits", label: "Execution", icon: Repeat },
   { href: "/events", label: "Calendar", icon: CalendarDays },
   { href: "/finance", label: "Finance", icon: CircleDollarSign },
   { href: "/knowledge", label: "Knowledge", icon: BookOpen },

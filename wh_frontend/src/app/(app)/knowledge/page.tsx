@@ -1,19 +1,19 @@
 import Link from "next/link";
 import type { Route } from "next";
+import Image from "next/image";
 import { Plus, Search } from "lucide-react";
 
-import { SubmitButton } from "@/components/forms/submit-button";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { ModalShell } from "@/components/ui/modal-shell";
 import { SectionHeader } from "@/components/ui/section-header";
 import { requireAppContext } from "@/lib/server-context";
 
 import { createKnowledgeSpaceAction } from "./actions";
+import { CreateTopicForm } from "./create-topic-form";
 
 type KnowledgeSearchParams = Promise<{
   q?: string;
@@ -54,7 +54,7 @@ export default async function KnowledgePage({
 
   const spacesRes = await supabase
     .from("knowledge_spaces")
-    .select("id, title, created_at, updated_at")
+    .select("id, title, image_url, created_at, updated_at")
     .eq("account_id", account.accountId)
     .order("updated_at", { ascending: false });
 
@@ -145,13 +145,20 @@ export default async function KnowledgePage({
                   <Link
                     key={space.id}
                     href={buildKnowledgeSpaceHref(space.id)}
-                    className="rounded-xl border border-[#c7d3e8] bg-[#f2f6fe] p-4 transition hover:border-[#9eb3d8] hover:shadow-sm"
+                    className="overflow-hidden rounded-xl border border-[#c7d3e8] bg-[#f2f6fe] transition hover:border-[#9eb3d8] hover:shadow-sm"
                   >
-                    <h3 className="mb-2 text-sm font-semibold text-[#0c1d3c]">{space.title}</h3>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge>{counts.total} items</Badge>
-                      <Badge variant="secondary">{counts.links} links</Badge>
-                      <Badge variant="secondary">{counts.notes} notes</Badge>
+                    <div className="relative h-28 w-full bg-[#dde6f7]">
+                      {space.image_url ? (
+                        <Image src={space.image_url} alt={space.title} fill className="object-cover" />
+                      ) : null}
+                    </div>
+                    <div className="p-4">
+                      <h3 className="mb-2 text-sm font-semibold text-[#0c1d3c]">{space.title}</h3>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge>{counts.total} items</Badge>
+                        <Badge variant="secondary">{counts.links} links</Badge>
+                        <Badge variant="secondary">{counts.notes} notes</Badge>
+                      </div>
                     </div>
                   </Link>
                 );
@@ -168,17 +175,10 @@ export default async function KnowledgePage({
       {modal === "new-topic" ? (
         <ModalShell
           title="Create Topic"
-          description="Add a new topic, then open it to add links and notes."
+          description="Add a new topic and optionally select a cover image from Pexels."
           closeHref={closeModalHref}
         >
-          <form action={createKnowledgeSpaceAction} className="grid gap-3 sm:grid-cols-[1fr_auto]">
-            <input type="hidden" name="returnPath" value="/knowledge" />
-            <div className="space-y-2">
-              <Label htmlFor="spaceTitle">Topic title</Label>
-              <Input id="spaceTitle" name="title" required placeholder="e.g. AI Research, Marketing, Product Ideas" />
-            </div>
-            <SubmitButton label="Create topic" pendingLabel="Creating..." className="w-full self-end sm:w-auto" />
-          </form>
+          <CreateTopicForm action={createKnowledgeSpaceAction} />
         </ModalShell>
       ) : null}
     </div>

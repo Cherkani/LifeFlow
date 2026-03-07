@@ -14,7 +14,7 @@ const profileSchema = z.object({
 
 export async function signOutAction() {
   const supabase = await createServerSupabaseClient();
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({ scope: "global" });
   redirect("/login");
 }
 

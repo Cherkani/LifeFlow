@@ -1,6 +1,8 @@
 import { Plus } from "lucide-react";
+import Image from "next/image";
 
 import { createObjectiveAction } from "@/app/(app)/habits/actions";
+import { PexelsImagePicker } from "@/components/forms/pexels-image-picker";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,12 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ModalShell } from "@/components/ui/modal-shell";
 import { SectionHeader } from "@/components/ui/section-header";
-import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { requireAppContext } from "@/lib/server-context";
-import { startOfIsoWeek, toDateInputValue } from "@/lib/utils";
 
-import { createTemplateWithDailyTasksAction, generateWeekAction } from "./actions";
+import { createTemplateWithDailyTasksAction } from "./actions";
 import { TemplateTaskBuilder } from "./template-task-builder";
 
 type PlanningSearchParams = Promise<{
@@ -24,6 +24,7 @@ type Objective = {
   id: string;
   title: string;
   description: string | null;
+  image_url: string | null;
 };
 
 type Task = {
@@ -74,7 +75,7 @@ export default async function PlanningPage({
   const [objectivesRes, tasksRes, templatesRes, weeksRes] = await Promise.all([
     supabase
       .from("habit_objectives")
-      .select("id, title, description")
+      .select("id, title, description, image_url")
       .eq("account_id", account.accountId)
       .order("created_at", { ascending: false }),
     supabase
@@ -113,12 +114,14 @@ export default async function PlanningPage({
           .order("day_of_week", { ascending: true })
       : { data: [] as TemplateEntry[] };
   const entries = (entriesRes.data ?? []) as TemplateEntry[];
+  const assignedWeeksCount = weeks.length;
+  const totalTemplateEntries = entries.length;
 
   return (
     <div className="space-y-6">
       <SectionHeader
-        title="Planner"
-        description="Simple setup: objective, one template with daily tasks, then generate a week."
+        title="Planning Studio"
+        description="Design objectives and weekly templates with clearer, faster structure."
         action={
           <div className="flex flex-wrap gap-2">
             <a
@@ -135,16 +138,44 @@ export default async function PlanningPage({
               <Plus size={16} />
               Template
             </a>
-            <a
-              href={buildPlanningHref("week")}
-              className="inline-flex items-center gap-2 rounded-lg border border-[#c7d3e8] bg-[#edf3ff] px-3 py-2 text-sm font-semibold text-[#23406d] transition hover:bg-[#e3ebf9]"
-            >
-              <Plus size={16} />
-              Generate Week
-            </a>
           </div>
         }
       />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm uppercase tracking-wide text-[#4a5f83]">Objectives</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold text-[#0c1d3c]">{objectives.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm uppercase tracking-wide text-[#4a5f83]">Templates</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold text-[#0c1d3c]">{templates.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm uppercase tracking-wide text-[#4a5f83]">Template tasks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold text-[#0c1d3c]">{totalTemplateEntries}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm uppercase tracking-wide text-[#4a5f83]">Generated weeks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold text-[#0c1d3c]">{assignedWeeksCount}</p>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>
@@ -153,7 +184,7 @@ export default async function PlanningPage({
         <CardContent className="space-y-2 text-sm text-[#4a5f83]">
           <p>1. Create objective.</p>
           <p>2. Create one template with day tasks, purpose/objective, average minutes, and optional start times.</p>
-          <p>3. Generate a week. Execution appears in Habits as checkboxes + hours.</p>
+          <p>3. Assign template to week in Execution Tracker. Then track checkboxes + minutes there.</p>
         </CardContent>
       </Card>
 
@@ -167,9 +198,16 @@ export default async function PlanningPage({
               objectives.map((objective) => {
                 const templateCount = templates.filter((template) => template.objective_id === objective.id).length;
                 return (
-                  <div key={objective.id} className="rounded-lg border border-[#c7d3e8] p-3">
+                  <div key={objective.id} className="rounded-lg border border-[#c7d3e8] bg-[#f8fbff] p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-[#0c1d3c]">{objective.title}</p>
+                      <div className="flex items-center gap-2">
+                        {objective.image_url ? (
+                          <div className="relative size-8 overflow-hidden rounded-md border border-[#d7e0f1] bg-white">
+                            <Image src={objective.image_url} alt={objective.title} fill className="object-cover" />
+                          </div>
+                        ) : null}
+                        <p className="text-sm font-semibold text-[#0c1d3c]">{objective.title}</p>
+                      </div>
                       <Badge variant="secondary">{templateCount} template(s)</Badge>
                     </div>
                     {objective.description ? <p className="mt-1 text-xs text-[#4a5f83]">{objective.description}</p> : null}
@@ -191,20 +229,21 @@ export default async function PlanningPage({
               templates.map((template) => {
                 const templateEntries = entries.filter((entry) => entry.template_id === template.id);
                 return (
-                  <div key={template.id} className="rounded-lg border border-[#c7d3e8] p-3">
+                  <div key={template.id} className="rounded-lg border border-[#c7d3e8] bg-[#f8fbff] p-3">
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <p className="text-sm font-semibold text-[#0c1d3c]">{template.name}</p>
-                      <Badge variant="secondary">Template</Badge>
+                      <Badge variant="secondary">{templateEntries.length} task(s)</Badge>
                     </div>
                     {templateEntries.length > 0 ? (
-                      <ul className="space-y-1 text-sm text-[#4a5f83]">
+                      <ul className="space-y-2 text-sm text-[#4a5f83]">
                         {templateEntries.map((entry) => {
                           const task = taskById.get(entry.habit_id);
                           const startTime = getStartTime(task?.metadata);
                           const taskObjective = objectiveById.get(task?.objective_id ?? "")?.title ?? "Objective";
                           return (
-                            <li key={entry.id}>
-                              {dayName[entry.day_of_week - 1]} · {task?.title ?? "Task"} ({entry.planned_minutes} min
+                            <li key={entry.id} className="rounded-md border border-[#d7e0f1] bg-white px-2 py-1.5">
+                              <span className="font-semibold text-[#0c1d3c]">{dayName[entry.day_of_week - 1]}</span> · {task?.title ?? "Task"} (
+                              {entry.planned_minutes} min
                               {startTime ? ` · ${startTime}` : ""}
                               {taskObjective ? ` · ${taskObjective}` : ""})
                             </li>
@@ -248,7 +287,7 @@ export default async function PlanningPage({
                     <div className="mt-2 flex items-center justify-between">
                       <Badge variant="secondary">Week {week.week_start_date}</Badge>
                       <a href={`/habits?week=${encodeURIComponent(week.week_start_date)}`} className="text-xs font-semibold text-[#0b1f3b]">
-                        Open in habits
+                        Open in execution
                       </a>
                     </div>
                   </div>
@@ -273,6 +312,7 @@ export default async function PlanningPage({
               <Label htmlFor="objectiveDescription">Description (optional)</Label>
               <Textarea id="objectiveDescription" name="description" placeholder="Short context for this objective." />
             </div>
+            <PexelsImagePicker inputName="imageUrl" label="Objective image (optional)" />
             <SubmitButton label="Save objective" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </form>
         </ModalShell>
@@ -306,25 +346,6 @@ export default async function PlanningPage({
         </ModalShell>
       ) : null}
 
-      {modal === "week" ? (
-        <ModalShell title="Generate week" description="Pick template and week start date." closeHref={buildPlanningHref()}>
-          {templates.length === 0 ? (
-            <p className="text-sm text-[#4a5f83]">Create template first.</p>
-          ) : (
-            <form action={generateWeekAction} className="space-y-4">
-              <input type="hidden" name="returnPath" value="/planning" />
-              <Select name="templateId" required>
-                <option value="">Template</option>
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>{template.name}</option>
-                ))}
-              </Select>
-              <Input name="weekStartDate" type="date" defaultValue={toDateInputValue(startOfIsoWeek(new Date()))} />
-              <SubmitButton label="Generate week" pendingLabel="Generating..." className="w-full sm:w-auto" />
-            </form>
-          )}
-        </ModalShell>
-      ) : null}
     </div>
   );
 }

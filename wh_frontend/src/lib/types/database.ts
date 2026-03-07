@@ -92,6 +92,7 @@ export type Database = {
           id: string;
           account_id: string;
           title: string;
+          image_url: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -99,6 +100,7 @@ export type Database = {
           id?: string;
           account_id: string;
           title: string;
+          image_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -106,6 +108,7 @@ export type Database = {
           id?: string;
           account_id?: string;
           title?: string;
+          image_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -148,6 +151,7 @@ export type Database = {
           account_id: string;
           title: string;
           description: string | null;
+          image_url: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -156,6 +160,7 @@ export type Database = {
           account_id: string;
           title: string;
           description?: string | null;
+          image_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -164,6 +169,7 @@ export type Database = {
           account_id?: string;
           title?: string;
           description?: string | null;
+          image_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -370,6 +376,7 @@ export type Database = {
           name: string;
           kind: "income" | "expense" | "savings" | "debt_payment";
           color: string | null;
+          image_url: string | null;
           monthly_limit: string | null;
           created_at: string;
         };
@@ -379,6 +386,7 @@ export type Database = {
           name: string;
           kind: "income" | "expense" | "savings" | "debt_payment";
           color?: string | null;
+          image_url?: string | null;
           monthly_limit?: string | null;
           created_at?: string;
         };
@@ -388,6 +396,7 @@ export type Database = {
           name?: string;
           kind?: "income" | "expense" | "savings" | "debt_payment";
           color?: string | null;
+          image_url?: string | null;
           monthly_limit?: string | null;
           created_at?: string;
         };

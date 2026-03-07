@@ -1,75 +1,98 @@
-# LifeFlow (LifeOS)
+# Momentum Grid
 
-A personal ERP that separates **thinking**, **planning**, **execution**, and **measurement**. Built with Next.js and Supabase.
+Momentum Grid is a personal productivity platform built with Next.js and Supabase.
 
-## Philosophy
+## Monorepo Structure
 
-Most productivity apps mix everything together. LifeOS separates layers clearly:
-
-| Layer | Purpose |
-|-------|---------|
-| **Knowledge** | Strategic thinking |
-| **Templates** | Weekly planning |
-| **Sessions** | Real execution |
-| **Finance** | Resource control |
-| **Analytics** | Self-awareness (computed) |
-
-## Project Structure
-
-```
-LifeFlow/
-├── wh_frontend/     # Next.js 15 + React + Supabase
-├── wh_supabase/     # Supabase migrations & config
+```text
+life_flow/
+├── wh_frontend/   # Next.js app (UI + server actions)
+├── wh_supabase/   # Supabase config + SQL migrations
 └── README.md
 ```
 
-## System Layers
+## Main Modules
 
-### Knowledge Layer (Strategic Brain)
-- **Knowledge spaces** — Big intentions (e.g. "Master System Design")
-- **Notes** — Topics inside a space
-- **Cards** — Atomic ideas, reorderable and linkable
-
-### Habit System (Execution Engine)
-- **Habits** — Permanent definitions (type, weekly target, minimum time)
-- **Habit sessions** — Reality: planned vs actual minutes, rating, notes
-
-### Weekly Planning (Tactical)
-- **Templates** — Weekly blueprints
-- **Template entries** — Habit + day + planned/min time + required
-- **Weeks** — Week instances; selecting a template generates habit sessions
-
-### Finance (Control & Awareness)
-- **Expenses** — Daily spending (ledger entries)
-- **Debts** — Long-term obligations
-- **Subscriptions** — Recurring payments
-
-## Getting Started
-
-### Prerequisites
-- Node.js 18+
-- Supabase account
-
-### Frontend
-```bash
-cd wh_frontend
-npm install
-cp .env.example .env.local  # Add Supabase URL + anon key
-npm run dev
-```
-
-### Database
-```bash
-cd wh_supabase
-# Configure Supabase connection in .env
-npm run run-migrations
-```
+- Dashboard
+- Planner
+- Weekly Tracker
+- Events
+- Finance
+- Knowledge
+- Analytics
+- Settings
 
 ## Tech Stack
 
-- **Frontend:** Next.js 15, React 18, Tailwind CSS, Supabase client
-- **Backend:** Supabase (PostgreSQL, Auth, RLS)
+- Next.js 15
+- React 18
+- Tailwind CSS
+- Supabase Auth + PostgreSQL + RLS
 
-## License
+## Environment
 
-Private project.
+### Frontend (`wh_frontend/.env.local`)
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+PEXELS_API_KEY=<pexels-api-key>
+DEMO_USER_EMAIL=demo@momentumgrid.app
+DEMO_USER_PASSWORD=Demo12345!
+```
+
+### Supabase migration runner (`wh_supabase/supabase/.env`)
+
+Use either:
+
+- `DATABASE_URL`
+- or `SUPABASE_URL` + `SUPABASE_DB_PASSWORD`
+
+## Local Development
+
+### 1) Install dependencies
+
+```bash
+cd wh_frontend && npm install
+cd ../wh_supabase && npm install
+```
+
+### 2) Run database migrations
+
+```bash
+cd wh_supabase
+npm run run-migrations
+```
+
+Current migration files:
+
+- `20260300000000_lifeflow_core_schema.sql`
+- `20260300010000_lifeflow_demo_feb_march_seed.sql`
+
+### 3) Run frontend
+
+```bash
+cd wh_frontend
+npm run dev
+```
+
+Open `http://localhost:3000`.
+
+## Demo Access
+
+- Auth pages include a `User demo` action (`Open Demo Space`).
+- Demo data is seeded for February and March 2026.
+
+## Useful Scripts
+
+In `wh_frontend`:
+
+- `npm run dev`
+- `npm run build`
+- `npm run lint`
+- `npm run typecheck`
+
+In `wh_supabase`:
+
+- `npm run run-migrations`

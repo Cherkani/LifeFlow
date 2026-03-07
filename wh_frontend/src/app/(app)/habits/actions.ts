@@ -10,7 +10,8 @@ const dateInputSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
 
 const createObjectiveSchema = z.object({
   title: z.string().trim().min(2, "Objective title is required").max(160),
-  description: z.string().trim().max(1200).optional()
+  description: z.string().trim().max(1200).optional(),
+  imageUrl: z.string().trim().optional()
 });
 
 const createHabitSchema = z.object({
@@ -51,6 +52,12 @@ const generateWeekSchema = z.object({
   weekStartDate: dateInputSchema
 });
 
+const addCompensationSessionSchema = z.object({
+  habitId: z.string().uuid(),
+  sessionDate: dateInputSchema,
+  doneMinutes: z.coerce.number().int().min(1).max(100000)
+});
+
 function getSafeReturnPath(raw: FormDataEntryValue | null) {
   const value = typeof raw === "string" ? raw.trim() : "";
   if (value.startsWith("/habits") || value.startsWith("/planning")) {
@@ -67,7 +74,8 @@ export async function createObjectiveAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = createObjectiveSchema.safeParse({
     title: formData.get("title"),
-    description: formData.get("description")
+    description: formData.get("description"),
+    imageUrl: formData.get("imageUrl")
   });
 
   if (!payload.success) {
@@ -79,7 +87,8 @@ export async function createObjectiveAction(formData: FormData) {
   await supabase.from("habit_objectives").insert({
     account_id: account.accountId,
     title: payload.data.title,
-    description: payload.data.description?.trim() ? payload.data.description : null
+    description: payload.data.description?.trim() ? payload.data.description : null,
+    image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null
   });
 
   revalidatePath("/habits");
@@ -288,7 +297,6 @@ export async function generateWeekFromTemplateAction(formData: FormData) {
     .eq("week_start_date", payload.data.weekStartDate)
     .maybeSingle();
 
-  // Week assignment is immutable after first save.
   if (existingWeek?.id) {
     redirectToPath(returnPath);
   }
@@ -301,6 +309,52 @@ export async function generateWeekFromTemplateAction(formData: FormData) {
 
   revalidatePath("/habits");
   revalidatePath("/planning");
+  revalidatePath("/dashboard");
+  revalidatePath("/analytics");
+  redirectToPath(returnPath);
+}
+
+export async function addCompensationSessionAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = addCompensationSessionSchema.safeParse({
+    habitId: formData.get("habitId"),
+    sessionDate: formData.get("sessionDate"),
+    doneMinutes: formData.get("doneMinutes")
+  });
+
+  if (!payload.success) {
+    redirectToPath(returnPath);
+  }
+
+  const { supabase } = await requireAppContext();
+  const { data: existing } = await supabase
+    .from("habit_sessions")
+    .select("id, actual_minutes, planned_minutes, minimum_minutes")
+    .eq("habit_id", payload.data.habitId)
+    .eq("session_date", payload.data.sessionDate)
+    .maybeSingle();
+
+  if (existing?.id) {
+    const updatedMinutes = (existing.actual_minutes ?? 0) + payload.data.doneMinutes;
+    await supabase
+      .from("habit_sessions")
+      .update({
+        actual_minutes: updatedMinutes,
+        completed: true
+      })
+      .eq("id", existing.id);
+  } else {
+    await supabase.from("habit_sessions").insert({
+      habit_id: payload.data.habitId,
+      session_date: payload.data.sessionDate,
+      planned_minutes: 0,
+      minimum_minutes: 0,
+      actual_minutes: payload.data.doneMinutes,
+      completed: true
+    });
+  }
+
+  revalidatePath("/habits");
   revalidatePath("/dashboard");
   revalidatePath("/analytics");
   redirectToPath(returnPath);

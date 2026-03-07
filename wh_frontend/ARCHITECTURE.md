@@ -1,4 +1,4 @@
-# LifeFlow Frontend Architecture
+# Momentum Grid Frontend Architecture
 
 ## Stack
 - Next.js 15 (App Router)

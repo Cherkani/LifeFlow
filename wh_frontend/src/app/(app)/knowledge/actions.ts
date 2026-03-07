@@ -7,7 +7,8 @@ import { z } from "zod";
 import { requireAppContext } from "@/lib/server-context";
 
 const createSpaceSchema = z.object({
-  title: z.string().trim().min(2, "Space title is required").max(140)
+  title: z.string().trim().min(2, "Space title is required").max(140),
+  imageUrl: z.string().trim().optional()
 });
 
 const createItemSchema = z.object({
@@ -111,7 +112,8 @@ function revalidateKnowledgeRoutes(spaceId?: string | null) {
 export async function createKnowledgeSpaceAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"), "/knowledge");
   const payload = createSpaceSchema.safeParse({
-    title: formData.get("title")
+    title: formData.get("title"),
+    imageUrl: formData.get("imageUrl")
   });
 
   if (!payload.success) {
@@ -119,12 +121,15 @@ export async function createKnowledgeSpaceAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
+  const imageUrl = normalizeOptional(payload.data.imageUrl);
+  const safeImageUrl = imageUrl && URL.canParse(imageUrl) ? imageUrl : null;
 
   const { data: space, error } = await supabase
     .from("knowledge_spaces")
     .insert({
       account_id: account.accountId,
-      title: payload.data.title
+      title: payload.data.title,
+      image_url: safeImageUrl
     })
     .select("id")
     .single();

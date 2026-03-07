@@ -18,9 +18,7 @@ export async function createServerSupabaseClient() {
           for (const { name, value, options } of cookiesToSet) {
             cookieStore.set(name, value, options);
           }
-        } catch {
-          // noop: Server Components cannot set cookies during render.
-        }
+        } catch {}
       }
     }
   });

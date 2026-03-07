@@ -1,9 +1,12 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getSupabaseEnv } from "@/lib/supabase/env";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email"),
@@ -114,4 +117,122 @@ export async function resetPasswordAction(formData: FormData) {
   }
 
   redirect("/login?success=password-reset");
+}
+
+function getSafeNextPath(raw: FormDataEntryValue | null) {
+  const value = typeof raw === "string" ? raw.trim() : "";
+  if (value.startsWith("/")) {
+    return value;
+  }
+  return "/dashboard";
+}
+
+async function resolveSiteUrl() {
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL;
+  }
+
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+  const proto = requestHeaders.get("x-forwarded-proto") ?? "http";
+  if (host) {
+    return `${proto}://${host}`;
+  }
+
+  return "http://localhost:3000";
+}
+
+export async function signInWithGoogleAction(formData: FormData) {
+  const nextPath = getSafeNextPath(formData.get("next"));
+  const supabase = await createServerSupabaseClient();
+  const siteUrl = await resolveSiteUrl();
+  const redirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent(nextPath)}`;
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo
+    }
+  });
+
+  if (error) {
+    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+  }
+
+  if (!data.url) {
+    redirect(`/login?error=${encodeURIComponent("Could not start Google sign-in")}`);
+  }
+
+  redirect(data.url as Parameters<typeof redirect>[0]);
+}
+
+export async function loginDemoUserAction() {
+  const email = process.env.DEMO_USER_EMAIL ?? "demo@momentumgrid.app";
+  const password = process.env.DEMO_USER_PASSWORD ?? "Demo12345!";
+  const supabase = await createServerSupabaseClient();
+
+  let activeUserId: string | null = null;
+  const loginAttempt = await supabase.auth.signInWithPassword({ email, password });
+  if (loginAttempt.data.user?.id) {
+    activeUserId = loginAttempt.data.user.id;
+  }
+
+  if (loginAttempt.error) {
+    const lower = loginAttempt.error.message.toLowerCase();
+
+    if (lower.includes("email not confirmed")) {
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (serviceRoleKey) {
+        const { url } = getSupabaseEnv();
+        const admin = createClient(url, serviceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false }
+        });
+
+        const adminCreate = await admin.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: {
+            full_name: "Momentum Grid Demo",
+            timezone: "Africa/Casablanca",
+            account_name: "Momentum Grid Demo"
+          }
+        });
+
+        if (adminCreate.error && !adminCreate.error.message.toLowerCase().includes("already")) {
+          redirect(`/login?error=${encodeURIComponent(adminCreate.error.message)}`);
+        }
+      } else {
+        redirect("/login?error=Demo account not ready yet. Add SUPABASE_SERVICE_ROLE_KEY on server to auto-confirm demo user.");
+      }
+    }
+
+    const signUpAttempt = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: "Momentum Grid Demo",
+          timezone: "Africa/Casablanca",
+          account_name: "Momentum Grid Demo"
+        }
+      }
+    });
+
+    if (signUpAttempt.error && !signUpAttempt.error.message.toLowerCase().includes("already")) {
+      redirect(`/login?error=${encodeURIComponent(signUpAttempt.error.message)}`);
+    }
+
+    const retryLogin = await supabase.auth.signInWithPassword({ email, password });
+    if (retryLogin.error) {
+      redirect(`/login?error=${encodeURIComponent(retryLogin.error.message)}`);
+    }
+    activeUserId = retryLogin.data.user?.id ?? null;
+  }
+
+  if (activeUserId) {
+    await supabase.rpc("seed_demo_data_for_user", { p_user_id: activeUserId });
+  }
+  await supabase.rpc("update_my_last_signed_in");
+  redirect("/dashboard");
 }

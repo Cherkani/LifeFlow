@@ -5,11 +5,16 @@ import { cn } from "@/lib/utils";
 type CardProps = HTMLAttributes<HTMLDivElement>;
 
 export function Card({ className, ...props }: CardProps) {
-  return <div className={cn("rounded-2xl border border-[#c7d3e8] bg-[#f2f6fe] shadow-sm", className)} {...props} />;
+  return (
+    <div
+      className={cn("rounded-2xl border border-[#dddced] bg-[rgba(255,255,255,0.78)] shadow-[0_10px_24px_rgba(64,56,110,0.07)] backdrop-blur-sm", className)}
+      {...props}
+    />
+  );
 }
 
 export function CardHeader({ className, ...props }: CardProps) {
-  return <div className={cn("border-b border-[#d7e0f1] px-5 py-4", className)} {...props} />;
+  return <div className={cn("border-b border-[#ecebf6] px-5 py-4", className)} {...props} />;
 }
 
 export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {

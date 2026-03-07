@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { ArrowLeft, Lock, Mail } from "lucide-react";
+import { Lock, Mail } from "lucide-react";
 
-import { loginAction } from "@/app/(auth)/actions";
+import { loginAction, loginDemoUserAction } from "@/app/(auth)/actions";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -17,13 +18,23 @@ export default async function LoginPage({
   const params = await searchParams;
 
   return (
-    <Card>
+    <Card className="auth-card">
       <CardHeader className="space-y-3">
-        <Link href="/" className="inline-flex items-center text-sm text-slate-600 hover:text-slate-900">
-          <ArrowLeft size={16} className="mr-2" />
-          Back to home
-        </Link>
-        <CardTitle className="text-2xl">Sign in to LifeFlow</CardTitle>
+        <CardTitle className="auth-title text-2xl">Sign in to Momentum Grid</CardTitle>
+        <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+          <Link
+            href="/login"
+            className="rounded-lg bg-white px-3 py-2 text-center text-sm font-semibold text-slate-900 shadow-sm transition-all duration-200 hover:-translate-y-0.5"
+          >
+            Sign in
+          </Link>
+          <Link
+            href="/signup"
+            className="rounded-lg px-3 py-2 text-center text-sm font-semibold text-slate-600 transition-all duration-200 hover:bg-white/70 hover:text-slate-800"
+          >
+            Sign up
+          </Link>
+        </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -56,8 +67,25 @@ export default async function LoginPage({
             </div>
           </div>
 
-          <SubmitButton label="Sign in" pendingLabel="Signing in..." className="w-full" />
+          <SubmitButton label="Sign in" pendingLabel="Signing in..." className="auth-primary-btn w-full" />
         </form>
+
+        <div className="pt-1">
+          <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">Google (soon)</p>
+          <div className="flex items-center justify-center gap-2">
+            <Button type="button" variant="outline" size="icon" disabled aria-label="Continue with Google (coming soon)">
+              <span className="text-base font-bold text-slate-600">G</span>
+            </Button>
+            <form action={loginDemoUserAction}>
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-[#8c88bc] bg-[#f5f4fb] px-3 text-sm font-semibold text-[#5e5a87] transition-colors hover:bg-[#eceaf7]"
+              >
+                Demo
+              </button>
+            </form>
+          </div>
+        </div>
 
         <p className="text-center text-sm text-slate-600">
           Not registered? <Link href="/signup" className="font-semibold text-slate-900">Create account</Link>

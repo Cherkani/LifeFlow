@@ -1,6 +1,15 @@
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
+import { AnalyticsCharts } from "@/app/(app)/analytics/analytics-charts";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireAppContext } from "@/lib/server-context";
 import { endOfIsoWeek, startOfIsoWeek } from "@/lib/utils";
+
+type AnalyticsSearchParams = Promise<{
+  week?: string;
+  month?: string;
+}>;
 
 type HabitSession = {
   id: string;
@@ -28,30 +37,74 @@ function toIsoDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
-function formatDayLabel(value: string) {
-  return new Date(`${value}T00:00:00`).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric"
-  });
+function toMonthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export default async function AnalyticsPage() {
-  const { supabase, account } = await requireAppContext();
-  const today = new Date();
+function parseWeekStart(raw: string | undefined) {
+  if (typeof raw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return startOfIsoWeek(new Date(`${raw}T00:00:00`));
+  }
+  return startOfIsoWeek(new Date());
+}
 
-  const weekStart = startOfIsoWeek(today);
-  const weekEnd = endOfIsoWeek(today);
+function parseMonthStart(raw: string | undefined) {
+  if (typeof raw === "string" && /^\d{4}-\d{2}$/.test(raw)) {
+    const [yearRaw, monthRaw] = raw.split("-");
+    const year = Number(yearRaw);
+    const month = Number(monthRaw);
+    if (Number.isFinite(year) && Number.isFinite(month) && month >= 1 && month <= 12) {
+      return new Date(year, month - 1, 1);
+    }
+  }
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1);
+}
+
+function formatWeekRange(start: Date, end: Date) {
+  return `${start.toLocaleDateString("en-US")} - ${end.toLocaleDateString("en-US")}`;
+}
+
+function analyticsHref(weekStart: Date, monthStart: Date) {
+  const query = new URLSearchParams();
+  query.set("week", toIsoDate(startOfIsoWeek(weekStart)));
+  query.set("month", toMonthKey(monthStart));
+  return `/analytics?${query.toString()}`;
+}
+
+export default async function AnalyticsPage({
+  searchParams
+}: {
+  searchParams: AnalyticsSearchParams;
+}) {
+  const params = await searchParams;
+  const weekStart = parseWeekStart(params.week);
+  const weekEnd = endOfIsoWeek(weekStart);
+  const monthStart = parseMonthStart(params.month);
+  const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
+
+  const previousWeekStart = new Date(weekStart);
+  previousWeekStart.setDate(previousWeekStart.getDate() - 7);
+  const nextWeekStart = new Date(weekStart);
+  nextWeekStart.setDate(nextWeekStart.getDate() + 7);
+
+  const previousMonthStart = new Date(monthStart.getFullYear(), monthStart.getMonth() - 1, 1);
+  const nextMonthStart = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
+
   const weekStartIso = toIsoDate(weekStart);
   const weekEndIso = toIsoDate(weekEnd);
+  const monthStartIso = toIsoDate(monthStart);
+  const monthEndIso = toIsoDate(monthEnd);
 
-  const monthStartIso = toIsoDate(new Date(today.getFullYear(), today.getMonth(), 1));
-  const monthEndIso = toIsoDate(new Date(today.getFullYear(), today.getMonth() + 1, 0));
+  const previousWeekEnd = endOfIsoWeek(previousWeekStart);
+  const previousWeekStartIso = toIsoDate(previousWeekStart);
+  const previousWeekEndIso = toIsoDate(previousWeekEnd);
 
+  const { supabase, account } = await requireAppContext();
   const habitsRes = await supabase.from("habits").select("id").eq("account_id", account.accountId).eq("is_active", true);
   const habitIds = (habitsRes.data ?? []).map((habit) => habit.id);
 
-  const [weekSessionsRes, monthSessionsRes, categoriesRes, monthExpensesRes] = await Promise.all([
+  const [weekSessionsRes, previousWeekSessionsRes, monthSessionsRes, categoriesRes, monthExpensesRes] = await Promise.all([
     habitIds.length > 0
       ? supabase
           .from("habit_sessions")
@@ -60,6 +113,14 @@ export default async function AnalyticsPage() {
           .gte("session_date", weekStartIso)
           .lte("session_date", weekEndIso)
           .order("session_date", { ascending: true })
+      : Promise.resolve({ data: [] as HabitSession[] }),
+    habitIds.length > 0
+      ? supabase
+          .from("habit_sessions")
+          .select("id, habit_id, session_date, planned_minutes, actual_minutes, completed")
+          .in("habit_id", habitIds)
+          .gte("session_date", previousWeekStartIso)
+          .lte("session_date", previousWeekEndIso)
       : Promise.resolve({ data: [] as HabitSession[] }),
     habitIds.length > 0
       ? supabase
@@ -77,7 +138,7 @@ export default async function AnalyticsPage() {
       .order("name"),
     supabase
       .from("ledger_entries")
-      .select("id, category_id, amount")
+      .select("id, category_id, amount, occurred_on")
       .eq("account_id", account.accountId)
       .eq("entry_type", "expense")
       .gte("occurred_on", monthStartIso)
@@ -85,23 +146,21 @@ export default async function AnalyticsPage() {
   ]);
 
   const weekSessions = (weekSessionsRes.data ?? []) as HabitSession[];
+  const previousWeekSessions = (previousWeekSessionsRes.data ?? []) as HabitSession[];
   const monthSessions = (monthSessionsRes.data ?? []) as HabitSession[];
   const categories = categoriesRes.data ?? [];
   const monthExpenses = monthExpensesRes.data ?? [];
 
   const weekPlannedHours = weekSessions.reduce((sum, session) => sum + session.planned_minutes, 0) / 60;
   const weekDoneHours = weekSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;
-  const weekCompletion = percent(
-    weekSessions.filter((session) => session.completed).length,
-    weekSessions.length
-  );
+  const weekCompletion = percent(weekSessions.filter((session) => session.completed).length, weekSessions.length);
+  const previousWeekDoneHours = previousWeekSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;
+  const trendDeltaHours = weekDoneHours - previousWeekDoneHours;
+  const trendText = trendDeltaHours >= 0 ? `+${trendDeltaHours.toFixed(1)}h vs previous week` : `${trendDeltaHours.toFixed(1)}h vs previous week`;
 
   const monthPlannedHours = monthSessions.reduce((sum, session) => sum + session.planned_minutes, 0) / 60;
   const monthDoneHours = monthSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;
-  const monthCompletion = percent(
-    monthSessions.filter((session) => session.completed).length,
-    monthSessions.length
-  );
+  const monthCompletion = percent(monthSessions.filter((session) => session.completed).length, monthSessions.length);
 
   const weekDates = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(weekStart);
@@ -109,34 +168,50 @@ export default async function AnalyticsPage() {
     return toIsoDate(date);
   });
 
-  const dailyRows = weekDates.map((dateKey) => {
+  const weeklyChartData = weekDates.map((dateKey) => {
     const sessions = weekSessions.filter((session) => session.session_date === dateKey);
-    const planned = sessions.reduce((sum, session) => sum + session.planned_minutes, 0) / 60;
-    const done = sessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;
-    const completion = percent(
-      sessions.filter((session) => session.completed).length,
-      sessions.length
-    );
-
+    const plannedHours = sessions.reduce((sum, session) => sum + session.planned_minutes, 0) / 60;
+    const doneHours = sessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;
     return {
-      dateKey,
-      planned,
-      done,
-      completion
+      day: new Date(`${dateKey}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" }),
+      plannedHours: Number(plannedHours.toFixed(1)),
+      doneHours: Number(doneHours.toFixed(1)),
+      completion: percent(sessions.filter((session) => session.completed).length, sessions.length)
     };
   });
 
+  const monthDates = Array.from({ length: monthEnd.getDate() }, (_, index) => {
+    const date = new Date(monthStart);
+    date.setDate(monthStart.getDate() + index);
+    return toIsoDate(date);
+  });
+
+  const expenseByDay = new Map<string, number>();
   const spentByCategory = new Map<string, number>();
   for (const expense of monthExpenses) {
-    const key = expense.category_id ?? "";
-    spentByCategory.set(key, (spentByCategory.get(key) ?? 0) + Number(expense.amount));
+    const amount = Number(expense.amount);
+    const dayKey = expense.occurred_on;
+    expenseByDay.set(dayKey, (expenseByDay.get(dayKey) ?? 0) + amount);
+    const categoryKey = expense.category_id ?? "";
+    spentByCategory.set(categoryKey, (spentByCategory.get(categoryKey) ?? 0) + amount);
   }
+
+  const monthlyChartData = monthDates.map((dateKey) => {
+    const sessions = monthSessions.filter((session) => session.session_date === dateKey);
+    const plannedHours = sessions.reduce((sum, session) => sum + session.planned_minutes, 0) / 60;
+    const doneHours = sessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;
+    return {
+      day: new Date(`${dateKey}T00:00:00`).toLocaleDateString("en-US", { day: "2-digit" }),
+      plannedHours: Number(plannedHours.toFixed(1)),
+      doneHours: Number(doneHours.toFixed(1)),
+      expense: Number((expenseByDay.get(dateKey) ?? 0).toFixed(2))
+    };
+  });
 
   const categoriesWithMetrics = categories.map((category) => {
     const spent = spentByCategory.get(category.id) ?? 0;
     const limit = category.monthly_limit ? Number(category.monthly_limit) : null;
     const ratio = limit && limit > 0 ? Math.min((spent / limit) * 100, 100) : 0;
-
     return {
       ...category,
       spent,
@@ -146,36 +221,98 @@ export default async function AnalyticsPage() {
     };
   });
 
+  const expensePieData = categoriesWithMetrics
+    .filter((category) => category.spent > 0)
+    .sort((a, b) => b.spent - a.spent)
+    .slice(0, 6)
+    .map((category) => ({
+      name: category.name,
+      spent: Number(category.spent.toFixed(2))
+    }));
+
   const monthSpent = monthExpenses.reduce((sum, entry) => sum + Number(entry.amount), 0);
   const monthLimit = categoriesWithMetrics.reduce((sum, category) => sum + (category.limit ?? 0), 0);
   const overLimitCount = categoriesWithMetrics.filter((category) => category.overBy > 0).length;
+  const monthPace = monthLimit > 0 ? Math.round((monthSpent / monthLimit) * 100) : 0;
+  const activeDays = weeklyChartData.filter((row) => row.doneHours > 0).length;
 
   return (
     <div className="space-y-6">
       <Card>
         <CardContent className="space-y-2 py-6">
           <h1 className="text-4xl font-bold tracking-tight text-[#0c1d3c]">Analysis</h1>
-          <p className="text-base text-[#4a5f83]">Weekly and monthly productivity hours, plus spending control.</p>
+          <p className="text-base text-[#4a5f83]">Richer weekly/monthly insights for execution and spending.</p>
         </CardContent>
       </Card>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Week Selector</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-2">
+              <a
+                href={analyticsHref(previousWeekStart, monthStart)}
+                className="inline-flex size-9 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] text-[#23406d]"
+              >
+                <ChevronLeft size={16} />
+              </a>
+              <p className="text-sm font-semibold text-[#0c1d3c]">{formatWeekRange(weekStart, weekEnd)}</p>
+              <a
+                href={analyticsHref(nextWeekStart, monthStart)}
+                className="inline-flex size-9 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] text-[#23406d]"
+              >
+                <ChevronRight size={16} />
+              </a>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">Week done {weekDoneHours.toFixed(1)}h</Badge>
+              <Badge variant="secondary">Week planned {weekPlannedHours.toFixed(1)}h</Badge>
+              <Badge variant={weekCompletion >= 75 ? "secondary" : "warning"}>{weekCompletion}% completion</Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Month Selector</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-2">
+              <a
+                href={analyticsHref(weekStart, previousMonthStart)}
+                className="inline-flex size-9 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] text-[#23406d]"
+              >
+                <ChevronLeft size={16} />
+              </a>
+              <p className="text-sm font-semibold text-[#0c1d3c]">
+                {monthStart.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+              </p>
+              <a
+                href={analyticsHref(weekStart, nextMonthStart)}
+                className="inline-flex size-9 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] text-[#23406d]"
+              >
+                <ChevronRight size={16} />
+              </a>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">Month done {monthDoneHours.toFixed(1)}h</Badge>
+              <Badge variant="secondary">Month planned {monthPlannedHours.toFixed(1)}h</Badge>
+              <Badge variant={monthCompletion >= 75 ? "secondary" : "warning"}>{monthCompletion}% completion</Badge>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm uppercase tracking-wide text-[#4a5f83]">Week done</CardTitle>
+            <CardTitle className="text-sm uppercase tracking-wide text-[#4a5f83]">Weekly trend</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold text-[#0c1d3c]">{weekDoneHours.toFixed(1)}h</p>
-            <p className="text-xs text-[#4a5f83]">Planned {weekPlannedHours.toFixed(1)}h · {weekCompletion}% complete</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm uppercase tracking-wide text-[#4a5f83]">Month done</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold text-[#0c1d3c]">{monthDoneHours.toFixed(1)}h</p>
-            <p className="text-xs text-[#4a5f83]">Planned {monthPlannedHours.toFixed(1)}h · {monthCompletion}% complete</p>
+            <p className={`text-2xl font-semibold ${trendDeltaHours >= 0 ? "text-emerald-700" : "text-rose-700"}`}>{trendText}</p>
+            <p className="text-xs text-[#4a5f83]">{activeDays}/7 active days</p>
           </CardContent>
         </Card>
         <Card>
@@ -184,7 +321,7 @@ export default async function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-semibold text-rose-700">{money(monthSpent, account.currencyCode)}</p>
-            <p className="text-xs text-[#4a5f83]">Across {categories.length} expense categories</p>
+            <p className="text-xs text-[#4a5f83]">{categories.length} expense categories</p>
           </CardContent>
         </Card>
         <Card>
@@ -193,86 +330,26 @@ export default async function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-semibold text-amber-700">{overLimitCount} over limit</p>
-            <p className="text-xs text-[#4a5f83]">
-              {monthLimit > 0
-                ? `Global limit ${money(monthLimit, account.currencyCode)}`
-                : "Set monthly limits in Finance"}
-            </p>
+            <p className="text-xs text-[#4a5f83]">{monthLimit > 0 ? `${monthPace}% of total limit used` : "Set finance limits"}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm uppercase tracking-wide text-[#4a5f83]">Overall completion</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold text-[#0c1d3c]">{Math.round((weekCompletion + monthCompletion) / 2)}%</p>
+            <p className="text-xs text-[#4a5f83]">Blended week/month completion</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Weekly productivity by day</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {dailyRows.some((row) => row.planned > 0 || row.done > 0) ? (
-              <div className="space-y-3">
-                {dailyRows.map((row) => {
-                  const width = row.planned > 0 ? Math.min((row.done / row.planned) * 100, 100) : 0;
-                  return (
-                    <div key={row.dateKey} className="rounded-lg border border-[#c7d3e8] p-3">
-                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-semibold text-[#0c1d3c]">{formatDayLabel(row.dateKey)}</p>
-                        <p className="text-xs text-[#4a5f83]">
-                          {row.done.toFixed(1)}h / {row.planned.toFixed(1)}h · {row.completion}%
-                        </p>
-                      </div>
-                      <div className="h-2 rounded-full bg-[#e1e8f6]">
-                        <div className="h-2 rounded-full bg-[#0b1f3b]" style={{ width: `${width}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-sm text-[#4a5f83]">No habit sessions for this week.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Expense category limits</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {categoriesWithMetrics.length > 0 ? (
-              <div className="space-y-3">
-                {categoriesWithMetrics.map((category) => (
-                  <div key={category.id} className="rounded-lg border border-[#c7d3e8] p-3">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-[#0c1d3c]">{category.name}</p>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                          category.overBy > 0 ? "bg-rose-100 text-rose-700" : "bg-[#dbe5f7] text-[#23406d]"
-                        }`}
-                      >
-                        {category.overBy > 0 ? "Over limit" : "On track"}
-                      </span>
-                    </div>
-                    <p className="text-xs text-[#4a5f83]">
-                      {money(category.spent, account.currencyCode)}
-                      {category.limit !== null ? ` / ${money(category.limit, account.currencyCode)}` : " (no limit)"}
-                    </p>
-                    {category.limit !== null ? (
-                      <div className="mt-2 h-2 rounded-full bg-[#e1e8f6]">
-                        <div
-                          className={`h-2 rounded-full ${category.overBy > 0 ? "bg-rose-600" : "bg-[#0b1f3b]"}`}
-                          style={{ width: `${category.ratio}%` }}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-[#4a5f83]">No expense categories yet.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <AnalyticsCharts
+        weekly={weeklyChartData}
+        monthly={monthlyChartData}
+        expenseCategories={expensePieData}
+        currencyCode={account.currencyCode}
+      />
     </div>
   );
 }

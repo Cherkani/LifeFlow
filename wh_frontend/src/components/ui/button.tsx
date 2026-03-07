@@ -11,10 +11,10 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variantClasses: Record<ButtonVariant, string> = {
-  default: "bg-[#0b1f3b] text-white hover:bg-[#102a52]",
-  secondary: "bg-[#1e3a6d] text-white hover:bg-[#274881]",
-  outline: "border border-[#0b1f3b] bg-[#edf3ff] text-[#0b1f3b] hover:bg-[#e0eaf9]",
-  ghost: "bg-transparent text-[#0b1f3b] hover:bg-[#e8effa]",
+  default: "bg-[#6f6aa8] text-white hover:bg-[#625d98]",
+  secondary: "bg-[#8c88bc] text-white hover:bg-[#7d78ae]",
+  outline: "border border-[#8c88bc] bg-[#f5f4fb] text-[#5e5a87] hover:bg-[#eceaf7]",
+  ghost: "bg-transparent text-[#5e5a87] hover:bg-[#eeecf8]",
   destructive: "bg-rose-600 text-white hover:bg-rose-500"
 };
 
@@ -30,7 +30,7 @@ export function Button({ className, variant = "default", size = "default", type 
     <button
       type={type}
       className={cn(
-        "inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a6d] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8f8abf] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
         variantClasses[variant],
         sizeClasses[size],
         className

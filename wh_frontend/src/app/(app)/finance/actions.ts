@@ -10,7 +10,8 @@ const dateInputSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
 
 const createCategorySchema = z.object({
   name: z.string().trim().min(2).max(120),
-  monthlyLimit: z.union([z.literal(""), z.coerce.number().min(0).max(100000000)]).optional()
+  monthlyLimit: z.union([z.literal(""), z.coerce.number().min(0).max(100000000)]).optional(),
+  imageUrl: z.string().trim().optional()
 });
 
 const createExpenseSchema = z.object({
@@ -50,7 +51,8 @@ export async function createExpenseCategoryAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = createCategorySchema.safeParse({
     name: formData.get("name"),
-    monthlyLimit: formData.get("monthlyLimit")
+    monthlyLimit: formData.get("monthlyLimit"),
+    imageUrl: formData.get("imageUrl")
   });
 
   if (!payload.success) {
@@ -67,7 +69,8 @@ export async function createExpenseCategoryAction(formData: FormData) {
     account_id: account.accountId,
     name: payload.data.name,
     kind: "expense",
-    monthly_limit: monthlyLimit
+    monthly_limit: monthlyLimit,
+    image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null
   });
 
   revalidatePath("/finance");
