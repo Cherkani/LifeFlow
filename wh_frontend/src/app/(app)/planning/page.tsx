@@ -193,27 +193,27 @@ export default async function PlanningPage({
           <CardHeader>
             <CardTitle>Objectives</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent>
             {objectives.length > 0 ? (
-              objectives.map((objective) => {
-                const templateCount = templates.filter((template) => template.objective_id === objective.id).length;
-                return (
-                  <div key={objective.id} className="rounded-lg border border-[#c7d3e8] bg-[#f8fbff] p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        {objective.image_url ? (
-                          <div className="relative size-8 overflow-hidden rounded-md border border-[#d7e0f1] bg-white">
-                            <Image src={objective.image_url} alt={objective.title} fill className="object-cover" />
-                          </div>
-                        ) : null}
-                        <p className="text-sm font-semibold text-[#0c1d3c]">{objective.title}</p>
+              <div className="grid gap-3 lg:grid-cols-3">
+                {objectives.map((objective) => {
+                  const templateCount = templates.filter((template) => template.objective_id === objective.id).length;
+                  return (
+                    <div key={objective.id} className="rounded-lg border border-[#c7d3e8] bg-[#f8fbff] p-3">
+                      {objective.image_url ? (
+                        <div className="relative mb-3 h-28 w-full overflow-hidden rounded-lg border border-[#d7e0f1] bg-white">
+                          <Image src={objective.image_url} alt={objective.title} fill className="object-cover" />
+                        </div>
+                      ) : null}
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="truncate text-base font-semibold text-[#0c1d3c]">{objective.title}</p>
+                        <Badge variant="secondary" className="shrink-0">{templateCount} template(s)</Badge>
                       </div>
-                      <Badge variant="secondary">{templateCount} template(s)</Badge>
+                      {objective.description ? <p className="mt-1 text-xs leading-5 text-[#4a5f83]">{objective.description}</p> : null}
                     </div>
-                    {objective.description ? <p className="mt-1 text-xs text-[#4a5f83]">{objective.description}</p> : null}
-                  </div>
-                );
-              })
+                  );
+                })}
+              </div>
             ) : (
               <p className="text-sm text-[#4a5f83]">No objectives yet.</p>
             )}

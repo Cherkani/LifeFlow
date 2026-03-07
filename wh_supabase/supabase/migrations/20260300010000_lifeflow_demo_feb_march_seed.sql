@@ -31,7 +31,7 @@ begin
   end if;
 
   insert into public.profiles (id, full_name, email, role, timezone, is_active)
-  values (v_demo_user_id, 'Momentum Grid Demo', coalesce((select email from auth.users where id = v_demo_user_id), 'demo@momentumgrid.app'), 'user', 'Africa/Casablanca', true)
+  values (v_demo_user_id, 'Momentum Grid Demo', coalesce((select email from auth.users where id = v_demo_user_id), 'demo@lifeflow.app'), 'user', 'Africa/Casablanca', true)
   on conflict (id) do update set
     full_name = excluded.full_name,
     email = excluded.email,
@@ -201,6 +201,45 @@ begin
     end if;
   end loop;
 
+  if to_regclass('public.debt_payments') is not null and to_regclass('public.debts') is not null then
+    delete from public.debt_payments
+    where account_id = v_account_id;
+
+    delete from public.debts
+    where account_id = v_account_id and name in ('Laptop Installments', 'Friend Loan');
+
+    insert into public.debts (account_id, type, name, principal, apr, due_date, status, remaining_balance, created_by)
+    values
+      (v_account_id, 'owing', 'Laptop Installments', 9000, 7.5, date '2026-08-31', 'open', 4200, v_profile_id),
+      (v_account_id, 'owed', 'Friend Loan', 2500, null, date '2026-04-30', 'open', 1100, v_profile_id);
+
+    insert into public.debt_payments (account_id, debt_id, amount, paid_at, method, notes, created_by)
+    select v_account_id, d.id, 600, date '2026-02-10', 'bank_transfer', 'February installment', v_profile_id
+    from public.debts d
+    where d.account_id = v_account_id and d.name = 'Laptop Installments';
+
+    insert into public.debt_payments (account_id, debt_id, amount, paid_at, method, notes, created_by)
+    select v_account_id, d.id, 700, date '2026-03-10', 'bank_transfer', 'March installment', v_profile_id
+    from public.debts d
+    where d.account_id = v_account_id and d.name = 'Laptop Installments';
+
+    insert into public.debt_payments (account_id, debt_id, amount, paid_at, method, notes, created_by)
+    select v_account_id, d.id, 800, date '2026-03-18', 'cash', 'Partial repayment from friend', v_profile_id
+    from public.debts d
+    where d.account_id = v_account_id and d.name = 'Friend Loan';
+  end if;
+
+  if to_regclass('public.subscriptions') is not null then
+    delete from public.subscriptions
+    where account_id = v_account_id and name in ('Notion Plus', 'Spotify', 'Cloud Storage');
+
+    insert into public.subscriptions (account_id, name, amount, currency_code, recurrence, next_due_date, notes, is_active)
+    values
+      (v_account_id, 'Notion Plus', 10, 'USD', 'monthly', date '2026-04-01', 'Knowledge workspace', true),
+      (v_account_id, 'Spotify', 6, 'USD', 'monthly', date '2026-04-07', 'Music while working', true),
+      (v_account_id, 'Cloud Storage', 24, 'USD', 'yearly', date '2026-11-20', 'Backups and assets', true);
+  end if;
+
   if exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'finance_categories' and column_name = 'image_url'
@@ -292,14 +331,28 @@ begin
     delete from public.calendar_events
     where account_id = v_account_id and event_date between date '2026-02-01' and date '2026-03-31';
 
-    insert into public.calendar_events (account_id, title, description, event_date, start_time, end_time, kind)
-    values
-      (v_account_id, 'Weekly Planning', 'Plan weekly priorities and review backlog.', date '2026-02-02', '09:00', '09:45', 'meeting'),
-      (v_account_id, 'Mentor Call', 'Discuss strategy and blockers.', date '2026-02-11', '18:00', '19:00', 'important'),
-      (v_account_id, 'Project Milestone', 'Submit monthly deliverable.', date '2026-02-26', '11:00', '12:00', 'important'),
-      (v_account_id, 'March Kickoff', 'Define March learning and habits.', date '2026-03-01', '10:00', '11:00', 'meeting'),
-      (v_account_id, 'Team Sync', 'Progress update and next actions.', date '2026-03-12', '14:30', '15:15', 'meeting'),
-      (v_account_id, 'Quarter Reflection', 'Assess outcomes and adjust goals.', date '2026-03-29', '17:30', '18:30', 'important');
+    if exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'calendar_events' and column_name = 'description'
+    ) then
+      insert into public.calendar_events (account_id, title, description, event_date, start_time, end_time, kind)
+      values
+        (v_account_id, 'Weekly Planning', 'Plan weekly priorities and review backlog.', date '2026-02-02', '09:00', '09:45', 'meeting'),
+        (v_account_id, 'Mentor Call', 'Discuss strategy and blockers.', date '2026-02-11', '18:00', '19:00', 'important'),
+        (v_account_id, 'Project Milestone', 'Submit monthly deliverable.', date '2026-02-26', '11:00', '12:00', 'important'),
+        (v_account_id, 'March Kickoff', 'Define March learning and habits.', date '2026-03-01', '10:00', '11:00', 'meeting'),
+        (v_account_id, 'Team Sync', 'Progress update and next actions.', date '2026-03-12', '14:30', '15:15', 'meeting'),
+        (v_account_id, 'Quarter Reflection', 'Assess outcomes and adjust goals.', date '2026-03-29', '17:30', '18:30', 'important');
+    else
+      insert into public.calendar_events (account_id, title, details, event_date, event_type)
+      values
+        (v_account_id, 'Weekly Planning', 'Plan weekly priorities and review backlog.', date '2026-02-02', 'meeting'),
+        (v_account_id, 'Mentor Call', 'Discuss strategy and blockers.', date '2026-02-11', 'important'),
+        (v_account_id, 'Project Milestone', 'Submit monthly deliverable.', date '2026-02-26', 'important'),
+        (v_account_id, 'March Kickoff', 'Define March learning and habits.', date '2026-03-01', 'meeting'),
+        (v_account_id, 'Team Sync', 'Progress update and next actions.', date '2026-03-12', 'meeting'),
+        (v_account_id, 'Quarter Reflection', 'Assess outcomes and adjust goals.', date '2026-03-29', 'important');
+    end if;
   end if;
 
   if exists (
@@ -346,7 +399,7 @@ do $$
 declare
   v_demo_user_id uuid;
 begin
-  select id into v_demo_user_id from auth.users where email = 'demo@momentumgrid.app' limit 1;
+  select id into v_demo_user_id from auth.users where email = 'demo@lifeflow.app' limit 1;
   if v_demo_user_id is not null then
     perform public.seed_demo_data_for_user(v_demo_user_id);
   end if;

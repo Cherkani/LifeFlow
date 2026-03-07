@@ -38,7 +38,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 PEXELS_API_KEY=<pexels-api-key>
-DEMO_USER_EMAIL=demo@momentumgrid.app
+DEMO_USER_EMAIL=demo@lifeflow.app
 DEMO_USER_PASSWORD=Demo12345!
 ```
 
@@ -96,4 +96,3 @@ In `wh_frontend`:
 In `wh_supabase`:
 
 - `npm run run-migrations`
-

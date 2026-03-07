@@ -167,7 +167,7 @@ export async function signInWithGoogleAction(formData: FormData) {
 }
 
 export async function loginDemoUserAction() {
-  const email = process.env.DEMO_USER_EMAIL ?? "demo@momentumgrid.app";
+  const email = process.env.DEMO_USER_EMAIL ?? "demo@lifeflow.app";
   const password = process.env.DEMO_USER_PASSWORD ?? "Demo12345!";
   const supabase = await createServerSupabaseClient();
 

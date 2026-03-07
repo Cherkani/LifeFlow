@@ -19,8 +19,11 @@ export default async function LoginPage({
 
   return (
     <Card className="auth-card">
-      <CardHeader className="space-y-3">
-        <CardTitle className="auth-title text-2xl">Sign in to Momentum Grid</CardTitle>
+      <CardHeader className="space-y-4 pb-5">
+        <div className="space-y-1.5">
+          <CardTitle className="auth-title text-2xl">Sign in to Momentum Grid</CardTitle>
+          <p className="text-sm text-slate-600">Welcome back. Continue your planning and tracking flow.</p>
+        </div>
         <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
           <Link
             href="/login"
@@ -37,24 +40,40 @@ export default async function LoginPage({
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5">
         {params.error ? <Alert variant="error">{params.error}</Alert> : null}
         {params.success ? <Alert variant="success">Account created. You can sign in now.</Alert> : null}
 
-        <form action={loginAction} className="space-y-4">
-          <div className="space-y-2">
+        <form action={loginAction} className="space-y-4 rounded-xl border border-slate-200/80 bg-white/70 p-4 shadow-[0_8px_24px_rgba(50,60,95,0.06)]">
+          <div className="space-y-2.5">
             <Label htmlFor="email">Email</Label>
             <div className="relative">
               <Mail size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input id="email" name="email" type="email" required autoFocus placeholder="example@company.com" className="pl-9" />
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                required
+                autoFocus
+                placeholder="example@company.com"
+                className="h-11 rounded-xl border-slate-200 bg-white pl-9"
+              />
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <Label htmlFor="password">Password</Label>
             <div className="relative">
               <Lock size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input id="password" name="password" type="password" required minLength={8} placeholder="Password" className="pl-9" />
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                required
+                minLength={8}
+                placeholder="Password"
+                className="h-11 rounded-xl border-slate-200 bg-white pl-9"
+              />
             </div>
             <div className="flex items-center justify-between pt-1 text-sm">
               <label htmlFor="remember" className="inline-flex items-center gap-2 text-slate-600">
@@ -67,10 +86,12 @@ export default async function LoginPage({
             </div>
           </div>
 
-          <SubmitButton label="Sign in" pendingLabel="Signing in..." className="auth-primary-btn w-full" />
+          <div className="flex justify-center">
+            <SubmitButton label="Sign in" pendingLabel="Signing in..." className="auth-primary-btn min-w-44" />
+          </div>
         </form>
 
-        <div className="pt-1">
+        <div className="rounded-xl border border-slate-200/80 bg-slate-50/85 p-3">
           <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">Google (soon)</p>
           <div className="flex items-center justify-center gap-2">
             <Button type="button" variant="outline" size="icon" disabled aria-label="Continue with Google (coming soon)">
