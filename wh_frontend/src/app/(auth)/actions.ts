@@ -179,55 +179,73 @@ export async function loginDemoUserAction() {
 
   if (loginAttempt.error) {
     const lower = loginAttempt.error.message.toLowerCase();
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (lower.includes("email not confirmed")) {
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      if (serviceRoleKey) {
-        const { url } = getSupabaseEnv();
-        const admin = createClient(url, serviceRoleKey, {
-          auth: { autoRefreshToken: false, persistSession: false }
-        });
+    if (serviceRoleKey) {
+      const { url } = getSupabaseEnv();
+      const admin = createClient(url, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false }
+      });
 
-        const adminCreate = await admin.auth.admin.createUser({
-          email,
-          password,
-          email_confirm: true,
-          user_metadata: {
-            full_name: "Momentum Grid Demo",
-            timezone: "Africa/Casablanca",
-            account_name: "Momentum Grid Demo"
-          }
-        });
-
-        if (adminCreate.error && !adminCreate.error.message.toLowerCase().includes("already")) {
-          redirect(`/login?error=${encodeURIComponent(adminCreate.error.message)}`);
-        }
-      } else {
-        redirect("/login?error=Demo account not ready yet. Add SUPABASE_SERVICE_ROLE_KEY on server to auto-confirm demo user.");
-      }
-    }
-
-    const signUpAttempt = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
+      const adminCreate = await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: {
           full_name: "Momentum Grid Demo",
           timezone: "Africa/Casablanca",
           account_name: "Momentum Grid Demo"
         }
+      });
+
+      if (adminCreate.error && !adminCreate.error.message.toLowerCase().includes("already")) {
+        redirect(`/login?error=${encodeURIComponent(adminCreate.error.message)}`);
       }
-    });
 
-    if (signUpAttempt.error && !signUpAttempt.error.message.toLowerCase().includes("already")) {
-      redirect(`/login?error=${encodeURIComponent(signUpAttempt.error.message)}`);
-    }
+      const retryLogin = await supabase.auth.signInWithPassword({ email, password });
+      if (retryLogin.error) {
+        redirect(`/login?error=${encodeURIComponent(retryLogin.error.message)}`);
+      }
+      activeUserId = retryLogin.data.user?.id ?? null;
+    } else if (lower.includes("invalid login credentials")) {
+      const signUpAttempt = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: "Momentum Grid Demo",
+            timezone: "Africa/Casablanca",
+            account_name: "Momentum Grid Demo"
+          }
+        }
+      });
 
-    const retryLogin = await supabase.auth.signInWithPassword({ email, password });
-    if (retryLogin.error) {
-      redirect(`/login?error=${encodeURIComponent(retryLogin.error.message)}`);
+      if (signUpAttempt.error) {
+        const signupError = signUpAttempt.error.message.toLowerCase();
+        if (signupError.includes("rate limit")) {
+          redirect("/login?error=Demo signup rate limit exceeded. Add SUPABASE_SERVICE_ROLE_KEY on server to avoid email limits.");
+        }
+        if (!signupError.includes("already")) {
+          redirect(`/login?error=${encodeURIComponent(signUpAttempt.error.message)}`);
+        }
+      }
+
+      const retryLogin = await supabase.auth.signInWithPassword({ email, password });
+      if (retryLogin.error) {
+        const retryError = retryLogin.error.message.toLowerCase();
+        if (retryError.includes("email not confirmed")) {
+          redirect("/login?error=Demo user created but email is not confirmed. Add SUPABASE_SERVICE_ROLE_KEY on server to auto-confirm.");
+        }
+        redirect(`/login?error=${encodeURIComponent(retryLogin.error.message)}`);
+      }
+      activeUserId = retryLogin.data.user?.id ?? null;
+    } else if (lower.includes("email not confirmed")) {
+      redirect("/login?error=Demo user exists but email is not confirmed. Add SUPABASE_SERVICE_ROLE_KEY on server to auto-confirm.");
+    } else if (lower.includes("rate limit")) {
+      redirect("/login?error=Demo auth rate limit exceeded. Wait a moment or configure SUPABASE_SERVICE_ROLE_KEY.");
+    } else {
+      redirect(`/login?error=${encodeURIComponent(loginAttempt.error.message)}`);
     }
-    activeUserId = retryLogin.data.user?.id ?? null;
   }
 
   if (activeUserId) {
