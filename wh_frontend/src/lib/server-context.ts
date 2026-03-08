@@ -53,7 +53,12 @@ export async function getPrimaryAccountForUser(user: User) {
 
 export async function requireAppContext() {
   const { supabase, user } = await requireUser();
-  const account = await getPrimaryAccountForUser(user);
+  let account = await getPrimaryAccountForUser(user);
+
+  if (!account) {
+    await supabase.rpc("ensure_my_account");
+    account = await getPrimaryAccountForUser(user);
+  }
 
   if (!account) {
     redirect("/login?error=missing-account");

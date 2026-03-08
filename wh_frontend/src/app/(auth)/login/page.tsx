@@ -42,7 +42,12 @@ export default async function LoginPage({
 
       <CardContent className="space-y-5">
         {params.error ? <Alert variant="error">{params.error}</Alert> : null}
-        {params.success ? <Alert variant="success">Account created. You can sign in now.</Alert> : null}
+        {params.success === "signup-created-check-email" ? (
+          <Alert variant="success">Account created. Please confirm your email, then sign in.</Alert>
+        ) : null}
+        {params.success && params.success !== "signup-created-check-email" ? (
+          <Alert variant="success">Account created. You can sign in now.</Alert>
+        ) : null}
 
         <form action={loginAction} className="space-y-4 rounded-xl border border-slate-200/80 bg-white/70 p-4 shadow-[0_8px_24px_rgba(50,60,95,0.06)]">
           <div className="space-y-2.5">

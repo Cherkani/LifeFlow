@@ -9,7 +9,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getSupabaseEnv } from "@/lib/supabase/env";
 
 const loginSchema = z.object({
-  email: z.string().email("Invalid email"),
+  email: z.string().trim().email("Invalid email"),
   password: z.string().min(8, "Password must be at least 8 characters")
 });
 
@@ -54,6 +54,46 @@ export async function signUpAction(formData: FormData) {
   }
 
   const supabase = await createServerSupabaseClient();
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (serviceRoleKey) {
+    const { url } = getSupabaseEnv();
+    const admin = createClient(url, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
+
+    const adminCreate = await admin.auth.admin.createUser({
+      email: payload.data.email,
+      password: payload.data.password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: payload.data.fullName,
+        timezone: payload.data.timezone,
+        account_name: payload.data.accountName
+      }
+    });
+
+    if (adminCreate.error) {
+      const adminError = adminCreate.error.message.toLowerCase();
+      if (adminError.includes("already")) {
+        redirect("/signup?error=Email already registered. Please sign in or reset your password.");
+      }
+      redirect(`/signup?error=${encodeURIComponent(adminCreate.error.message)}`);
+    }
+
+    const signInRes = await supabase.auth.signInWithPassword({
+      email: payload.data.email,
+      password: payload.data.password
+    });
+
+    if (signInRes.error) {
+      redirect(`/login?error=${encodeURIComponent(signInRes.error.message)}`);
+    }
+
+    await supabase.rpc("update_my_last_signed_in");
+    redirect("/dashboard");
+  }
+
   const { data, error } = await supabase.auth.signUp({
     email: payload.data.email,
     password: payload.data.password,
@@ -71,9 +111,10 @@ export async function signUpAction(formData: FormData) {
   }
 
   if (!data.session) {
-    redirect("/login?success=signup-created");
+    redirect("/login?success=signup-created-check-email");
   }
 
+  await supabase.rpc("update_my_last_signed_in");
   redirect("/dashboard");
 }
 
