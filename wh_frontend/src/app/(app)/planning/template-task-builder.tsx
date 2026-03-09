@@ -12,8 +12,18 @@ type ObjectiveOption = {
   title: string;
 };
 
+type TemplateTask = {
+  dayOfWeek: number;
+  title: string;
+  objectiveId: string;
+  plannedMinutes: number;
+  startTime: string | null;
+  habitId?: string | null;
+};
+
 type TaskDraft = {
   id: string;
+  habitId?: string;
   title: string;
   objectiveId: string;
   plannedMinutes: string;
@@ -32,39 +42,71 @@ const dayConfig = [
   { dayOfWeek: 7, label: "Sunday" }
 ] as const;
 
-function createDraft(id: string): TaskDraft {
+function createDraft(id: string, overrides?: Partial<TaskDraft>): TaskDraft {
   return {
     id,
-    title: "",
-    objectiveId: "",
-    plannedMinutes: "",
-    startTime: ""
+    habitId: overrides?.habitId ?? "",
+    title: overrides?.title ?? "",
+    objectiveId: overrides?.objectiveId ?? "",
+    plannedMinutes: overrides?.plannedMinutes ?? "",
+    startTime: overrides?.startTime ?? ""
   };
 }
 
-function createInitialState() {
+function createInitialState(initialTasks?: TemplateTask[]) {
   const state = {} as TasksByDay;
   for (const day of dayConfig) {
-    state[day.dayOfWeek] = [createDraft(`${day.dayOfWeek}-1`)];
+    state[day.dayOfWeek] = [];
+  }
+  if (initialTasks && initialTasks.length > 0) {
+    initialTasks.forEach((task, index) => {
+      const dayKey = dayConfig.find((day) => day.dayOfWeek === task.dayOfWeek);
+      if (!dayKey) {
+        return;
+      }
+      const draftId = `${task.dayOfWeek}-${index + 1}`;
+      state[task.dayOfWeek]?.push(
+        createDraft(draftId, {
+          habitId: task.habitId ?? "",
+          title: task.title,
+          objectiveId: task.objectiveId,
+          plannedMinutes: String(task.plannedMinutes ?? ""),
+          startTime: task.startTime ?? ""
+        })
+      );
+    });
+  } else {
+    for (const day of dayConfig) {
+      state[day.dayOfWeek] = [createDraft(`${day.dayOfWeek}-1`)];
+    }
   }
   return state;
 }
 
-export function TemplateTaskBuilder({ objectives }: { objectives: ObjectiveOption[] }) {
-  const [tasksByDay, setTasksByDay] = useState<TasksByDay>(() => createInitialState());
-  const idCounterRef = useRef(7);
+type TemplateTaskBuilderProps = {
+  objectives: ObjectiveOption[];
+  initialTasks?: TemplateTask[];
+};
+
+export function TemplateTaskBuilder({ objectives, initialTasks }: TemplateTaskBuilderProps) {
+  const [tasksByDay, setTasksByDay] = useState<TasksByDay>(() => createInitialState(initialTasks));
+  const idCounterRef = useRef(initialTasks?.length ? initialTasks.length + 7 : 7);
 
   const serializedTasks = useMemo(
     () =>
       JSON.stringify(
         dayConfig.flatMap((day) =>
-          (tasksByDay[day.dayOfWeek] ?? []).map((task) => ({
-            dayOfWeek: day.dayOfWeek,
-            title: task.title,
-            objectiveId: task.objectiveId,
-            plannedMinutes: Number(task.plannedMinutes || 0),
-            startTime: task.startTime
-          }))
+          (tasksByDay[day.dayOfWeek] ?? []).map((task) => {
+            const normalizedStartTime = task.startTime.trim();
+            return {
+              dayOfWeek: day.dayOfWeek,
+              title: task.title,
+              objectiveId: task.objectiveId,
+              plannedMinutes: Number(task.plannedMinutes || 0),
+              startTime: normalizedStartTime.length > 0 ? normalizedStartTime : null,
+              habitId: task.habitId && task.habitId.length > 0 ? task.habitId : null
+            };
+          })
         )
       ),
     [tasksByDay]
@@ -87,7 +129,7 @@ export function TemplateTaskBuilder({ objectives }: { objectives: ObjectiveOptio
     }));
   }
 
-  function updateTask(dayOfWeek: number, taskId: string, field: keyof Omit<TaskDraft, "id">, value: string) {
+  function updateTask(dayOfWeek: number, taskId: string, field: keyof Omit<TaskDraft, "id" | "habitId">, value: string) {
     setTasksByDay((previous) => ({
       ...previous,
       [dayOfWeek]: (previous[dayOfWeek] ?? []).map((task) => (task.id === taskId ? { ...task, [field]: value } : task))
@@ -149,7 +191,6 @@ export function TemplateTaskBuilder({ objectives }: { objectives: ObjectiveOptio
                   <Input
                     type="number"
                     min={0}
-                    step={10}
                     value={task.plannedMinutes}
                     onChange={(event) => updateTask(day.dayOfWeek, task.id, "plannedMinutes", event.target.value)}
                     placeholder="Avg min"

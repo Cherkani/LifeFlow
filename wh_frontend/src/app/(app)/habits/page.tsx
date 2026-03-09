@@ -1,11 +1,15 @@
 import { CheckSquare, ChevronLeft, ChevronRight, Square } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import type { Route } from "next";
 
-import { addCompensationSessionAction, completeSessionWithHoursAction, generateWeekFromTemplateAction } from "@/app/(app)/habits/actions";
+import { addCompensationSessionAction, generateWeekFromTemplateAction, syncWeekWithTemplateAction } from "@/app/(app)/habits/actions";
+import { CompleteSessionForm } from "@/app/(app)/habits/complete-session-form";
+import { SyncWeekConfirmForm } from "@/app/(app)/habits/sync-week-confirm-form";
 import { DailyObjectiveChart } from "@/app/(app)/habits/daily-objective-chart";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/ui/modal-shell";
 import { Select } from "@/components/ui/select";
@@ -28,6 +32,7 @@ type Category = {
 type Objective = {
   id: string;
   title: string;
+  image_url: string | null;
 };
 
 type Template = {
@@ -71,7 +76,7 @@ function weekHref(
   if (options?.logDate) {
     query.set("logDate", options.logDate);
   }
-  return `/habits?${query.toString()}`;
+  return `/habits?${query.toString()}` as Route;
 }
 
 function dayHeaderLabel(value: string) {
@@ -90,6 +95,12 @@ function weekdayName(value: string) {
 
 function dayNumber(value: string) {
   return new Date(`${value}T00:00:00`).getDate();
+}
+
+function isoWeekdayIndex(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  const day = date.getDay();
+  return day === 0 ? 7 : day;
 }
 
 function formatMinutesLabel(totalMinutes: number) {
@@ -130,7 +141,7 @@ export default async function HabitsPage({
 
   const { supabase, account } = await requireAppContext();
   const [objectivesRes, categoriesRes, templatesRes, currentWeekRes] = await Promise.all([
-    supabase.from("habit_objectives").select("id, title").eq("account_id", account.accountId),
+    supabase.from("habit_objectives").select("id, title, image_url").eq("account_id", account.accountId),
     supabase.from("habits").select("id, title, objective_id").eq("account_id", account.accountId).eq("is_active", true),
     supabase.from("templates").select("id, name").eq("account_id", account.accountId).order("created_at", { ascending: false }),
     supabase
@@ -146,9 +157,26 @@ export default async function HabitsPage({
   const templates = (templatesRes.data ?? []) as Template[];
   const currentWeek = currentWeekRes.data;
   const categoryById = new Map(categories.map((category) => [category.id, category]));
-  const objectiveById = new Map(objectives.map((objective) => [objective.id, objective.title]));
+  const objectiveById = new Map(objectives.map((objective) => [objective.id, objective]));
   const selectedTemplateId = currentWeek?.template_id ?? "";
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
+  const templateDayOrder = new Map<number, Map<string, number>>();
+  if (selectedTemplateId) {
+    const templateEntriesOrderRes = await supabase
+      .from("template_entries")
+      .select("habit_id, day_of_week")
+      .eq("template_id", selectedTemplateId)
+      .order("created_at", { ascending: true });
+    for (const entry of templateEntriesOrderRes.data ?? []) {
+      const dayMap = templateDayOrder.get(entry.day_of_week) ?? new Map<string, number>();
+      if (!templateDayOrder.has(entry.day_of_week)) {
+        templateDayOrder.set(entry.day_of_week, dayMap);
+      }
+      if (!dayMap.has(entry.habit_id)) {
+        dayMap.set(entry.habit_id, dayMap.size);
+      }
+    }
+  }
 
   const [weekSessionsRes, monthSessionsRes] =
     categories.length > 0
@@ -234,16 +262,31 @@ export default async function HabitsPage({
           <CardTitle>Week Selector & Template</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex items-center gap-2">
-            <a href={weekHref(previousWeek)} className="inline-flex size-9 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] text-[#23406d]">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href={weekHref(previousWeek)} className="inline-flex size-9 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] text-[#23406d]">
               <ChevronLeft size={16} />
-            </a>
+            </Link>
             <span className="text-sm font-semibold text-[#0c1d3c]">
               {selectedWeekStart.toLocaleDateString("en-US")} - {selectedWeekEnd.toLocaleDateString("en-US")}
             </span>
-            <a href={weekHref(nextWeek)} className="inline-flex size-9 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] text-[#23406d]">
+            <Link href={weekHref(nextWeek)} className="inline-flex size-9 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] text-[#23406d]">
               <ChevronRight size={16} />
-            </a>
+            </Link>
+            <form action="/habits" method="get" className="ml-auto flex items-center gap-2 text-xs text-[#4a5f83]">
+              <label htmlFor="jumpToWeek" className="font-medium">
+                Jump to week
+              </label>
+              <input
+                id="jumpToWeek"
+                name="week"
+                type="date"
+                defaultValue={weekStartIso}
+                className="h-8 rounded-md border border-[#c7d3e8] bg-white px-2 text-sm text-[#0c1d3c] focus:border-[#1e3a6d] focus:ring-2 focus:ring-[#d6e0f2]"
+              />
+              <button type="submit" className="inline-flex h-8 items-center justify-center rounded-md border border-[#c7d3e8] bg-[#f8fbff] px-3 font-semibold text-[#23406d] transition hover:bg-[#edf3ff]">
+                Go
+              </button>
+            </form>
           </div>
 
           {templates.length === 0 ? (
@@ -251,7 +294,14 @@ export default async function HabitsPage({
           ) : currentWeek?.template_id ? (
             <div className="space-y-1 rounded-lg border border-[#c7d3e8] bg-[#edf3ff] p-3">
               <p className="text-xs font-medium text-[#4a5f83]">Template for this week</p>
-              <p className="text-sm font-semibold text-[#0c1d3c]">{selectedTemplate?.name ?? "Selected template"}</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-[#0c1d3c]">{selectedTemplate?.name ?? "Selected template"}</p>
+                <SyncWeekConfirmForm
+                  action={syncWeekWithTemplateAction}
+                  returnPath={weekHref(selectedWeekStart)}
+                  weekStartDate={weekStartIso}
+                />
+              </div>
               <p className="text-xs text-[#4a5f83]">Template assignment is locked for this week.</p>
             </div>
           ) : (
@@ -296,6 +346,21 @@ export default async function HabitsPage({
               const dayDoneMinutes = daySessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
               const dayProgress = dayPlannedMinutes > 0 ? Math.round((Math.min(dayDoneMinutes, dayPlannedMinutes) / dayPlannedMinutes) * 100) : dayDoneMinutes > 0 ? 100 : 0;
               const weekDay = weekdayName(dateKey);
+              const weekDayIndex = isoWeekdayIndex(dateKey);
+              const templateOrderForDay = templateDayOrder.get(weekDayIndex);
+              const orderedDaySessions =
+                templateOrderForDay && templateOrderForDay.size > 0
+                  ? [...daySessions].sort((a, b) => {
+                      const orderA = templateOrderForDay.get(a.habit_id) ?? Number.MAX_SAFE_INTEGER;
+                      const orderB = templateOrderForDay.get(b.habit_id) ?? Number.MAX_SAFE_INTEGER;
+                      if (orderA !== orderB) {
+                        return orderA - orderB;
+                      }
+                      const titleA = categoryById.get(a.habit_id)?.title ?? "";
+                      const titleB = categoryById.get(b.habit_id)?.title ?? "";
+                      return titleA.localeCompare(titleB);
+                    })
+                  : daySessions;
               const isCurrentDay = dateKey === todayKey;
               return (
                 <div
@@ -312,12 +377,12 @@ export default async function HabitsPage({
                         <p className="text-xl font-semibold leading-none text-[#0c1d3c]">{dayNumber(dateKey)}</p>
                       </div>
                       {categories.length > 0 ? (
-                        <a
+                        <Link
                           href={weekHref(selectedWeekStart, { logDate: dateKey })}
                           className="inline-flex h-7 items-center justify-center rounded-md border border-[#c7d3e8] bg-[#edf3ff] px-2 text-xs font-medium text-[#23406d]"
                         >
                           + Add
-                        </a>
+                        </Link>
                       ) : null}
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-1">
@@ -334,22 +399,37 @@ export default async function HabitsPage({
                   </div>
 
                   <div className="mt-2 flex flex-1 flex-col gap-2">
-                    {daySessions.length > 0 ? (
-                      daySessions.map((session) => {
+                    {orderedDaySessions.length > 0 ? (
+                      orderedDaySessions.map((session) => {
                         const habit = categoryById.get(session.habit_id);
-                        const objectiveTitle = objectiveById.get(habit?.objective_id ?? "") ?? "Objective";
+                        const objective = objectiveById.get(habit?.objective_id ?? "");
+                        const habitTitle = habit?.title ?? "Task";
+                        const objectiveImageUrl = objective?.image_url;
+                        const fallbackInitial = habitTitle.slice(0, 1).toUpperCase();
                         return (
-                          <a
+                          <Link
                             key={session.id}
                             href={weekHref(selectedWeekStart, { sessionId: session.id })}
-                            className="flex items-center justify-between gap-2 rounded-md border border-[#d7e0f1] bg-white px-2 py-2 text-left"
+                            className="flex items-center justify-between gap-2 rounded-md border border-[#d7e0f1] bg-white px-2 py-2"
                           >
-                            <div>
-                              <p className="text-xs font-semibold text-[#0c1d3c]">{habit?.title ?? "Task"}</p>
-                              <p className="text-[11px] text-[#4a5f83]">{objectiveTitle}</p>
+                            <div className="flex flex-1 items-center gap-2 overflow-hidden">
+                              {objectiveImageUrl ? (
+                                <div className="relative size-10 shrink-0 overflow-hidden rounded-md border border-[#d7e0f1] bg-white">
+                                  <Image src={objectiveImageUrl} alt={habitTitle} fill sizes="40px" className="object-cover" />
+                                </div>
+                              ) : (
+                                <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-dashed border-[#d7e0f1] bg-[#f8fbff] text-xs font-semibold uppercase text-[#23406d]">
+                                  {fallbackInitial}
+                                </div>
+                              )}
+                              <p className="min-w-0 flex-1 truncate text-xs font-semibold text-[#0c1d3c]">{habitTitle}</p>
                             </div>
-                            {session.completed ? <CheckSquare size={16} className="text-emerald-600" /> : <Square size={16} className="text-[#4a5f83]" />}
-                          </a>
+                            {session.completed ? (
+                              <CheckSquare size={16} className="shrink-0 text-emerald-600" />
+                            ) : (
+                              <Square size={16} className="shrink-0 text-[#4a5f83]" />
+                            )}
+                          </Link>
                         );
                       })
                     ) : (
@@ -384,40 +464,11 @@ export default async function HabitsPage({
           description="Check/uncheck and set minutes done for this day."
           closeHref={weekHref(selectedWeekStart)}
         >
-          <form action={completeSessionWithHoursAction} className="space-y-4">
-            <input type="hidden" name="sessionId" value={selectedSession.id} />
-            <input type="hidden" name="returnPath" value={weekHref(selectedWeekStart)} />
-            <div className="rounded-lg border border-[#d7e0f1] bg-[#f8fbff] p-3">
-              <p className="text-sm font-semibold text-[#0c1d3c]">{categoryById.get(selectedSession.habit_id)?.title ?? "Task"}</p>
-              <p className="text-xs text-[#4a5f83]">
-                Planned {selectedSession.planned_minutes} min · Minimum {selectedSession.minimum_minutes} min
-              </p>
-            </div>
-            <label className="inline-flex items-center gap-2 text-sm text-[#23406d]">
-              <Checkbox name="completed" defaultChecked={selectedSession.completed} />
-              Mark completed
-            </label>
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-[#4a5f83]">Minutes done</p>
-              <Input
-                name="actualMinutes"
-                type="number"
-                min={0}
-                step={10}
-                defaultValue={selectedSession.actual_minutes ?? undefined}
-                placeholder="0"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <SubmitButton label="Save" pendingLabel="Saving..." className="sm:w-auto" />
-              <a
-                href={weekHref(selectedWeekStart)}
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] px-4 py-2 text-sm font-medium text-[#23406d]"
-              >
-                Back
-              </a>
-            </div>
-          </form>
+          <CompleteSessionForm
+            session={selectedSession}
+            habitTitle={categoryById.get(selectedSession.habit_id)?.title ?? "Task"}
+            returnPath={weekHref(selectedWeekStart)}
+          />
         </ModalShell>
       ) : null}
 
@@ -427,28 +478,34 @@ export default async function HabitsPage({
             <input type="hidden" name="returnPath" value={weekHref(selectedWeekStart)} />
             <input type="hidden" name="sessionDate" value={selectedLogDay} />
             <div className="space-y-2">
-              <p className="text-xs font-medium text-[#4a5f83]">Task</p>
-              <Select name="habitId" required>
-                <option value="">Choose task</option>
-                {categories.map((habit) => (
-                  <option key={habit.id} value={habit.id}>
-                    {habit.title}
+              <p className="text-xs font-medium text-[#4a5f83]">Objective</p>
+              <Select name="objectiveId" required defaultValue="">
+                <option value="" disabled>
+                  Choose objective
+                </option>
+                {objectives.map((objective) => (
+                  <option key={objective.id} value={objective.id}>
+                    {objective.title}
                   </option>
                 ))}
               </Select>
             </div>
             <div className="space-y-2">
+              <p className="text-xs font-medium text-[#4a5f83]">Task title</p>
+              <Input name="newTaskTitle" placeholder="e.g. Extra cardio" required />
+            </div>
+            <div className="space-y-2">
               <p className="text-xs font-medium text-[#4a5f83]">Minutes done</p>
-              <Input name="doneMinutes" type="number" min={1} step={10} defaultValue={30} required />
+              <Input name="doneMinutes" type="number" min={1} defaultValue={30} required />
             </div>
             <div className="flex items-center gap-2">
               <SubmitButton label="Save work log" pendingLabel="Saving..." className="sm:w-auto" />
-              <a
+              <Link
                 href={weekHref(selectedWeekStart)}
                 className="inline-flex h-10 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] px-4 py-2 text-sm font-medium text-[#23406d]"
               >
                 Back
-              </a>
+              </Link>
             </div>
           </form>
         </ModalShell>

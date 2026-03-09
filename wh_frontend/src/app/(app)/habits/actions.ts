@@ -53,9 +53,13 @@ const generateWeekSchema = z.object({
 });
 
 const addCompensationSessionSchema = z.object({
-  habitId: z.string().uuid(),
+  habitId: z.string().uuid().optional(),
   sessionDate: dateInputSchema,
   doneMinutes: z.coerce.number().int().min(1).max(100000)
+});
+
+const syncWeekSchema = z.object({
+  weekStartDate: dateInputSchema
 });
 
 function getSafeReturnPath(raw: FormDataEntryValue | null) {
@@ -229,10 +233,12 @@ export async function toggleSessionCompletionAction(formData: FormData) {
 
 export async function completeSessionWithHoursAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const actualMinutesRaw = formData.get("actualMinutes");
+  const completedRaw = formData.get("completed");
   const payload = completeSessionSchema.safeParse({
     sessionId: formData.get("sessionId"),
-    completed: formData.get("completed"),
-    actualMinutes: formData.get("actualMinutes")
+    completed: completedRaw === null ? undefined : completedRaw,
+    actualMinutes: actualMinutesRaw === null ? undefined : actualMinutesRaw
   });
 
   if (!payload.success) {
@@ -316,8 +322,9 @@ export async function generateWeekFromTemplateAction(formData: FormData) {
 
 export async function addCompensationSessionAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const habitIdRaw = formData.get("habitId");
   const payload = addCompensationSessionSchema.safeParse({
-    habitId: formData.get("habitId"),
+    habitId: typeof habitIdRaw === "string" && habitIdRaw.length > 0 ? habitIdRaw : undefined,
     sessionDate: formData.get("sessionDate"),
     doneMinutes: formData.get("doneMinutes")
   });
@@ -326,11 +333,47 @@ export async function addCompensationSessionAction(formData: FormData) {
     redirectToPath(returnPath);
   }
 
-  const { supabase } = await requireAppContext();
+  const objectiveIdRaw = formData.get("objectiveId");
+  const newTaskTitleRaw = formData.get("newTaskTitle");
+
+  const { supabase, account } = await requireAppContext();
+
+  let habitId = payload.data.habitId ?? "";
+
+  if (!habitId) {
+    const objectiveId = typeof objectiveIdRaw === "string" && objectiveIdRaw.length > 0 ? objectiveIdRaw : null;
+    const newTaskTitle = typeof newTaskTitleRaw === "string" ? newTaskTitleRaw.trim() : "";
+    const isObjectiveValid = objectiveId ? z.string().uuid().safeParse(objectiveId).success : false;
+    if (!isObjectiveValid || newTaskTitle.length < 2) {
+      redirectToPath(returnPath);
+    }
+
+    const { data: newHabit } = await supabase
+      .from("habits")
+      .insert({
+        account_id: account.accountId,
+        objective_id: objectiveId,
+        title: newTaskTitle,
+        type: "time_tracking",
+        weekly_target_minutes: null,
+        minimum_minutes: null,
+        is_active: true,
+        metadata: {}
+      })
+      .select("id")
+      .single();
+
+    if (!newHabit?.id) {
+      redirectToPath(returnPath);
+    }
+
+    habitId = newHabit.id;
+  }
+
   const { data: existing } = await supabase
     .from("habit_sessions")
     .select("id, actual_minutes, planned_minutes, minimum_minutes")
-    .eq("habit_id", payload.data.habitId)
+    .eq("habit_id", habitId)
     .eq("session_date", payload.data.sessionDate)
     .maybeSingle();
 
@@ -345,7 +388,7 @@ export async function addCompensationSessionAction(formData: FormData) {
       .eq("id", existing.id);
   } else {
     await supabase.from("habit_sessions").insert({
-      habit_id: payload.data.habitId,
+      habit_id: habitId,
       session_date: payload.data.sessionDate,
       planned_minutes: 0,
       minimum_minutes: 0,
@@ -355,6 +398,58 @@ export async function addCompensationSessionAction(formData: FormData) {
   }
 
   revalidatePath("/habits");
+  revalidatePath("/dashboard");
+  revalidatePath("/analytics");
+  redirectToPath(returnPath);
+}
+
+export async function syncWeekWithTemplateAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = syncWeekSchema.safeParse({
+    weekStartDate: formData.get("weekStartDate")
+  });
+
+  if (!payload.success) {
+    redirectToPath(returnPath);
+  }
+
+  const { supabase, account } = await requireAppContext();
+  const { data: existingWeek } = await supabase
+    .from("weeks")
+    .select("template_id")
+    .eq("account_id", account.accountId)
+    .eq("week_start_date", payload.data.weekStartDate)
+    .maybeSingle();
+
+  if (!existingWeek?.template_id) {
+    redirectToPath(returnPath);
+  }
+
+  const weekStartDate = new Date(`${payload.data.weekStartDate}T00:00:00`);
+  const weekEndDate = new Date(weekStartDate);
+  weekEndDate.setDate(weekEndDate.getDate() + 6);
+  const weekEndIso = weekEndDate.toISOString().slice(0, 10);
+
+  await supabase
+    .from("habit_sessions")
+    .delete()
+    .gte("session_date", payload.data.weekStartDate)
+    .lte("session_date", weekEndIso);
+
+  await supabase
+    .from("weeks")
+    .delete()
+    .eq("account_id", account.accountId)
+    .eq("week_start_date", payload.data.weekStartDate);
+
+  await supabase.rpc("create_week_from_template", {
+    p_account_id: account.accountId,
+    p_template_id: existingWeek.template_id,
+    p_week_start_date: payload.data.weekStartDate
+  });
+
+  revalidatePath("/habits");
+  revalidatePath("/planning");
   revalidatePath("/dashboard");
   revalidatePath("/analytics");
   redirectToPath(returnPath);

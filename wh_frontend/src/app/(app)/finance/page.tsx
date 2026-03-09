@@ -18,7 +18,8 @@ import {
   createDebtAction,
   createDebtPaymentAction,
   createExpenseAction,
-  createExpenseCategoryAction
+  createExpenseCategoryAction,
+  updateExpenseCategoryAction
 } from "./actions";
 
 type FinanceSearchParams = Promise<{
@@ -70,10 +71,16 @@ function parseAnchorDate(raw: string | undefined) {
 }
 
 function parsePeriod(raw: string | undefined) {
-  return raw === "week" ? "week" : "day";
+  if (raw === "week") {
+    return "week";
+  }
+  if (raw === "month") {
+    return "month";
+  }
+  return "day";
 }
 
-function buildFinanceHref(options?: { modal?: string; tab?: string; mode?: string; period?: "day" | "week"; anchor?: string }) {
+function buildFinanceHref(options?: { modal?: string; tab?: string; mode?: string; period?: "day" | "week" | "month"; anchor?: string }) {
   const query = new URLSearchParams();
   if (options?.tab) query.set("tab", options.tab);
   if (options?.period) query.set("period", options.period);
@@ -95,14 +102,25 @@ export default async function FinancePage({
   const mode = params.mode === "payment" ? "payment" : "debt";
   const period = parsePeriod(params.period);
   const anchorDate = parseAnchorDate(params.anchor);
-  const rangeStartDate = period === "week" ? startOfIsoWeek(anchorDate) : anchorDate;
-  const rangeEndDate = period === "week" ? endOfIsoWeek(anchorDate) : anchorDate;
+  const anchorIso = toIsoDate(anchorDate);
+  const rangeStartDate =
+    period === "week"
+      ? startOfIsoWeek(anchorDate)
+      : period === "month"
+        ? new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1)
+        : anchorDate;
+  const rangeEndDate =
+    period === "week"
+      ? endOfIsoWeek(anchorDate)
+      : period === "month"
+        ? new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 0)
+        : anchorDate;
   const rangeStart = toIsoDate(rangeStartDate);
   const rangeEnd = toIsoDate(rangeEndDate);
   const previousAnchorDate = new Date(anchorDate);
-  previousAnchorDate.setDate(previousAnchorDate.getDate() - (period === "week" ? 7 : 1));
+  previousAnchorDate.setDate(previousAnchorDate.getDate() - (period === "week" ? 7 : period === "month" ? 30 : 1));
   const nextAnchorDate = new Date(anchorDate);
-  nextAnchorDate.setDate(nextAnchorDate.getDate() + (period === "week" ? 7 : 1));
+  nextAnchorDate.setDate(nextAnchorDate.getDate() + (period === "week" ? 7 : period === "month" ? 30 : 1));
 
   const { supabase, account } = await requireAppContext();
   const [categoriesRes, monthExpensesRes, recentExpensesRes, debtsRes, paymentsRes] = await Promise.all([
@@ -160,7 +178,7 @@ export default async function FinancePage({
   }
 
   const totalSpent = periodExpenses.reduce((sum, entry) => sum + Number(entry.amount), 0);
-  const periodDays = period === "week" ? 7 : 1;
+  const periodDays = period === "week" ? 7 : period === "month" ? rangeEndDate.getDate() - rangeStartDate.getDate() + 1 : 1;
   const averageDaySpend = periodDays > 0 ? totalSpent / periodDays : 0;
   const topDay = [...spentByDay.entries()].sort((a, b) => b[1] - a[1])[0];
 
@@ -213,7 +231,7 @@ export default async function FinancePage({
     <div className="space-y-6">
       <SectionHeader
         title="Finance Command"
-        description="Track spending with rich charts and manage debt operations in one place."
+        description="Track monthly spending with rich charts and manage debt operations in one place."
         action={
           <div className="flex flex-wrap gap-2">
             <a
@@ -277,6 +295,12 @@ export default async function FinancePage({
                 className={["rounded-md px-3 py-1.5 text-sm font-semibold", period === "week" ? "bg-[#0b1f3b] text-white" : "text-[#23406d]"].join(" ")}
               >
                 Week
+              </a>
+              <a
+                href={buildFinanceHref({ tab, period: "month", anchor: toIsoDate(anchorDate) })}
+                className={["rounded-md px-3 py-1.5 text-sm font-semibold", period === "month" ? "bg-[#0b1f3b] text-white" : "text-[#23406d]"].join(" ")}
+              >
+                Month
               </a>
             </div>
             <a
@@ -372,31 +396,54 @@ export default async function FinancePage({
             <CardHeader>
               <CardTitle>Category limits (monthly)</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent>
               {categories.length > 0 ? (
-                categoryMetrics.map((category) => (
-                  <div key={category.id} className="rounded-lg border border-[#c7d3e8] p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        {categories.find((entry) => entry.id === category.id)?.image_url ? (
-                          <div className="relative size-8 overflow-hidden rounded-md border border-[#d7e0f1] bg-white">
-                            <Image
-                              src={categories.find((entry) => entry.id === category.id)?.image_url as string}
-                              alt={category.name}
-                              fill
-                              className="object-cover"
-                            />
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {categoryMetrics.map((category) => {
+                    const categoryMeta = categories.find((entry) => entry.id === category.id);
+                    return (
+                      <div key={category.id} className="relative space-y-3 rounded-lg border border-[#c7d3e8] bg-[#f8fbff] p-3">
+                        {categoryMeta?.image_url ? (
+                          <div className="relative h-24 w-full overflow-hidden rounded-md border border-[#d7e0f1] bg-white">
+                            <Image src={categoryMeta.image_url} alt={category.name} fill className="object-cover" />
                           </div>
-                        ) : null}
-                        <p className="text-sm font-semibold text-[#0c1d3c]">{category.name}</p>
+                        ) : (
+                          <div className="flex h-24 items-center justify-center rounded-md border border-dashed border-[#d7e0f1] text-xs text-[#4a5f83]">
+                            No image
+                          </div>
+                        )}
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold text-[#0c1d3c]">{category.name}</p>
+                            <p className="text-[11px] text-[#4a5f83]">
+                              {category.limit > 0 ? `${money(category.limit, account.currencyCode)} limit` : "No limit set"}
+                            </p>
+                          </div>
+                          <a
+                            href={buildFinanceHref({ tab, period, anchor: anchorIso, modal: `edit-category-${category.id}` })}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#c7d3e8] bg-white text-[#0c1d3c] transition hover:bg-[#f8fbff]"
+                            aria-label="Edit category"
+                          >
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path
+                                d="m3 11 9-9 3 3-9 9H3v-3Z"
+                                stroke="currentColor"
+                                strokeWidth="1.2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                              <path d="M12 3l1 1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </a>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={category.over ? "danger" : "secondary"}>{money(category.spent, account.currencyCode)} spent</Badge>
+                          <Badge variant="secondary">{category.limit > 0 ? "Tracked" : "Untracked"}</Badge>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={category.over ? "danger" : "secondary"}>{money(category.spent, account.currencyCode)} spent</Badge>
-                        <Badge variant="secondary">{category.limit > 0 ? `${money(category.limit, account.currencyCode)} limit` : "No limit"}</Badge>
-                      </div>
-                    </div>
-                  </div>
-                ))
+                    );
+                  })}
+                </div>
               ) : (
                 <p className="text-sm text-[#4a5f83]">No expense categories yet.</p>
               )}
@@ -636,6 +683,53 @@ export default async function FinancePage({
           )}
         </ModalShell>
       ) : null}
+
+      {modal?.startsWith("edit-category-") ? (() => {
+        const categoryId = modal.replace("edit-category-", "");
+        const category = categories.find((item) => item.id === categoryId);
+        if (!category) {
+          return (
+            <ModalShell title="Category not found" description="Select another category to edit." closeHref={buildFinanceHref({ tab, period, anchor: anchorIso })}>
+              <p className="text-sm text-[#4a5f83]">The requested category is unavailable.</p>
+            </ModalShell>
+          );
+        }
+
+        return (
+          <ModalShell
+            title="Edit category"
+            description="Update category name and monthly limit."
+            closeHref={buildFinanceHref({ tab, period, anchor: anchorIso })}
+          >
+            <form action={updateExpenseCategoryAction} className="space-y-4">
+              <input type="hidden" name="returnPath" value={buildFinanceHref({ tab, period, anchor: anchorIso })} />
+              <input type="hidden" name="categoryId" value={category.id} />
+              <div className="space-y-2">
+                <Label htmlFor="editCategoryName">Name</Label>
+                <Input id="editCategoryName" name="name" defaultValue={category.name} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editCategoryLimit">Monthly limit</Label>
+                <Input
+                  id="editCategoryLimit"
+                  name="monthlyLimit"
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  defaultValue={category.monthly_limit ?? ""}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editCategoryImage">Image URL</Label>
+                <PexelsImagePicker inputName="imageUrl" label="Category image" defaultValue={category.image_url ?? ""} />
+              </div>
+              <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
+            </form>
+          </ModalShell>
+        );
+      })() : null}
+
     </div>
   );
 }

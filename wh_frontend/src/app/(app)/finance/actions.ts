@@ -14,6 +14,13 @@ const createCategorySchema = z.object({
   imageUrl: z.string().trim().optional()
 });
 
+const updateCategorySchema = z.object({
+  categoryId: z.string().uuid(),
+  name: z.string().trim().min(2).max(120),
+  monthlyLimit: z.union([z.literal(""), z.coerce.number().min(0).max(100000000)]).optional(),
+  imageUrl: z.string().trim().optional()
+});
+
 const createExpenseSchema = z.object({
   categoryId: z.string().uuid(),
   amount: z.coerce.number().positive().max(100000000),
@@ -194,6 +201,43 @@ export async function createDebtPaymentAction(formData: FormData) {
 
   revalidatePath("/finance");
   revalidatePath("/dashboard");
+  revalidatePath("/analytics");
+  redirectToPath(returnPath);
+}
+
+export async function updateExpenseCategoryAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = updateCategorySchema.safeParse({
+    categoryId: formData.get("categoryId"),
+    name: formData.get("name"),
+    monthlyLimit: formData.get("monthlyLimit"),
+    imageUrl: formData.get("imageUrl")
+  });
+
+  if (!payload.success) {
+    redirectToPath(returnPath);
+  }
+
+  const { supabase, account } = await requireAppContext();
+  const monthlyLimit =
+    payload.data.monthlyLimit === "" || typeof payload.data.monthlyLimit === "undefined"
+      ? null
+      : payload.data.monthlyLimit.toFixed(2);
+
+  await supabase
+    .from("finance_categories")
+    .update({
+      name: payload.data.name,
+      monthly_limit: monthlyLimit,
+      image_url:
+        payload.data.imageUrl && payload.data.imageUrl.trim().length > 0 && URL.canParse(payload.data.imageUrl)
+          ? payload.data.imageUrl.trim()
+          : null
+    })
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.categoryId);
+
+  revalidatePath("/finance");
   revalidatePath("/analytics");
   redirectToPath(returnPath);
 }

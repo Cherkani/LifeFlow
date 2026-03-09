@@ -20,15 +20,17 @@ type PexelsPhoto = {
 type PexelsImagePickerProps = {
   inputName?: string;
   label?: string;
+  defaultValue?: string;
 };
 
 export function PexelsImagePicker({
   inputName = "imageUrl",
-  label = "Image (optional)"
+  label = "Image (optional)",
+  defaultValue = ""
 }: PexelsImagePickerProps) {
   const [search, setSearch] = useState("");
   const [gallery, setGallery] = useState<PexelsPhoto[]>([]);
-  const [selectedImage, setSelectedImage] = useState<string>("");
+  const [selectedImage, setSelectedImage] = useState<string>(defaultValue);
   const [loading, setLoading] = useState(false);
   const selectedPhoto = useMemo(() => gallery.find((photo) => photo.src.large === selectedImage), [gallery, selectedImage]);
 
