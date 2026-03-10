@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,94 @@ type TaskDraft = {
 };
 
 type TasksByDay = Record<number, TaskDraft[]>;
+
+type TaskRowProps = {
+  task: TaskDraft;
+  dayOfWeek: number;
+  objectives: ObjectiveOption[];
+  onUpdateTask: (dayOfWeek: number, taskId: string, field: keyof Omit<TaskDraft, "id" | "habitId">, value: string) => void;
+  onUpdateObjective: (dayOfWeek: number, taskId: string, objectiveId: string) => void;
+  onRemoveTask: (dayOfWeek: number, taskId: string) => void;
+};
+
+function TaskRow({
+  task,
+  dayOfWeek,
+  objectives,
+  onUpdateTask,
+  onUpdateObjective,
+  onRemoveTask
+}: TaskRowProps) {
+  const handleMinutesChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onUpdateTask(dayOfWeek, task.id, "plannedMinutes", e.target.value);
+    },
+    [dayOfWeek, task.id, onUpdateTask]
+  );
+
+  const handleStartTimeChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onUpdateTask(dayOfWeek, task.id, "startTime", e.target.value);
+    },
+    [dayOfWeek, task.id, onUpdateTask]
+  );
+
+  const handleTitleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onUpdateTask(dayOfWeek, task.id, "title", e.target.value);
+    },
+    [dayOfWeek, task.id, onUpdateTask]
+  );
+
+  const handleObjectiveChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      onUpdateObjective(dayOfWeek, task.id, e.target.value);
+    },
+    [dayOfWeek, task.id, onUpdateObjective]
+  );
+
+  return (
+    <div className="grid gap-2 md:grid-cols-[130px_2.1fr_110px_120px_auto]">
+      <Select value={task.objectiveId} onChange={handleObjectiveChange}>
+        <option value="">Choose objective</option>
+        {objectives.map((objective) => (
+          <option key={objective.id} value={objective.id}>
+            {objective.title}
+          </option>
+        ))}
+      </Select>
+      <Input
+        value={task.title}
+        onChange={handleTitleChange}
+        placeholder="Task title"
+        aria-label={`Task title for ${task.id}`}
+      />
+      <Input
+        type="number"
+        min={0}
+        value={task.plannedMinutes}
+        onChange={handleMinutesChange}
+        placeholder="Avg min"
+        aria-label={`Planned minutes for ${task.id}`}
+      />
+      <Input
+        type="time"
+        value={task.startTime}
+        onChange={handleStartTimeChange}
+        aria-label={`Start time for ${task.id}`}
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={() => onRemoveTask(dayOfWeek, task.id)}
+        aria-label="Remove task"
+      >
+        <Trash2 size={14} />
+      </Button>
+    </div>
+  );
+}
 
 const dayConfig = [
   { dayOfWeek: 1, label: "Monday" },
@@ -112,7 +200,7 @@ export function TemplateTaskBuilder({ objectives, initialTasks }: TemplateTaskBu
     [tasksByDay]
   );
 
-  function addTask(dayOfWeek: number) {
+  const addTask = useCallback((dayOfWeek: number) => {
     idCounterRef.current += 1;
     const id = `${dayOfWeek}-${idCounterRef.current}`;
 
@@ -120,42 +208,50 @@ export function TemplateTaskBuilder({ objectives, initialTasks }: TemplateTaskBu
       ...previous,
       [dayOfWeek]: [...(previous[dayOfWeek] ?? []), createDraft(id)]
     }));
-  }
+  }, []);
 
-  function removeTask(dayOfWeek: number, taskId: string) {
+  const removeTask = useCallback((dayOfWeek: number, taskId: string) => {
     setTasksByDay((previous) => ({
       ...previous,
       [dayOfWeek]: (previous[dayOfWeek] ?? []).filter((task) => task.id !== taskId)
     }));
-  }
+  }, []);
 
-  function updateTask(dayOfWeek: number, taskId: string, field: keyof Omit<TaskDraft, "id" | "habitId">, value: string) {
-    setTasksByDay((previous) => ({
-      ...previous,
-      [dayOfWeek]: (previous[dayOfWeek] ?? []).map((task) => (task.id === taskId ? { ...task, [field]: value } : task))
-    }));
-  }
+  const updateTask = useCallback(
+    (dayOfWeek: number, taskId: string, field: keyof Omit<TaskDraft, "id" | "habitId">, value: string) => {
+      setTasksByDay((previous) => ({
+        ...previous,
+        [dayOfWeek]: (previous[dayOfWeek] ?? []).map((task) =>
+          task.id === taskId ? { ...task, [field]: value } : task
+        )
+      }));
+    },
+    []
+  );
 
-  function updateObjective(dayOfWeek: number, taskId: string, objectiveId: string) {
-    setTasksByDay((previous) => ({
-      ...previous,
-      [dayOfWeek]: (previous[dayOfWeek] ?? []).map((task) => {
-        if (task.id !== taskId) {
-          return task;
-        }
+  const updateObjective = useCallback(
+    (dayOfWeek: number, taskId: string, objectiveId: string) => {
+      setTasksByDay((previous) => ({
+        ...previous,
+        [dayOfWeek]: (previous[dayOfWeek] ?? []).map((task) => {
+          if (task.id !== taskId) {
+            return task;
+          }
 
-        const previousObjectiveTitle = objectives.find((objective) => objective.id === task.objectiveId)?.title ?? "";
-        const nextObjectiveTitle = objectives.find((objective) => objective.id === objectiveId)?.title ?? "";
-        const shouldAutoFillTitle = task.title.trim().length === 0 || task.title === previousObjectiveTitle;
+          const previousObjectiveTitle = objectives.find((objective) => objective.id === task.objectiveId)?.title ?? "";
+          const nextObjectiveTitle = objectives.find((objective) => objective.id === objectiveId)?.title ?? "";
+          const shouldAutoFillTitle = task.title.trim().length === 0 || task.title === previousObjectiveTitle;
 
-        return {
-          ...task,
-          objectiveId,
-          title: shouldAutoFillTitle ? nextObjectiveTitle : task.title
-        };
-      })
-    }));
-  }
+          return {
+            ...task,
+            objectiveId,
+            title: shouldAutoFillTitle ? nextObjectiveTitle : task.title
+          };
+        })
+      }));
+    },
+    [objectives]
+  );
 
   return (
     <div className="space-y-3">
@@ -174,36 +270,15 @@ export function TemplateTaskBuilder({ objectives, initialTasks }: TemplateTaskBu
           {(tasksByDay[day.dayOfWeek] ?? []).length > 0 ? (
             <div className="space-y-2">
               {(tasksByDay[day.dayOfWeek] ?? []).map((task) => (
-                <div key={task.id} className="grid gap-2 md:grid-cols-[130px_2.1fr_110px_120px_auto]">
-                  <Select value={task.objectiveId} onChange={(event) => updateObjective(day.dayOfWeek, task.id, event.target.value)}>
-                    <option value="">Choose objective</option>
-                    {objectives.map((objective) => (
-                      <option key={objective.id} value={objective.id}>
-                        {objective.title}
-                      </option>
-                    ))}
-                  </Select>
-                  <Input
-                    value={task.title}
-                    onChange={(event) => updateTask(day.dayOfWeek, task.id, "title", event.target.value)}
-                    placeholder="Task title"
-                  />
-                  <Input
-                    type="number"
-                    min={0}
-                    value={task.plannedMinutes}
-                    onChange={(event) => updateTask(day.dayOfWeek, task.id, "plannedMinutes", event.target.value)}
-                    placeholder="Avg min"
-                  />
-                  <Input
-                    type="time"
-                    value={task.startTime}
-                    onChange={(event) => updateTask(day.dayOfWeek, task.id, "startTime", event.target.value)}
-                  />
-                  <Button type="button" variant="ghost" size="icon" onClick={() => removeTask(day.dayOfWeek, task.id)} aria-label="Remove task">
-                    <Trash2 size={14} />
-                  </Button>
-                </div>
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  dayOfWeek={day.dayOfWeek}
+                  objectives={objectives}
+                  onUpdateTask={updateTask}
+                  onUpdateObjective={updateObjective}
+                  onRemoveTask={removeTask}
+                />
               ))}
             </div>
           ) : (

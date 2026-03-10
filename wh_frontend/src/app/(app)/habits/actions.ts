@@ -69,6 +69,11 @@ const syncWeekSchema = z.object({
   weekStartDate: dateInputSchema
 });
 
+const changeWeekTemplateSchema = z.object({
+  templateId: z.string().uuid(),
+  weekStartDate: dateInputSchema
+});
+
 function getSafeReturnPath(raw: FormDataEntryValue | null) {
   const value = typeof raw === "string" ? raw.trim() : "";
   if (value.startsWith("/habits") || value.startsWith("/planning")) {
@@ -362,6 +367,66 @@ export async function generateWeekFromTemplateAction(formData: FormData) {
   return { redirectTo: returnPath };
 }
 
+export async function changeWeekTemplateAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = changeWeekTemplateSchema.safeParse({
+    templateId: formData.get("templateId"),
+    weekStartDate: formData.get("weekStartDate")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  const { data: existingWeek } = await supabase
+    .from("weeks")
+    .select("id, template_id")
+    .eq("account_id", account.accountId)
+    .eq("week_start_date", payload.data.weekStartDate)
+    .maybeSingle();
+
+  if (!existingWeek?.id) {
+    return { redirectTo: returnPath };
+  }
+
+  if (existingWeek.template_id === payload.data.templateId) {
+    return { redirectTo: returnPath };
+  }
+
+  const weekStartDate = new Date(`${payload.data.weekStartDate}T00:00:00`);
+  const weekEndDate = new Date(weekStartDate);
+  weekEndDate.setDate(weekEndDate.getDate() + 6);
+  const weekEndIso = weekEndDate.toISOString().slice(0, 10);
+
+  const { data: habitsInAccount } = await supabase.from("habits").select("id").eq("account_id", account.accountId);
+  const habitIds = (habitsInAccount ?? []).map((h) => h.id);
+
+  if (habitIds.length > 0) {
+    await supabase
+      .from("habit_sessions")
+      .delete()
+      .in("habit_id", habitIds)
+      .gte("session_date", payload.data.weekStartDate)
+      .lte("session_date", weekEndIso);
+  }
+
+  await supabase
+    .from("weeks")
+    .delete()
+    .eq("account_id", account.accountId)
+    .eq("week_start_date", payload.data.weekStartDate);
+
+  await supabase.rpc("create_week_from_template", {
+    p_account_id: account.accountId,
+    p_template_id: payload.data.templateId,
+    p_week_start_date: payload.data.weekStartDate
+  });
+
+  revalidatePath(returnPath.split("?")[0] || "/habits");
+  return { redirectTo: returnPath };
+}
+
 export async function addCompensationSessionAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const habitIdRaw = formData.get("habitId");
@@ -462,6 +527,13 @@ export async function generateWeekFromTemplateFormAction(
   formData: FormData
 ): Promise<RedirectResult | null> {
   return generateWeekFromTemplateAction(formData);
+}
+
+export async function changeWeekTemplateFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return changeWeekTemplateAction(formData);
 }
 
 export async function addCompensationSessionFormAction(

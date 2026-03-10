@@ -1,8 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
-import { useFormState } from "react-dom";
+import { useActionState, useEffect, type ReactNode } from "react";
 
 import type { RedirectResult } from "@/lib/action-with-state";
 
@@ -18,7 +17,7 @@ type ActionFormProps = {
 
 export function ActionForm({ action, children, className, onSuccess, refreshOnly }: ActionFormProps) {
   const router = useRouter();
-  const [state, formAction] = useFormState(action, null);
+  const [state, formAction] = useActionState(action, null);
 
   useEffect(() => {
     if (state?.redirectTo) {

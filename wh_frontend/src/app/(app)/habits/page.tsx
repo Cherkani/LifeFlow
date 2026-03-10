@@ -2,9 +2,13 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
 
-import { generateWeekFromTemplateFormAction, syncWeekWithTemplateFormAction } from "@/app/(app)/habits/actions";
+import {
+  changeWeekTemplateFormAction,
+  generateWeekFromTemplateFormAction,
+  syncWeekWithTemplateFormAction
+} from "@/app/(app)/habits/actions";
 import { ExecutionBoard } from "@/app/(app)/habits/execution-board";
-import { SyncWeekConfirmForm } from "@/app/(app)/habits/sync-week-confirm-form";
+import { WeekResetModal } from "@/app/(app)/habits/week-reset-modal";
 import { DailyObjectiveChart } from "@/app/(app)/habits/daily-objective-chart";
 import { ActionForm } from "@/components/forms/action-form";
 import { SubmitButton } from "@/components/forms/submit-button";
@@ -230,17 +234,20 @@ export default async function HabitsPage({
           {templates.length === 0 ? (
             <p className="text-sm text-[#4a5f83]">No templates yet. Create one from Planner first.</p>
           ) : currentWeek?.template_id ? (
-            <div className="space-y-1 rounded-lg border border-[#c7d3e8] bg-[#edf3ff] p-3">
-              <p className="text-xs font-medium text-[#4a5f83]">Template for this week</p>
-              <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#c7d3e8] bg-[#edf3ff] p-3">
+              <div>
+                <p className="text-xs font-medium text-[#4a5f83]">Template for this week</p>
                 <p className="text-sm font-semibold text-[#0c1d3c]">{selectedTemplate?.name ?? "Selected template"}</p>
-                <SyncWeekConfirmForm
-                  action={syncWeekWithTemplateFormAction}
-                  returnPath={weekHref(selectedWeekStart)}
-                  weekStartDate={weekStartIso}
-                />
               </div>
-              <p className="text-xs text-[#4a5f83]">Template assignment is locked for this week.</p>
+              <WeekResetModal
+                templates={templates}
+                currentTemplateId={selectedTemplateId}
+                currentTemplateName={selectedTemplate?.name ?? "current template"}
+                weekStartDate={weekStartIso}
+                returnPath={weekHref(selectedWeekStart)}
+                changeTemplateAction={changeWeekTemplateFormAction}
+                resetSameTemplateAction={syncWeekWithTemplateFormAction}
+              />
             </div>
           ) : (
             <ActionForm action={generateWeekFromTemplateFormAction} className="grid gap-2 md:grid-cols-[1fr_auto] md:items-end">
@@ -262,7 +269,11 @@ export default async function HabitsPage({
           )}
 
           <div className="flex flex-wrap items-center gap-2">
-            {currentWeek?.template_id ? <Badge variant="secondary">Template locked</Badge> : <Badge variant="warning">No template selected</Badge>}
+            {currentWeek?.template_id ? (
+              <Badge variant="secondary">Template: {selectedTemplate?.name ?? "Assigned"}</Badge>
+            ) : (
+              <Badge variant="warning">No template selected</Badge>
+            )}
             <Badge variant="secondary">Week planned: {weekPlannedMinutes} min</Badge>
             <Badge>Week done: {weekDoneMinutes} min</Badge>
             <Badge variant="secondary">Month done: {monthDoneMinutes} min</Badge>

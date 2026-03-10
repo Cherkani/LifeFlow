@@ -1,4 +1,5 @@
-import { Linkedin, Mail, MessageCircle } from "lucide-react";
+import Link from "next/link";
+import { Download, Linkedin, Mail, MessageCircle } from "lucide-react";
 
 import { updateProfileFormAction } from "@/app/(app)/actions";
 import { ActionForm } from "@/components/forms/action-form";
@@ -75,6 +76,27 @@ export default async function SettingsPage({
               <dt className="font-medium text-slate-500">Active</dt><dd>{profile?.is_active ? "Yes" : "No"}</dd>
               <dt className="font-medium text-slate-500">Joined</dt><dd>{profile?.created_at?.slice(0, 10) ?? "Unknown"}</dd>
             </dl>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-lg font-semibold text-slate-900">Data export</h2>
+        <Card>
+          <CardHeader>
+            <CardTitle>Export to Excel</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-slate-600">
+              Download your current data (profile, knowledge, habits, finance, planning, events) as an Excel file.
+            </p>
+            <Link
+              href="/api/export/excel"
+              className="inline-flex items-center gap-2 rounded-lg bg-[#0b1f3b] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#102a52]"
+            >
+              <Download size={16} />
+              Export data
+            </Link>
           </CardContent>
         </Card>
       </section>
