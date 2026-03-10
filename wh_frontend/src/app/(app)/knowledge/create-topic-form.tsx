@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import Image from "next/image";
 
+import { ActionForm } from "@/components/forms/action-form";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { RedirectResult } from "@/lib/action-with-state";
 
 type PexelsPhoto = {
   id: number;
@@ -19,10 +21,11 @@ type PexelsPhoto = {
 };
 
 type CreateTopicFormProps = {
-  action: (formData: FormData) => void;
+  action: (prevState: RedirectResult | null, formData: FormData) => Promise<RedirectResult | null>;
+  onSuccess?: () => void;
 };
 
-export function CreateTopicForm({ action }: CreateTopicFormProps) {
+export function CreateTopicForm({ action, onSuccess }: CreateTopicFormProps) {
   const [search, setSearch] = useState("");
   const [gallery, setGallery] = useState<PexelsPhoto[]>([]);
   const [selectedImage, setSelectedImage] = useState<string>("");
@@ -50,7 +53,7 @@ export function CreateTopicForm({ action }: CreateTopicFormProps) {
   }, []);
 
   return (
-    <form action={action} className="space-y-4">
+    <ActionForm action={action} className="space-y-4" onSuccess={onSuccess}>
       <input type="hidden" name="returnPath" value="/knowledge" />
       <input type="hidden" name="imageUrl" value={selectedImage} />
 
@@ -111,6 +114,6 @@ export function CreateTopicForm({ action }: CreateTopicFormProps) {
       )}
 
       <SubmitButton label="Create topic" pendingLabel="Creating..." className="w-full sm:w-auto" />
-    </form>
+    </ActionForm>
   );
 }

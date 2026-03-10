@@ -3,6 +3,7 @@ import { CalendarDays, CheckCircle2, Circle, ListFilter, PlusCircle, Search } fr
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { getTasksHabits, getTasksSessions } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
 
 type TaskSearchParams = Promise<{
@@ -52,21 +53,10 @@ export default async function TasksPage({
   const priorityFilter = params.priority?.trim() ?? "all";
 
   const { supabase, account } = await requireAppContext();
-  const habitsRes = await supabase.from("habits").select("id, title").eq("account_id", account.accountId).eq("is_active", true);
-  const habits = (habitsRes.data ?? []) as Habit[];
+  const habits = (await getTasksHabits(supabase, account.accountId)) as Habit[];
   const habitNameById = new Map(habits.map((habit) => [habit.id, habit.title]));
 
-  const sessionsRes =
-    habits.length > 0
-      ? await supabase
-          .from("habit_sessions")
-          .select("id, habit_id, session_date, planned_minutes, completed, notes")
-          .in("habit_id", habits.map((habit) => habit.id))
-          .order("session_date", { ascending: true })
-          .limit(50)
-      : { data: [] as Session[] };
-
-  const sessions = (sessionsRes.data ?? []) as Session[];
+  const sessions = (await getTasksSessions(supabase, habits.map((h) => h.id))) as Session[];
   const rawTasks = sessions.map((session) => {
     const status = session.completed ? "done" : "todo";
     const priority = getPriority(session.planned_minutes);

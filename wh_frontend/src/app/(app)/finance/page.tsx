@@ -1,31 +1,11 @@
-import { ArrowDownRight, ArrowUpRight, Plus } from "lucide-react";
-import Image from "next/image";
-
-import { FinanceCharts } from "@/app/(app)/finance/finance-charts";
-import { PexelsImagePicker } from "@/components/forms/pexels-image-picker";
-import { SubmitButton } from "@/components/forms/submit-button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ModalShell } from "@/components/ui/modal-shell";
-import { SectionHeader } from "@/components/ui/section-header";
-import { Select } from "@/components/ui/select";
+import { getFinancePageData } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
-import { endOfIsoWeek, startOfIsoWeek, toDateInputValue } from "@/lib/utils";
+import { endOfIsoWeek, startOfIsoWeek } from "@/lib/utils";
 
-import {
-  createDebtAction,
-  createDebtPaymentAction,
-  createExpenseAction,
-  createExpenseCategoryAction,
-  updateExpenseCategoryAction
-} from "./actions";
+import { FinanceModals } from "./finance-modals";
 
 type FinanceSearchParams = Promise<{
-  modal?: string;
   tab?: string;
-  mode?: string;
   period?: string;
   anchor?: string;
 }>;
@@ -40,23 +20,6 @@ type DebtRow = {
   due_date: string | null;
 };
 
-type PaymentRow = {
-  id: string;
-  debt_id: string;
-  amount: number;
-  paid_at: string;
-  method: string | null;
-  notes: string | null;
-};
-
-function money(amount: number, currencyCode: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currencyCode,
-    maximumFractionDigits: 2
-  }).format(amount);
-}
-
 function toIsoDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
@@ -70,25 +33,10 @@ function parseAnchorDate(raw: string | undefined) {
   return today;
 }
 
-function parsePeriod(raw: string | undefined) {
-  if (raw === "week") {
-    return "week";
-  }
-  if (raw === "month") {
-    return "month";
-  }
+function parsePeriod(raw: string | undefined): "day" | "week" | "month" {
+  if (raw === "week") return "week";
+  if (raw === "month") return "month";
   return "day";
-}
-
-function buildFinanceHref(options?: { modal?: string; tab?: string; mode?: string; period?: "day" | "week" | "month"; anchor?: string }) {
-  const query = new URLSearchParams();
-  if (options?.tab) query.set("tab", options.tab);
-  if (options?.period) query.set("period", options.period);
-  if (options?.anchor) query.set("anchor", options.anchor);
-  if (options?.modal) query.set("modal", options.modal);
-  if (options?.mode) query.set("mode", options.mode);
-  const queryValue = query.toString();
-  return queryValue.length > 0 ? `/finance?${queryValue}` : "/finance";
 }
 
 export default async function FinancePage({
@@ -98,8 +46,6 @@ export default async function FinancePage({
 }) {
   const params = await searchParams;
   const tab = params.tab === "debts" ? "debts" : "expenses";
-  const modal = params.modal?.trim();
-  const mode = params.mode === "payment" ? "payment" : "debt";
   const period = parsePeriod(params.period);
   const anchorDate = parseAnchorDate(params.anchor);
   const anchorIso = toIsoDate(anchorDate);
@@ -123,50 +69,27 @@ export default async function FinancePage({
   nextAnchorDate.setDate(nextAnchorDate.getDate() + (period === "week" ? 7 : period === "month" ? 30 : 1));
 
   const { supabase, account } = await requireAppContext();
-  const [categoriesRes, monthExpensesRes, recentExpensesRes, debtsRes, paymentsRes] = await Promise.all([
-    supabase
-      .from("finance_categories")
-      .select("id, name, monthly_limit, image_url")
-      .eq("account_id", account.accountId)
-      .eq("kind", "expense")
-      .order("name"),
-    supabase
-      .from("ledger_entries")
-      .select("id, amount, category_id, occurred_on")
-      .eq("account_id", account.accountId)
-      .eq("entry_type", "expense")
-      .gte("occurred_on", rangeStart)
-      .lte("occurred_on", rangeEnd),
-    supabase
-      .from("ledger_entries")
-      .select("id, amount, category_id, occurred_on, notes")
-      .eq("account_id", account.accountId)
-      .eq("entry_type", "expense")
-      .gte("occurred_on", rangeStart)
-      .lte("occurred_on", rangeEnd)
-      .order("occurred_on", { ascending: false })
-      .limit(period === "week" ? 200 : 50),
-    supabase
-      .from("debts")
-      .select("id, name, type, principal, remaining_balance, status, due_date")
-      .eq("account_id", account.accountId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("debt_payments")
-      .select("id, debt_id, amount, paid_at, method, notes")
-      .eq("account_id", account.accountId)
-      .order("paid_at", { ascending: false })
-      .limit(30)
-  ]);
+  const financeData = await getFinancePageData(
+    supabase,
+    account.accountId,
+    rangeStart,
+    rangeEnd,
+    period
+  );
+  const categories = financeData.categories;
+  const periodExpenses = financeData.periodExpenses;
+  const recentExpenses = financeData.recentExpenses;
+  const debts = financeData.debts as unknown as DebtRow[];
+  const payments = financeData.payments;
 
-  const categories = categoriesRes.data ?? [];
-  const periodExpenses = monthExpensesRes.data ?? [];
-  const recentExpenses = recentExpensesRes.data ?? [];
-  const debts = (debtsRes.data ?? []) as DebtRow[];
-  const payments = (paymentsRes.data ?? []) as PaymentRow[];
-
-  const categoryNameById = new Map(categories.map((category) => [category.id, category.name]));
-  const debtNameById = new Map(debts.map((debt) => [debt.id, debt.name]));
+  const categoryNameById: Record<string, string> = {};
+  for (const c of categories) {
+    categoryNameById[c.id] = c.name;
+  }
+  const debtNameById: Record<string, string> = {};
+  for (const d of debts) {
+    debtNameById[d.id] = d.name;
+  }
 
   const spentByCategory = new Map<string, number>();
   const spentByDay = new Map<string, number>();
@@ -178,7 +101,8 @@ export default async function FinancePage({
   }
 
   const totalSpent = periodExpenses.reduce((sum, entry) => sum + Number(entry.amount), 0);
-  const periodDays = period === "week" ? 7 : period === "month" ? rangeEndDate.getDate() - rangeStartDate.getDate() + 1 : 1;
+  const periodDays =
+    period === "week" ? 7 : period === "month" ? rangeEndDate.getDate() - rangeStartDate.getDate() + 1 : 1;
   const averageDaySpend = periodDays > 0 ? totalSpent / periodDays : 0;
   const topDay = [...spentByDay.entries()].sort((a, b) => b[1] - a[1])[0];
 
@@ -221,515 +145,67 @@ export default async function FinancePage({
       limit: Number(row.limit.toFixed(2))
     }));
 
-  const openDebts = debts.filter((debt) => debt.status === "open");
-  const openDebtTotal = openDebts.reduce((sum, debt) => sum + Number(debt.remaining_balance ?? debt.principal ?? 0), 0);
+  const openDebts = debts.filter((d) => d.status === "open");
+  const openDebtTotal = openDebts.reduce(
+    (sum, debt) => sum + Number(debt.remaining_balance ?? debt.principal ?? 0),
+    0
+  );
   const periodPaymentsTotal = payments
-    .filter((payment) => payment.paid_at >= rangeStart && payment.paid_at <= rangeEnd)
-    .reduce((sum, payment) => sum + Number(payment.amount), 0);
+    .filter((p) => p.paid_at >= rangeStart && p.paid_at <= rangeEnd)
+    .reduce((sum, p) => sum + Number(p.amount), 0);
+
+  const categoriesForClient = categories.map((c) => ({
+    id: c.id,
+    name: c.name,
+    monthly_limit: c.monthly_limit ? Number(c.monthly_limit) : null,
+    image_url: c.image_url
+  }));
+
+  const recentExpensesForClient = recentExpenses.map((e) => ({
+    id: e.id,
+    category_id: e.category_id,
+    amount: Number(e.amount),
+    occurred_on: e.occurred_on,
+    notes: e.notes
+  }));
+
+  const paymentsForClient = payments.map((p) => ({
+    id: p.id,
+    debt_id: p.debt_id,
+    amount: Number(p.amount),
+    paid_at: p.paid_at,
+    method: p.method,
+    notes: p.notes
+  }));
 
   return (
     <div className="space-y-6">
-      <SectionHeader
-        title="Finance Command"
-        description="Track monthly spending with rich charts and manage debt operations in one place."
-        action={
-          <div className="flex flex-wrap gap-2">
-            <a
-              href={buildFinanceHref({ tab, period, anchor: toIsoDate(anchorDate), modal: "expense" })}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#0b1f3b] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#102a52]"
-            >
-              <Plus size={16} />
-              Add Expense
-            </a>
-            <a
-              href={buildFinanceHref({ tab, period, anchor: toIsoDate(anchorDate), modal: "debt-entry", mode: "debt" })}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#1e3a6d] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#274881]"
-            >
-              <Plus size={16} />
-              Debt Entry
-            </a>
-            <a
-              href={buildFinanceHref({ tab, period, anchor: toIsoDate(anchorDate), modal: "expense-category" })}
-              className="inline-flex items-center gap-2 rounded-lg border border-[#c7d3e8] bg-[#edf3ff] px-3 py-2 text-sm font-semibold text-[#23406d] transition hover:bg-[#e3ebf9]"
-            >
-              <Plus size={16} />
-              Category
-            </a>
-          </div>
-        }
+      <FinanceModals
+        tab={tab}
+        period={period}
+        anchorIso={anchorIso}
+        categories={categoriesForClient}
+        openDebts={openDebts}
+        categoryMetrics={categoryMetrics}
+        categoryNameById={categoryNameById}
+        debtNameById={debtNameById}
+        recentExpenses={recentExpensesForClient}
+        payments={paymentsForClient}
+        debts={debts}
+        dailyChartData={dailyChartData}
+        categoryChartData={categoryChartData}
+        totalSpent={totalSpent}
+        averageDaySpend={averageDaySpend}
+        topDay={topDay}
+        overLimitCount={overLimitCount}
+        openDebtTotal={openDebtTotal}
+        periodPaymentsTotal={periodPaymentsTotal}
+        rangeStartIso={rangeStart}
+        rangeEndIso={rangeEnd}
+        previousAnchorIso={toIsoDate(previousAnchorDate)}
+        nextAnchorIso={toIsoDate(nextAnchorDate)}
+        currencyCode={account.currencyCode}
       />
-
-      <Card>
-        <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
-          <div className="inline-flex rounded-lg border border-[#c7d3e8] bg-white p-1">
-            <a
-              href={buildFinanceHref({ tab: "expenses", period, anchor: toIsoDate(anchorDate) })}
-              className={[
-                "rounded-md px-3 py-1.5 text-sm font-semibold",
-                tab === "expenses" ? "bg-[#0b1f3b] text-white" : "text-[#23406d]"
-              ].join(" ")}
-            >
-              Expenses
-            </a>
-            <a
-              href={buildFinanceHref({ tab: "debts", period, anchor: toIsoDate(anchorDate) })}
-              className={[
-                "rounded-md px-3 py-1.5 text-sm font-semibold",
-                tab === "debts" ? "bg-[#0b1f3b] text-white" : "text-[#23406d]"
-              ].join(" ")}
-            >
-              Debts
-            </a>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="inline-flex rounded-lg border border-[#c7d3e8] bg-white p-1">
-              <a
-                href={buildFinanceHref({ tab, period: "day", anchor: toIsoDate(anchorDate) })}
-                className={["rounded-md px-3 py-1.5 text-sm font-semibold", period === "day" ? "bg-[#0b1f3b] text-white" : "text-[#23406d]"].join(" ")}
-              >
-                Day
-              </a>
-              <a
-                href={buildFinanceHref({ tab, period: "week", anchor: toIsoDate(anchorDate) })}
-                className={["rounded-md px-3 py-1.5 text-sm font-semibold", period === "week" ? "bg-[#0b1f3b] text-white" : "text-[#23406d]"].join(" ")}
-              >
-                Week
-              </a>
-              <a
-                href={buildFinanceHref({ tab, period: "month", anchor: toIsoDate(anchorDate) })}
-                className={["rounded-md px-3 py-1.5 text-sm font-semibold", period === "month" ? "bg-[#0b1f3b] text-white" : "text-[#23406d]"].join(" ")}
-              >
-                Month
-              </a>
-            </div>
-            <a
-              href={buildFinanceHref({ tab, period, anchor: toIsoDate(previousAnchorDate) })}
-              className="inline-flex size-9 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] text-[#23406d]"
-            >
-              <ArrowDownRight size={16} />
-            </a>
-            <p className="text-sm font-semibold text-[#0c1d3c]">
-              {period === "day"
-                ? anchorDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                : `${rangeStartDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${rangeEndDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
-            </p>
-            <a
-              href={buildFinanceHref({ tab, period, anchor: toIsoDate(nextAnchorDate) })}
-              className="inline-flex size-9 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] text-[#23406d]"
-            >
-              <ArrowUpRight size={16} />
-            </a>
-          </div>
-        </CardContent>
-      </Card>
-
-      {tab === "expenses" ? (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Period spent</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold text-rose-700">{money(totalSpent, account.currencyCode)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Average / day</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold text-[#0c1d3c]">{money(averageDaySpend, account.currencyCode)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Top spend day in period</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold text-[#0c1d3c]">
-                  {topDay ? `${topDay[0]} · ${money(topDay[1], account.currencyCode)}` : "No data"}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Over-limit categories</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold text-amber-700">{overLimitCount}</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <FinanceCharts
-            dailyExpenses={dailyChartData}
-            categories={categoryChartData}
-            currencyCode={account.currencyCode}
-          />
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent expenses</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {recentExpenses.length > 0 ? (
-                <div className="space-y-3">
-                  {recentExpenses.map((entry) => (
-                    <div key={entry.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#c7d3e8] bg-[#f8fbff] p-3">
-                      <div>
-                        <p className="text-sm font-semibold text-[#0c1d3c]">{entry.notes || "Expense"}</p>
-                        <p className="text-xs text-[#4a5f83]">{entry.occurred_on} · {categoryNameById.get(entry.category_id ?? "") ?? "No category"}</p>
-                      </div>
-                      <Badge variant="danger">-{money(Number(entry.amount), account.currencyCode)}</Badge>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-[#4a5f83]">No expenses yet.</p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Category limits (monthly)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {categories.length > 0 ? (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {categoryMetrics.map((category) => {
-                    const categoryMeta = categories.find((entry) => entry.id === category.id);
-                    return (
-                      <div key={category.id} className="relative space-y-3 rounded-lg border border-[#c7d3e8] bg-[#f8fbff] p-3">
-                        {categoryMeta?.image_url ? (
-                          <div className="relative h-24 w-full overflow-hidden rounded-md border border-[#d7e0f1] bg-white">
-                            <Image src={categoryMeta.image_url} alt={category.name} fill className="object-cover" />
-                          </div>
-                        ) : (
-                          <div className="flex h-24 items-center justify-center rounded-md border border-dashed border-[#d7e0f1] text-xs text-[#4a5f83]">
-                            No image
-                          </div>
-                        )}
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="text-sm font-semibold text-[#0c1d3c]">{category.name}</p>
-                            <p className="text-[11px] text-[#4a5f83]">
-                              {category.limit > 0 ? `${money(category.limit, account.currencyCode)} limit` : "No limit set"}
-                            </p>
-                          </div>
-                          <a
-                            href={buildFinanceHref({ tab, period, anchor: anchorIso, modal: `edit-category-${category.id}` })}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#c7d3e8] bg-white text-[#0c1d3c] transition hover:bg-[#f8fbff]"
-                            aria-label="Edit category"
-                          >
-                            <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path
-                                d="m3 11 9-9 3 3-9 9H3v-3Z"
-                                stroke="currentColor"
-                                strokeWidth="1.2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                              <path d="M12 3l1 1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          </a>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={category.over ? "danger" : "secondary"}>{money(category.spent, account.currencyCode)} spent</Badge>
-                          <Badge variant="secondary">{category.limit > 0 ? "Tracked" : "Untracked"}</Badge>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-[#4a5f83]">No expense categories yet.</p>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      ) : (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Open debt</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold text-amber-700">{money(openDebtTotal, account.currencyCode)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Open debt lines</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold text-[#0c1d3c]">{openDebts.length}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Payments in period</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold text-emerald-700">{money(periodPaymentsTotal, account.currencyCode)}</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Debt lines</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {debts.length > 0 ? (
-                <div className="space-y-3">
-                  {debts.map((debt) => (
-                    <div key={debt.id} className="rounded-lg border border-[#c7d3e8] bg-[#f8fbff] p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-[#0c1d3c]">{debt.name}</p>
-                          <p className="text-xs text-[#4a5f83]">{debt.type} · {debt.status}{debt.due_date ? ` · due ${debt.due_date}` : ""}</p>
-                        </div>
-                        <Badge variant={debt.status === "open" ? "warning" : "secondary"}>
-                          {money(Number(debt.remaining_balance ?? debt.principal ?? 0), account.currencyCode)}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-[#4a5f83]">No debts yet.</p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent debt payments</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {payments.length > 0 ? (
-                <div className="space-y-3">
-                  {payments.map((payment) => (
-                    <div key={payment.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#c7d3e8] bg-[#f8fbff] p-3">
-                      <div>
-                        <p className="text-sm font-semibold text-[#0c1d3c]">{debtNameById.get(payment.debt_id) ?? "Debt payment"}</p>
-                        <p className="text-xs text-[#4a5f83]">{payment.paid_at}{payment.method ? ` · ${payment.method}` : ""}</p>
-                      </div>
-                      <Badge variant="secondary">{money(Number(payment.amount), account.currencyCode)}</Badge>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-[#4a5f83]">No debt payments yet.</p>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
-
-      {modal === "expense-category" ? (
-        <ModalShell title="Create Expense Category" description="Set monthly spending cap per category." closeHref={buildFinanceHref({ tab, period, anchor: toIsoDate(anchorDate) })}>
-          <form action={createExpenseCategoryAction} className="space-y-4">
-            <input type="hidden" name="returnPath" value={buildFinanceHref({ tab, period, anchor: toIsoDate(anchorDate) })} />
-            <div className="space-y-2">
-              <Label htmlFor="categoryName">Category name</Label>
-              <Input id="categoryName" name="name" required placeholder="e.g. Food, Transport, Shopping" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="monthlyLimit">Monthly limit (optional)</Label>
-              <Input id="monthlyLimit" name="monthlyLimit" type="number" min={0} step="0.01" placeholder="0.00" />
-            </div>
-            <PexelsImagePicker inputName="imageUrl" label="Category image (optional)" />
-            <SubmitButton label="Save category" pendingLabel="Saving..." className="w-full sm:w-auto" />
-          </form>
-        </ModalShell>
-      ) : null}
-
-      {modal === "expense" ? (
-        <ModalShell title="Add Expense" description="Record what you spent." closeHref={buildFinanceHref({ tab, period, anchor: toIsoDate(anchorDate) })}>
-          {categories.length === 0 ? (
-            <p className="text-sm text-[#4a5f83]">Create expense category first.</p>
-          ) : (
-            <form action={createExpenseAction} className="space-y-4">
-              <input type="hidden" name="returnPath" value={buildFinanceHref({ tab, period, anchor: toIsoDate(anchorDate) })} />
-              <div className="space-y-2">
-                <Label htmlFor="categoryId">Category</Label>
-                <Select id="categoryId" name="categoryId" required>
-                  <option value="">Choose category</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="amount">Amount</Label>
-                  <Input id="amount" name="amount" type="number" min={0} step="0.01" required placeholder="0.00" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="occurredOn">Date</Label>
-                  <Input id="occurredOn" name="occurredOn" type="date" required defaultValue={toDateInputValue(new Date())} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="notes">Note (optional)</Label>
-                <Input id="notes" name="notes" placeholder="What was this expense?" />
-              </div>
-              <SubmitButton label="Save expense" pendingLabel="Saving..." className="w-full sm:w-auto" />
-            </form>
-          )}
-        </ModalShell>
-      ) : null}
-
-      {modal === "debt-entry" ? (
-        <ModalShell title="Debt Entry" description="Create debt or record a payment in one place." closeHref={buildFinanceHref({ tab, period, anchor: toIsoDate(anchorDate) })}>
-          <div className="mb-4 inline-flex rounded-lg border border-[#c7d3e8] bg-white p-1">
-            <a
-              href={buildFinanceHref({ tab, period, anchor: toIsoDate(anchorDate), modal: "debt-entry", mode: "debt" })}
-              className={["rounded-md px-3 py-1.5 text-sm font-semibold", mode === "debt" ? "bg-[#0b1f3b] text-white" : "text-[#23406d]"].join(" ")}
-            >
-              New debt
-            </a>
-            <a
-              href={buildFinanceHref({ tab, period, anchor: toIsoDate(anchorDate), modal: "debt-entry", mode: "payment" })}
-              className={["rounded-md px-3 py-1.5 text-sm font-semibold", mode === "payment" ? "bg-[#0b1f3b] text-white" : "text-[#23406d]"].join(" ")}
-            >
-              Payment
-            </a>
-          </div>
-
-          {mode === "debt" ? (
-            <form action={createDebtAction} className="space-y-4">
-              <input type="hidden" name="returnPath" value={buildFinanceHref({ tab, period, anchor: toIsoDate(anchorDate) })} />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="debtType">Type</Label>
-                  <Select id="debtType" name="type" defaultValue="owing">
-                    <option value="owing">I owe</option>
-                    <option value="owed">Owed to me</option>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="debtName">Name</Label>
-                  <Input id="debtName" name="name" required placeholder="Debt name" />
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="principal">Principal</Label>
-                  <Input id="principal" name="principal" type="number" min={0} step="0.01" required placeholder="0.00" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="remainingBalance">Remaining</Label>
-                  <Input id="remainingBalance" name="remainingBalance" type="number" min={0} step="0.01" placeholder="0.00" />
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="apr">APR % (optional)</Label>
-                  <Input id="apr" name="apr" type="number" min={0} step="0.001" placeholder="0" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="dueDate">Due date (optional)</Label>
-                  <Input id="dueDate" name="dueDate" type="date" />
-                </div>
-              </div>
-              <SubmitButton label="Save debt" pendingLabel="Saving..." className="w-full sm:w-auto" />
-            </form>
-          ) : openDebts.length === 0 ? (
-            <p className="text-sm text-[#4a5f83]">No open debts available.</p>
-          ) : (
-            <form action={createDebtPaymentAction} className="space-y-4">
-              <input type="hidden" name="returnPath" value={buildFinanceHref({ tab, period, anchor: toIsoDate(anchorDate) })} />
-              <div className="space-y-2">
-                <Label htmlFor="debtId">Debt</Label>
-                <Select id="debtId" name="debtId" required>
-                  <option value="">Choose debt</option>
-                  {openDebts.map((debt) => (
-                    <option key={debt.id} value={debt.id}>
-                      {debt.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="paymentAmount">Amount</Label>
-                  <Input id="paymentAmount" name="amount" type="number" min={0} step="0.01" required placeholder="0.00" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="paidAt">Date</Label>
-                  <Input id="paidAt" name="paidAt" type="date" required defaultValue={toDateInputValue(new Date())} />
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="method">Method (optional)</Label>
-                  <Input id="method" name="method" placeholder="Optional" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="paymentNotes">Notes (optional)</Label>
-                  <Input id="paymentNotes" name="notes" placeholder="Optional" />
-                </div>
-              </div>
-              <SubmitButton label="Record payment" pendingLabel="Saving..." className="w-full sm:w-auto" />
-            </form>
-          )}
-        </ModalShell>
-      ) : null}
-
-      {modal?.startsWith("edit-category-") ? (() => {
-        const categoryId = modal.replace("edit-category-", "");
-        const category = categories.find((item) => item.id === categoryId);
-        if (!category) {
-          return (
-            <ModalShell title="Category not found" description="Select another category to edit." closeHref={buildFinanceHref({ tab, period, anchor: anchorIso })}>
-              <p className="text-sm text-[#4a5f83]">The requested category is unavailable.</p>
-            </ModalShell>
-          );
-        }
-
-        return (
-          <ModalShell
-            title="Edit category"
-            description="Update category name and monthly limit."
-            closeHref={buildFinanceHref({ tab, period, anchor: anchorIso })}
-          >
-            <form action={updateExpenseCategoryAction} className="space-y-4">
-              <input type="hidden" name="returnPath" value={buildFinanceHref({ tab, period, anchor: anchorIso })} />
-              <input type="hidden" name="categoryId" value={category.id} />
-              <div className="space-y-2">
-                <Label htmlFor="editCategoryName">Name</Label>
-                <Input id="editCategoryName" name="name" defaultValue={category.name} required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="editCategoryLimit">Monthly limit</Label>
-                <Input
-                  id="editCategoryLimit"
-                  name="monthlyLimit"
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  defaultValue={category.monthly_limit ?? ""}
-                  placeholder="0"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="editCategoryImage">Image URL</Label>
-                <PexelsImagePicker inputName="imageUrl" label="Category image" defaultValue={category.image_url ?? ""} />
-              </div>
-              <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
-            </form>
-          </ModalShell>
-        );
-      })() : null}
-
     </div>
   );
 }

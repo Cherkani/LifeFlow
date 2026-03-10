@@ -1,19 +1,14 @@
-import { CalendarDays, ChevronLeft, ChevronRight, CirclePlus, Star } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Star } from "lucide-react";
 
-import { createCalendarEventAction } from "@/app/(app)/events/actions";
-import { SubmitButton } from "@/components/forms/submit-button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ModalShell } from "@/components/ui/modal-shell";
-import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { getCalendarEvents } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
+
+import { EventsAddEvent } from "./events-add-event";
 
 type EventsSearchParams = Promise<{
   month?: string;
   date?: string;
-  modal?: string;
 }>;
 
 type CalendarEvent = {
@@ -55,11 +50,10 @@ function formatLongDate(date: Date) {
   return `${month} ${ordinal(date.getDate())}, ${date.getFullYear()}`;
 }
 
-function buildEventsHref(month: string, date: string, modal?: string) {
+function buildEventsHref(month: string, date: string) {
   const query = new URLSearchParams();
   query.set("month", month);
   query.set("date", date);
-  if (modal) query.set("modal", modal);
   return `/events?${query.toString()}`;
 }
 
@@ -83,14 +77,12 @@ export default async function EventsPage({
   const selectedIso = formatDateKey(selectedDate);
 
   const { supabase, account } = await requireAppContext();
-  const eventsRes = await supabase
-    .from("calendar_events")
-    .select("id, title, details, event_date, event_type")
-    .eq("account_id", account.accountId)
-    .gte("event_date", formatDateKey(monthStart))
-    .lte("event_date", formatDateKey(monthEnd))
-    .order("event_date", { ascending: true });
-  const events = (eventsRes.data ?? []) as CalendarEvent[];
+  const events = (await getCalendarEvents(
+    supabase,
+    account.accountId,
+    formatDateKey(monthStart),
+    formatDateKey(monthEnd)
+  )) as CalendarEvent[];
 
   const eventsByDate = new Map<string, CalendarEvent[]>();
   for (const event of events) {
@@ -115,8 +107,6 @@ export default async function EventsPage({
   });
 
   const selectedEvents = eventsByDate.get(selectedIso) ?? [];
-  const isModalOpen = params.modal === "new-event";
-  const closeModalHref = buildEventsHref(monthKey, selectedIso);
 
   return (
     <div className="space-y-6">
@@ -132,13 +122,7 @@ export default async function EventsPage({
           <CardContent className="space-y-5 py-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-4xl font-semibold text-[#0c1d3c]">Important Dates Calendar</h2>
-              <a
-                href={buildEventsHref(monthKey, selectedIso, "new-event")}
-                className="inline-flex items-center gap-2 rounded-lg border border-[#c7d3e8] bg-[#edf3ff] px-3 py-2 text-sm font-semibold text-[#23406d] transition hover:bg-[#e3ebf9]"
-              >
-                <CirclePlus size={16} />
-                Add Event
-              </a>
+              <EventsAddEvent monthKey={monthKey} selectedIso={selectedIso} />
             </div>
 
             <div className="rounded-lg border border-[#d7e0f1] bg-[#eef3fb] p-4">
@@ -221,36 +205,6 @@ export default async function EventsPage({
         </Card>
       </div>
 
-      {isModalOpen ? (
-        <ModalShell title="Add Calendar Event" description="Meeting or important note." closeHref={closeModalHref}>
-          <form action={createCalendarEventAction} className="space-y-4">
-            <input type="hidden" name="returnPath" value={closeModalHref} />
-            <div className="space-y-2">
-              <Label htmlFor="eventTitle">Title</Label>
-              <Input id="eventTitle" name="title" required placeholder="e.g. Team meeting, Visa renewal, Doctor appointment" />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="eventDate">Date</Label>
-                <Input id="eventDate" name="eventDate" type="date" defaultValue={selectedIso} required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="eventType">Type</Label>
-                <Select id="eventType" name="eventType" defaultValue="important">
-                  <option value="important">Important</option>
-                  <option value="meeting">Meeting</option>
-                  <option value="general">General</option>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="eventDetails">Details (optional)</Label>
-              <Textarea id="eventDetails" name="details" placeholder="Add context or location." />
-            </div>
-            <SubmitButton label="Save event" pendingLabel="Saving..." className="w-full sm:w-auto" />
-          </form>
-        </ModalShell>
-      ) : null}
     </div>
   );
 }

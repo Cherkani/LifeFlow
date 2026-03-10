@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import type { RedirectResult } from "@/lib/action-with-state";
 import { requireAppContext } from "@/lib/server-context";
 
 const dateInputSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
@@ -50,10 +50,6 @@ function getSafeReturnPath(raw: FormDataEntryValue | null) {
   return value.startsWith("/finance") ? value : "/finance";
 }
 
-function redirectToPath(path: string): never {
-  redirect(path as Parameters<typeof redirect>[0]);
-}
-
 export async function createExpenseCategoryAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = createCategorySchema.safeParse({
@@ -63,7 +59,7 @@ export async function createExpenseCategoryAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const { supabase, account } = await requireAppContext();
@@ -80,9 +76,8 @@ export async function createExpenseCategoryAction(formData: FormData) {
     image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null
   });
 
-  revalidatePath("/finance");
-  revalidatePath("/analytics");
-  redirectToPath(returnPath);
+  revalidatePath(returnPath.split("?")[0] || "/finance");
+  return { redirectTo: returnPath };
 }
 
 export async function createExpenseAction(formData: FormData) {
@@ -95,7 +90,7 @@ export async function createExpenseAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const { supabase, user, account } = await requireAppContext();
@@ -110,10 +105,8 @@ export async function createExpenseAction(formData: FormData) {
     created_by: user.id
   });
 
-  revalidatePath("/finance");
-  revalidatePath("/dashboard");
-  revalidatePath("/analytics");
-  redirectToPath(returnPath);
+  revalidatePath(returnPath.split("?")[0] || "/finance");
+  return { redirectTo: returnPath };
 }
 
 export async function createDebtAction(formData: FormData) {
@@ -128,7 +121,7 @@ export async function createDebtAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const { supabase, user, account } = await requireAppContext();
@@ -148,10 +141,8 @@ export async function createDebtAction(formData: FormData) {
     created_by: user.id
   });
 
-  revalidatePath("/finance");
-  revalidatePath("/dashboard");
-  revalidatePath("/analytics");
-  redirectToPath(returnPath);
+  revalidatePath(returnPath.split("?")[0] || "/finance");
+  return { redirectTo: returnPath };
 }
 
 export async function createDebtPaymentAction(formData: FormData) {
@@ -165,7 +156,7 @@ export async function createDebtPaymentAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const { supabase, user, account } = await requireAppContext();
@@ -199,10 +190,8 @@ export async function createDebtPaymentAction(formData: FormData) {
       .eq("id", payload.data.debtId);
   }
 
-  revalidatePath("/finance");
-  revalidatePath("/dashboard");
-  revalidatePath("/analytics");
-  redirectToPath(returnPath);
+  revalidatePath(returnPath.split("?")[0] || "/finance");
+  return { redirectTo: returnPath };
 }
 
 export async function updateExpenseCategoryAction(formData: FormData) {
@@ -215,7 +204,7 @@ export async function updateExpenseCategoryAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const { supabase, account } = await requireAppContext();
@@ -237,7 +226,41 @@ export async function updateExpenseCategoryAction(formData: FormData) {
     .eq("account_id", account.accountId)
     .eq("id", payload.data.categoryId);
 
-  revalidatePath("/finance");
-  revalidatePath("/analytics");
-  redirectToPath(returnPath);
+  revalidatePath(returnPath.split("?")[0] || "/finance");
+  return { redirectTo: returnPath };
+}
+
+export async function createExpenseCategoryFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return createExpenseCategoryAction(formData);
+}
+
+export async function createExpenseFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return createExpenseAction(formData);
+}
+
+export async function createDebtFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return createDebtAction(formData);
+}
+
+export async function createDebtPaymentFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return createDebtPaymentAction(formData);
+}
+
+export async function updateExpenseCategoryFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return updateExpenseCategoryAction(formData);
 }

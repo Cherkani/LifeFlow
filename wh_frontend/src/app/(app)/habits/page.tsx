@@ -1,19 +1,23 @@
-import { CheckSquare, ChevronLeft, ChevronRight, Square } from "lucide-react";
-import Image from "next/image";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
 
-import { addCompensationSessionAction, generateWeekFromTemplateAction, syncWeekWithTemplateAction } from "@/app/(app)/habits/actions";
-import { CompleteSessionForm } from "@/app/(app)/habits/complete-session-form";
+import { generateWeekFromTemplateFormAction, syncWeekWithTemplateFormAction } from "@/app/(app)/habits/actions";
+import { ExecutionBoard } from "@/app/(app)/habits/execution-board";
 import { SyncWeekConfirmForm } from "@/app/(app)/habits/sync-week-confirm-form";
 import { DailyObjectiveChart } from "@/app/(app)/habits/daily-objective-chart";
+import { ActionForm } from "@/components/forms/action-form";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { ModalShell } from "@/components/ui/modal-shell";
 import { Select } from "@/components/ui/select";
 import { SectionHeader } from "@/components/ui/section-header";
+import {
+  getHabitsPageData,
+  getMonthSessions,
+  getTemplateEntriesOrder,
+  getWeekSessions
+} from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
 import { endOfIsoWeek, startOfIsoWeek } from "@/lib/utils";
 
@@ -79,43 +83,10 @@ function weekHref(
   return `/habits?${query.toString()}` as Route;
 }
 
-function dayHeaderLabel(value: string) {
-  return new Date(`${value}T00:00:00`).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric"
-  });
-}
-
 function weekdayName(value: string) {
   return new Date(`${value}T00:00:00`).toLocaleDateString("en-US", {
     weekday: "short"
   });
-}
-
-function dayNumber(value: string) {
-  return new Date(`${value}T00:00:00`).getDate();
-}
-
-function isoWeekdayIndex(value: string) {
-  const date = new Date(`${value}T00:00:00`);
-  const day = date.getDay();
-  return day === 0 ? 7 : day;
-}
-
-function formatMinutesLabel(totalMinutes: number) {
-  if (totalMinutes <= 0) {
-    return "0m";
-  }
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours === 0) {
-    return `${minutes}m`;
-  }
-  if (minutes === 0) {
-    return `${hours}h`;
-  }
-  return `${hours}h ${minutes}m`;
 }
 
 export default async function HabitsPage({
@@ -128,9 +99,6 @@ export default async function HabitsPage({
   const selectedWeekEnd = endOfIsoWeek(selectedWeekStart);
   const weekStartIso = formatWeekKey(selectedWeekStart);
   const weekEndIso = formatWeekKey(selectedWeekEnd);
-  const selectedSessionId = params.session?.trim();
-  const selectedLogDate = params.logDate?.trim();
-
   const monthStart = new Date(selectedWeekStart.getFullYear(), selectedWeekStart.getMonth(), 1).toISOString().slice(0, 10);
   const monthEnd = new Date(selectedWeekStart.getFullYear(), selectedWeekStart.getMonth() + 1, 0).toISOString().slice(0, 10);
 
@@ -140,65 +108,37 @@ export default async function HabitsPage({
   nextWeek.setDate(nextWeek.getDate() + 7);
 
   const { supabase, account } = await requireAppContext();
-  const [objectivesRes, categoriesRes, templatesRes, currentWeekRes] = await Promise.all([
-    supabase.from("habit_objectives").select("id, title, image_url").eq("account_id", account.accountId),
-    supabase.from("habits").select("id, title, objective_id").eq("account_id", account.accountId).eq("is_active", true),
-    supabase.from("templates").select("id, name").eq("account_id", account.accountId).order("created_at", { ascending: false }),
-    supabase
-      .from("weeks")
-      .select("id, template_id")
-      .eq("account_id", account.accountId)
-      .eq("week_start_date", weekStartIso)
-      .maybeSingle()
-  ]);
-
-  const categories = (categoriesRes.data ?? []) as Category[];
-  const objectives = (objectivesRes.data ?? []) as Objective[];
-  const templates = (templatesRes.data ?? []) as Template[];
-  const currentWeek = currentWeekRes.data;
+  const habitsData = await getHabitsPageData(supabase, account.accountId, weekStartIso);
+  const categories = habitsData.categories as Category[];
+  const objectives = habitsData.objectives as Objective[];
+  const templates = habitsData.templates as Template[];
+  const currentWeek = habitsData.currentWeek;
   const categoryById = new Map(categories.map((category) => [category.id, category]));
   const objectiveById = new Map(objectives.map((objective) => [objective.id, objective]));
   const selectedTemplateId = currentWeek?.template_id ?? "";
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
+  const categoryIds = categories.map((category) => category.id);
+
+  const [templateEntriesOrderRes, weekSessionsRes, monthSessionsRes] = await Promise.all([
+    selectedTemplateId ? getTemplateEntriesOrder(supabase, selectedTemplateId) : Promise.resolve({ data: [] as Array<{ habit_id: string; day_of_week: number }> }),
+    getWeekSessions(supabase, categoryIds, weekStartIso, weekEndIso),
+    getMonthSessions(supabase, categoryIds, monthStart, monthEnd)
+  ]);
+
+  const sessions = (weekSessionsRes.data ?? []) as Session[];
+  const monthSessions = (monthSessionsRes.data ?? []) as Array<{ actual_minutes: number | null; planned_minutes: number; completed: boolean }>;
+
   const templateDayOrder = new Map<number, Map<string, number>>();
-  if (selectedTemplateId) {
-    const templateEntriesOrderRes = await supabase
-      .from("template_entries")
-      .select("habit_id, day_of_week")
-      .eq("template_id", selectedTemplateId)
-      .order("created_at", { ascending: true });
-    for (const entry of templateEntriesOrderRes.data ?? []) {
-      const dayMap = templateDayOrder.get(entry.day_of_week) ?? new Map<string, number>();
-      if (!templateDayOrder.has(entry.day_of_week)) {
-        templateDayOrder.set(entry.day_of_week, dayMap);
-      }
-      if (!dayMap.has(entry.habit_id)) {
-        dayMap.set(entry.habit_id, dayMap.size);
-      }
+  for (const entry of templateEntriesOrderRes.data ?? []) {
+    const dayMap = templateDayOrder.get(entry.day_of_week) ?? new Map<string, number>();
+    if (!templateDayOrder.has(entry.day_of_week)) {
+      templateDayOrder.set(entry.day_of_week, dayMap);
+    }
+    if (!dayMap.has(entry.habit_id)) {
+      dayMap.set(entry.habit_id, dayMap.size);
     }
   }
 
-  const [weekSessionsRes, monthSessionsRes] =
-    categories.length > 0
-      ? await Promise.all([
-          supabase
-            .from("habit_sessions")
-            .select("id, habit_id, session_date, planned_minutes, minimum_minutes, actual_minutes, completed")
-            .in("habit_id", categories.map((category) => category.id))
-            .gte("session_date", weekStartIso)
-            .lte("session_date", weekEndIso)
-            .order("session_date", { ascending: true }),
-          supabase
-            .from("habit_sessions")
-            .select("id, actual_minutes, planned_minutes, completed")
-            .in("habit_id", categories.map((category) => category.id))
-            .gte("session_date", monthStart)
-            .lte("session_date", monthEnd)
-        ])
-      : [{ data: [] as Session[] }, { data: [] as Array<{ actual_minutes: number | null; planned_minutes: number; completed: boolean }> }];
-
-  const sessions = (weekSessionsRes.data ?? []) as Session[];
-  const monthSessions = monthSessionsRes.data ?? [];
 
   const weekPlannedMinutes = sessions.reduce((sum, session) => sum + session.planned_minutes, 0);
   const weekDoneMinutes = sessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
@@ -223,8 +163,6 @@ export default async function HabitsPage({
     return formatWeekKey(date);
   });
 
-  const selectedSession = selectedSessionId ? sessions.find((session) => session.id === selectedSessionId) ?? null : null;
-  const selectedLogDay = selectedLogDate && weekDates.includes(selectedLogDate) ? selectedLogDate : null;
   const todayKey = formatWeekKey(new Date());
   const dailyChart = weekDates.map((dateKey) => {
     const daySessions = sessionsByDate.get(dateKey) ?? [];
@@ -297,7 +235,7 @@ export default async function HabitsPage({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-[#0c1d3c]">{selectedTemplate?.name ?? "Selected template"}</p>
                 <SyncWeekConfirmForm
-                  action={syncWeekWithTemplateAction}
+                  action={syncWeekWithTemplateFormAction}
                   returnPath={weekHref(selectedWeekStart)}
                   weekStartDate={weekStartIso}
                 />
@@ -305,7 +243,7 @@ export default async function HabitsPage({
               <p className="text-xs text-[#4a5f83]">Template assignment is locked for this week.</p>
             </div>
           ) : (
-            <form action={generateWeekFromTemplateAction} className="grid gap-2 md:grid-cols-[1fr_auto] md:items-end">
+            <ActionForm action={generateWeekFromTemplateFormAction} className="grid gap-2 md:grid-cols-[1fr_auto] md:items-end">
               <input type="hidden" name="returnPath" value={weekHref(selectedWeekStart)} />
               <input type="hidden" name="weekStartDate" value={weekStartIso} />
               <div className="space-y-1">
@@ -320,7 +258,7 @@ export default async function HabitsPage({
                 </Select>
               </div>
               <SubmitButton label="Assign Template to Week" pendingLabel="Assigning..." className="md:w-auto" />
-            </form>
+            </ActionForm>
           )}
 
           <div className="flex flex-wrap items-center gap-2">
@@ -334,116 +272,19 @@ export default async function HabitsPage({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Execution Board (7 Days)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 md:grid-cols-7">
-            {weekDates.map((dateKey) => {
-              const daySessions = sessionsByDate.get(dateKey) ?? [];
-              const dayPlannedMinutes = daySessions.reduce((sum, session) => sum + session.planned_minutes, 0);
-              const dayDoneMinutes = daySessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
-              const dayProgress = dayPlannedMinutes > 0 ? Math.round((Math.min(dayDoneMinutes, dayPlannedMinutes) / dayPlannedMinutes) * 100) : dayDoneMinutes > 0 ? 100 : 0;
-              const weekDay = weekdayName(dateKey);
-              const weekDayIndex = isoWeekdayIndex(dateKey);
-              const templateOrderForDay = templateDayOrder.get(weekDayIndex);
-              const orderedDaySessions =
-                templateOrderForDay && templateOrderForDay.size > 0
-                  ? [...daySessions].sort((a, b) => {
-                      const orderA = templateOrderForDay.get(a.habit_id) ?? Number.MAX_SAFE_INTEGER;
-                      const orderB = templateOrderForDay.get(b.habit_id) ?? Number.MAX_SAFE_INTEGER;
-                      if (orderA !== orderB) {
-                        return orderA - orderB;
-                      }
-                      const titleA = categoryById.get(a.habit_id)?.title ?? "";
-                      const titleB = categoryById.get(b.habit_id)?.title ?? "";
-                      return titleA.localeCompare(titleB);
-                    })
-                  : daySessions;
-              const isCurrentDay = dateKey === todayKey;
-              return (
-                <div
-                  key={dateKey}
-                  className={[
-                    "flex min-h-[340px] flex-col rounded-xl border p-2",
-                    isCurrentDay ? "border-[#dccf94] bg-[#f3ebc8]" : "border-[#c7d3e8] bg-[#f8fbff]"
-                  ].join(" ")}
-                >
-                  <div className="rounded-lg border border-[#d7e0f1] bg-white px-3 py-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase text-[#4a5f83]">{weekDay}</p>
-                        <p className="text-xl font-semibold leading-none text-[#0c1d3c]">{dayNumber(dateKey)}</p>
-                      </div>
-                      {categories.length > 0 ? (
-                        <Link
-                          href={weekHref(selectedWeekStart, { logDate: dateKey })}
-                          className="inline-flex h-7 items-center justify-center rounded-md border border-[#c7d3e8] bg-[#edf3ff] px-2 text-xs font-medium text-[#23406d]"
-                        >
-                          + Add
-                        </Link>
-                      ) : null}
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-1">
-                      <Badge variant="secondary" className="px-2 py-0 text-[10px]">
-                        {formatMinutesLabel(dayDoneMinutes)} done
-                      </Badge>
-                      <Badge variant="secondary" className="px-2 py-0 text-[10px]">
-                        {formatMinutesLabel(dayPlannedMinutes)} planned
-                      </Badge>
-                      <Badge variant={dayProgress >= 100 ? "secondary" : "warning"} className="px-2 py-0 text-[10px]">
-                        {dayProgress}%
-                      </Badge>
-                    </div>
-                  </div>
-
-                  <div className="mt-2 flex flex-1 flex-col gap-2">
-                    {orderedDaySessions.length > 0 ? (
-                      orderedDaySessions.map((session) => {
-                        const habit = categoryById.get(session.habit_id);
-                        const objective = objectiveById.get(habit?.objective_id ?? "");
-                        const habitTitle = habit?.title ?? "Task";
-                        const objectiveImageUrl = objective?.image_url;
-                        const fallbackInitial = habitTitle.slice(0, 1).toUpperCase();
-                        return (
-                          <Link
-                            key={session.id}
-                            href={weekHref(selectedWeekStart, { sessionId: session.id })}
-                            className="flex items-center justify-between gap-2 rounded-md border border-[#d7e0f1] bg-white px-2 py-2"
-                          >
-                            <div className="flex flex-1 items-center gap-2 overflow-hidden">
-                              {objectiveImageUrl ? (
-                                <div className="relative size-10 shrink-0 overflow-hidden rounded-md border border-[#d7e0f1] bg-white">
-                                  <Image src={objectiveImageUrl} alt={habitTitle} fill sizes="40px" className="object-cover" />
-                                </div>
-                              ) : (
-                                <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-dashed border-[#d7e0f1] bg-[#f8fbff] text-xs font-semibold uppercase text-[#23406d]">
-                                  {fallbackInitial}
-                                </div>
-                              )}
-                              <p className="min-w-0 flex-1 truncate text-xs font-semibold text-[#0c1d3c]">{habitTitle}</p>
-                            </div>
-                            {session.completed ? (
-                              <CheckSquare size={16} className="shrink-0 text-emerald-600" />
-                            ) : (
-                              <Square size={16} className="shrink-0 text-[#4a5f83]" />
-                            )}
-                          </Link>
-                        );
-                      })
-                    ) : (
-                      <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-[#d7e0f1] text-center">
-                        <p className="text-xs italic text-[#6b7da1]">No tasks assigned</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+      <ExecutionBoard
+        weekDates={weekDates}
+        sessionsByDate={Object.fromEntries(sessionsByDate)}
+        templateDayOrder={Object.fromEntries(
+          Array.from(templateDayOrder.entries()).map(([k, v]) => [k, Object.fromEntries(v)] as const)
+        )}
+        categoryById={Object.fromEntries(categoryById)}
+        objectiveById={Object.fromEntries(objectiveById)}
+        categories={categories}
+        objectives={objectives}
+        todayKey={todayKey}
+        weekHref={weekHref(selectedWeekStart)}
+      />
 
       <Card>
         <CardHeader>
@@ -458,58 +299,6 @@ export default async function HabitsPage({
         </CardContent>
       </Card>
 
-      {selectedSession ? (
-        <ModalShell
-          title="Update Task"
-          description="Check/uncheck and set minutes done for this day."
-          closeHref={weekHref(selectedWeekStart)}
-        >
-          <CompleteSessionForm
-            session={selectedSession}
-            habitTitle={categoryById.get(selectedSession.habit_id)?.title ?? "Task"}
-            returnPath={weekHref(selectedWeekStart)}
-          />
-        </ModalShell>
-      ) : null}
-
-      {selectedLogDay ? (
-        <ModalShell title="Add Done Task" description={`Log extra work for ${dayHeaderLabel(selectedLogDay)}.`} closeHref={weekHref(selectedWeekStart)}>
-          <form action={addCompensationSessionAction} className="space-y-4">
-            <input type="hidden" name="returnPath" value={weekHref(selectedWeekStart)} />
-            <input type="hidden" name="sessionDate" value={selectedLogDay} />
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-[#4a5f83]">Objective</p>
-              <Select name="objectiveId" required defaultValue="">
-                <option value="" disabled>
-                  Choose objective
-                </option>
-                {objectives.map((objective) => (
-                  <option key={objective.id} value={objective.id}>
-                    {objective.title}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-[#4a5f83]">Task title</p>
-              <Input name="newTaskTitle" placeholder="e.g. Extra cardio" required />
-            </div>
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-[#4a5f83]">Minutes done</p>
-              <Input name="doneMinutes" type="number" min={1} defaultValue={30} required />
-            </div>
-            <div className="flex items-center gap-2">
-              <SubmitButton label="Save work log" pendingLabel="Saving..." className="sm:w-auto" />
-              <Link
-                href={weekHref(selectedWeekStart)}
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] px-4 py-2 text-sm font-medium text-[#23406d]"
-              >
-                Back
-              </Link>
-            </div>
-          </form>
-        </ModalShell>
-      ) : null}
     </div>
   );
 }

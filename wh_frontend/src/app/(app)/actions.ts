@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import type { RedirectResult } from "@/lib/action-with-state";
 import { requireAppContext } from "@/lib/server-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -25,7 +26,7 @@ export async function updateProfileAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirect(`/settings?error=${encodeURIComponent(payload.error.issues[0]?.message ?? "Invalid profile data")}`);
+    return { redirectTo: `/settings?error=${encodeURIComponent(payload.error.issues[0]?.message ?? "Invalid profile data")}` };
   }
 
   const { supabase, user } = await requireAppContext();
@@ -35,9 +36,16 @@ export async function updateProfileAction(formData: FormData) {
     .eq("id", user.id);
 
   if (error) {
-    redirect(`/settings?error=${encodeURIComponent(error.message)}`);
+    return { redirectTo: `/settings?error=${encodeURIComponent(error.message)}` };
   }
 
   revalidatePath("/settings");
-  redirect("/settings?success=profile-updated");
+  return { redirectTo: "/settings?success=profile-updated" };
+}
+
+export async function updateProfileFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return updateProfileAction(formData);
 }

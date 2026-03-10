@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import { ArrowRight, CalendarDays, ChartNoAxesCombined, NotebookPen, Repeat, WalletCards } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getDashboardCounts } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
 type QuickAction = {
   title: string;
@@ -50,12 +51,7 @@ const quickActions: QuickAction[] = [
 
 export default async function DashboardPage() {
   const { supabase, account } = await requireAppContext();
-  const [objectivesRes, templatesRes] = await Promise.all([
-    supabase.from("habit_objectives").select("id", { count: "exact", head: true }).eq("account_id", account.accountId),
-    supabase.from("templates").select("id", { count: "exact", head: true }).eq("account_id", account.accountId)
-  ]);
-  const objectivesCount = objectivesRes.count ?? 0;
-  const templatesCount = templatesRes.count ?? 0;
+  const { objectivesCount, templatesCount } = await getDashboardCounts(supabase, account.accountId);
 
   return (
     <div className="space-y-6">

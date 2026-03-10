@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink, FileText, Link2, Pencil, Plus } from "lucide-react";
 
+import { ActionForm } from "@/components/forms/action-form";
 import { PexelsImagePicker } from "@/components/forms/pexels-image-picker";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Alert } from "@/components/ui/alert";
@@ -13,10 +14,15 @@ import { ModalShell } from "@/components/ui/modal-shell";
 import { SectionHeader } from "@/components/ui/section-header";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { getKnowledgeSpaceById, getKnowledgeSpaceItems } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
 import { toDateInputValue } from "@/lib/utils";
 
-import { createKnowledgeItemAction, updateKnowledgeItemAction, updateKnowledgeSpaceAction } from "../actions";
+import {
+  createKnowledgeItemFormAction,
+  updateKnowledgeItemFormAction,
+  updateKnowledgeSpaceFormAction
+} from "../actions";
 
 type KnowledgeItem = {
   id: string;
@@ -55,24 +61,10 @@ export default async function KnowledgeSpacePage({
   const modalItemId = query.itemId?.trim();
   const { supabase, account } = await requireAppContext();
 
-  const { data: space } = await supabase
-    .from("knowledge_spaces")
-    .select("id, title, image_url, created_at, updated_at")
-    .eq("id", spaceId)
-    .eq("account_id", account.accountId)
-    .maybeSingle();
+  const space = await getKnowledgeSpaceById(supabase, spaceId, account.accountId);
+  if (!space) notFound();
 
-  if (!space) {
-    notFound();
-  }
-
-  const itemsRes = await supabase
-    .from("knowledge_items")
-    .select("id, space_id, kind, title, url, content, created_at")
-    .eq("space_id", space.id)
-    .order("created_at", { ascending: false });
-
-  const items = (itemsRes.data ?? []) as KnowledgeItem[];
+  const items = (await getKnowledgeSpaceItems(supabase, spaceId)) as KnowledgeItem[];
 
   const linksCount = items.filter((item) => item.kind === "link").length;
   const notesCount = items.filter((item) => item.kind === "note").length;
@@ -194,7 +186,7 @@ export default async function KnowledgeSpacePage({
           description="Create either a link entry or a note entry for this topic."
           closeHref={closeModalHref}
         >
-          <form action={createKnowledgeItemAction} className="space-y-3">
+          <ActionForm action={createKnowledgeItemFormAction} className="space-y-3">
             <input type="hidden" name="spaceId" value={space.id} />
             <input type="hidden" name="returnPath" value={`/knowledge/${space.id}`} />
 
@@ -228,13 +220,13 @@ export default async function KnowledgeSpacePage({
             </div>
 
             <SubmitButton label="Add item" pendingLabel="Saving..." className="w-full sm:w-auto" />
-          </form>
+          </ActionForm>
         </ModalShell>
       ) : null}
 
       {modal === "edit-item" && selectedItem ? (
         <ModalShell title="Edit Item" description="Update this entry and save changes." closeHref={closeModalHref}>
-          <form action={updateKnowledgeItemAction} className="space-y-3">
+          <ActionForm action={updateKnowledgeItemFormAction} className="space-y-3">
             <input type="hidden" name="itemId" value={selectedItem.id} />
             <input type="hidden" name="returnPath" value={`/knowledge/${space.id}`} />
 
@@ -269,13 +261,13 @@ export default async function KnowledgeSpacePage({
             </div>
 
             <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
-          </form>
+          </ActionForm>
         </ModalShell>
       ) : null}
 
       {modal === "edit-space" ? (
         <ModalShell title="Edit Topic" description="Update the topic title or cover image." closeHref={closeModalHref}>
-          <form action={updateKnowledgeSpaceAction} className="space-y-4">
+          <ActionForm action={updateKnowledgeSpaceFormAction} className="space-y-4">
             <input type="hidden" name="returnPath" value={`/knowledge/${space.id}`} />
             <input type="hidden" name="spaceId" value={space.id} />
             <div className="space-y-2">
@@ -294,7 +286,7 @@ export default async function KnowledgeSpacePage({
               defaultValue={space.image_url ?? ""}
             />
             <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
-          </form>
+          </ActionForm>
         </ModalShell>
       ) : null}
     </div>

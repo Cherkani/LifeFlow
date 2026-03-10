@@ -3,6 +3,10 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { AnalyticsCharts } from "@/app/(app)/analytics/analytics-charts";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  getAnalyticsInitialData,
+  getAnalyticsSessions
+} from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
 import { endOfIsoWeek, startOfIsoWeek } from "@/lib/utils";
 
@@ -101,55 +105,30 @@ export default async function AnalyticsPage({
   const previousWeekEndIso = toIsoDate(previousWeekEnd);
 
   const { supabase, account } = await requireAppContext();
-  const habitsRes = await supabase.from("habits").select("id").eq("account_id", account.accountId).eq("is_active", true);
-  const habitIds = (habitsRes.data ?? []).map((habit) => habit.id);
+  const initialData = await getAnalyticsInitialData(
+    supabase,
+    account.accountId,
+    monthStartIso,
+    monthEndIso
+  );
+  const habitIds = initialData.habitIds;
+  const categories = initialData.categories as Array<{ id: string; name: string; monthly_limit: string | null }>;
+  const monthExpenses = initialData.monthExpenses as Array<{ amount: string; category_id: string | null; occurred_on: string }>;
 
-  const [weekSessionsRes, previousWeekSessionsRes, monthSessionsRes, categoriesRes, monthExpensesRes] = await Promise.all([
-    habitIds.length > 0
-      ? supabase
-          .from("habit_sessions")
-          .select("id, habit_id, session_date, planned_minutes, actual_minutes, completed")
-          .in("habit_id", habitIds)
-          .gte("session_date", weekStartIso)
-          .lte("session_date", weekEndIso)
-          .order("session_date", { ascending: true })
-      : Promise.resolve({ data: [] as HabitSession[] }),
-    habitIds.length > 0
-      ? supabase
-          .from("habit_sessions")
-          .select("id, habit_id, session_date, planned_minutes, actual_minutes, completed")
-          .in("habit_id", habitIds)
-          .gte("session_date", previousWeekStartIso)
-          .lte("session_date", previousWeekEndIso)
-      : Promise.resolve({ data: [] as HabitSession[] }),
-    habitIds.length > 0
-      ? supabase
-          .from("habit_sessions")
-          .select("id, habit_id, session_date, planned_minutes, actual_minutes, completed")
-          .in("habit_id", habitIds)
-          .gte("session_date", monthStartIso)
-          .lte("session_date", monthEndIso)
-      : Promise.resolve({ data: [] as HabitSession[] }),
-    supabase
-      .from("finance_categories")
-      .select("id, name, monthly_limit")
-      .eq("account_id", account.accountId)
-      .eq("kind", "expense")
-      .order("name"),
-    supabase
-      .from("ledger_entries")
-      .select("id, category_id, amount, occurred_on")
-      .eq("account_id", account.accountId)
-      .eq("entry_type", "expense")
-      .gte("occurred_on", monthStartIso)
-      .lte("occurred_on", monthEndIso)
-  ]);
+  const sessionsResult = await getAnalyticsSessions(
+    supabase,
+    habitIds,
+    weekStartIso,
+    weekEndIso,
+    previousWeekStartIso,
+    previousWeekEndIso,
+    monthStartIso,
+    monthEndIso
+  );
 
-  const weekSessions = (weekSessionsRes.data ?? []) as HabitSession[];
-  const previousWeekSessions = (previousWeekSessionsRes.data ?? []) as HabitSession[];
-  const monthSessions = (monthSessionsRes.data ?? []) as HabitSession[];
-  const categories = categoriesRes.data ?? [];
-  const monthExpenses = monthExpensesRes.data ?? [];
+  const weekSessions = (sessionsResult.weekSessions ?? []) as HabitSession[];
+  const previousWeekSessions = (sessionsResult.previousWeekSessions ?? []) as HabitSession[];
+  const monthSessions = (sessionsResult.monthSessions ?? []) as HabitSession[];
 
   const weekPlannedHours = weekSessions.reduce((sum, session) => sum + session.planned_minutes, 0) / 60;
   const weekDoneHours = weekSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;

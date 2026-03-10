@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import type { RedirectResult } from "@/lib/action-with-state";
 import { requireAppContext } from "@/lib/server-context";
 
 const createEventSchema = z.object({
@@ -18,10 +18,6 @@ function getSafeReturnPath(raw: FormDataEntryValue | null) {
   return value.startsWith("/events") ? value : "/events";
 }
 
-function redirectToPath(path: string): never {
-  redirect(path as Parameters<typeof redirect>[0]);
-}
-
 export async function createCalendarEventAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = createEventSchema.safeParse({
@@ -32,7 +28,7 @@ export async function createCalendarEventAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const { supabase, account } = await requireAppContext();
@@ -45,5 +41,12 @@ export async function createCalendarEventAction(formData: FormData) {
   });
 
   revalidatePath("/events");
-  redirectToPath(returnPath);
+  return { redirectTo: returnPath };
+}
+
+export async function createCalendarEventFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return createCalendarEventAction(formData);
 }

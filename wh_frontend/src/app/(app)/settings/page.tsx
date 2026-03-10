@@ -1,6 +1,7 @@
 import { Linkedin, Mail, MessageCircle } from "lucide-react";
 
-import { updateProfileAction } from "@/app/(app)/actions";
+import { updateProfileFormAction } from "@/app/(app)/actions";
+import { ActionForm } from "@/components/forms/action-form";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Alert } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SectionHeader } from "@/components/ui/section-header";
 import { Select } from "@/components/ui/select";
+import { getProfileFull } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
 
 export default async function SettingsPage({
@@ -18,11 +20,7 @@ export default async function SettingsPage({
   const params = await searchParams;
   const { supabase, user, account } = await requireAppContext();
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, email, timezone, role, is_active, created_at")
-    .eq("id", user.id)
-    .maybeSingle();
+  const profile = await getProfileFull(supabase, user.id);
 
   return (
     <div className="space-y-6">
@@ -38,7 +36,7 @@ export default async function SettingsPage({
             {params.error ? <Alert variant="error">{params.error}</Alert> : null}
             {params.success ? <Alert variant="success">Profile updated.</Alert> : null}
 
-            <form action={updateProfileAction} className="space-y-4">
+            <ActionForm action={updateProfileFormAction} className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="fullName">Full name</Label>
@@ -57,7 +55,7 @@ export default async function SettingsPage({
                 </div>
               </div>
               <SubmitButton label="Update profile" pendingLabel="Updating..." className="w-full" />
-            </form>
+            </ActionForm>
           </CardContent>
         </Card>
       </section>

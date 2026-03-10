@@ -1,12 +1,14 @@
 "use client";
 
-import { FormHTMLAttributes, useState } from "react";
+import { useState } from "react";
 
+import { ActionForm } from "@/components/forms/action-form";
 import { SubmitButton } from "@/components/forms/submit-button";
+import type { RedirectResult } from "@/lib/action-with-state";
 import { cn } from "@/lib/utils";
 
 type SyncWeekConfirmFormProps = {
-  action: FormHTMLAttributes<HTMLFormElement>["action"];
+  action: (prevState: RedirectResult | null, formData: FormData) => Promise<RedirectResult | null>;
   returnPath: string;
   weekStartDate: string;
   className?: string;
@@ -46,7 +48,7 @@ export function SyncWeekConfirmForm({ action, returnPath, weekStartDate, classNa
                 This deletes every logged task for the selected week and regenerates it from the template.
               </p>
             </div>
-            <form action={action} className="flex flex-col gap-2 sm:flex-row">
+            <ActionForm action={action} className="flex flex-col gap-2 sm:flex-row">
               <input type="hidden" name="returnPath" value={returnPath} />
               <input type="hidden" name="weekStartDate" value={weekStartDate} />
               <button
@@ -61,7 +63,7 @@ export function SyncWeekConfirmForm({ action, returnPath, weekStartDate, classNa
                 pendingLabel="Resetting..."
                 className="h-10 flex-1 bg-[#92400e] text-sm text-white hover:bg-[#78350f]"
               />
-            </form>
+            </ActionForm>
           </div>
         </div>
       ) : null}

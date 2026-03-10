@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import type { RedirectResult } from "@/lib/action-with-state";
 import { requireAppContext } from "@/lib/server-context";
 
 const dateInputSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
@@ -77,10 +77,6 @@ function getSafeReturnPath(raw: FormDataEntryValue | null) {
   return "/habits";
 }
 
-function redirectToPath(path: string): never {
-  redirect(path as Parameters<typeof redirect>[0]);
-}
-
 export async function createObjectiveAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = createObjectiveSchema.safeParse({
@@ -90,7 +86,7 @@ export async function createObjectiveAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const { supabase, account } = await requireAppContext();
@@ -102,9 +98,8 @@ export async function createObjectiveAction(formData: FormData) {
     image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null
   });
 
-  revalidatePath("/habits");
-  revalidatePath("/planning");
-  redirectToPath(returnPath);
+  revalidatePath(returnPath.split("?")[0] || "/habits");
+  return { redirectTo: returnPath };
 }
 
 export async function updateObjectiveAction(formData: FormData) {
@@ -117,7 +112,7 @@ export async function updateObjectiveAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const { supabase, account } = await requireAppContext();
@@ -133,12 +128,25 @@ export async function updateObjectiveAction(formData: FormData) {
     .eq("account_id", account.accountId);
 
   if (error) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
-  revalidatePath("/habits");
-  revalidatePath("/planning");
-  redirectToPath(returnPath);
+  revalidatePath(returnPath.split("?")[0] || "/habits");
+  return { redirectTo: returnPath };
+}
+
+export async function createObjectiveFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return createObjectiveAction(formData);
+}
+
+export async function updateObjectiveFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return updateObjectiveAction(formData);
 }
 
 export async function createHabitAction(formData: FormData) {
@@ -152,7 +160,7 @@ export async function createHabitAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const { supabase, account } = await requireAppContext();
@@ -168,8 +176,8 @@ export async function createHabitAction(formData: FormData) {
     metadata: {}
   });
 
-  revalidatePath("/habits");
-  redirectToPath(returnPath);
+  revalidatePath(returnPath.split("?")[0] || "/habits");
+  return { redirectTo: returnPath };
 }
 
 export async function planSessionAction(formData: FormData) {
@@ -182,7 +190,7 @@ export async function planSessionAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const { supabase } = await requireAppContext();
@@ -199,8 +207,8 @@ export async function planSessionAction(formData: FormData) {
     }
   );
 
-  revalidatePath("/habits");
-  redirectToPath(returnPath);
+  revalidatePath(returnPath.split("?")[0] || "/habits");
+  return { redirectTo: returnPath };
 }
 
 export async function updateSessionAction(formData: FormData) {
@@ -240,7 +248,7 @@ export async function toggleSessionCompletionAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const completed = payload.data.completed === "on";
@@ -253,7 +261,7 @@ export async function toggleSessionCompletionAction(formData: FormData) {
     .maybeSingle();
 
   if (!session) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   await supabase
@@ -266,10 +274,8 @@ export async function toggleSessionCompletionAction(formData: FormData) {
     })
     .eq("id", payload.data.sessionId);
 
-  revalidatePath("/habits");
-  revalidatePath("/dashboard");
-  revalidatePath("/analytics");
-  redirectToPath(returnPath);
+  revalidatePath(returnPath.split("?")[0] || "/habits");
+  return { redirectTo: returnPath };
 }
 
 export async function completeSessionWithHoursAction(formData: FormData) {
@@ -283,7 +289,7 @@ export async function completeSessionWithHoursAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const completed = payload.data.completed === "on";
@@ -300,11 +306,11 @@ export async function completeSessionWithHoursAction(formData: FormData) {
     .maybeSingle();
 
   if (!session) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   if (completed && (minutes === null || minutes <= 0)) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const actualMinutes = completed
@@ -319,10 +325,8 @@ export async function completeSessionWithHoursAction(formData: FormData) {
     })
     .eq("id", payload.data.sessionId);
 
-  revalidatePath("/habits");
-  revalidatePath("/dashboard");
-  revalidatePath("/analytics");
-  redirectToPath(returnPath);
+  revalidatePath(returnPath.split("?")[0] || "/habits");
+  return { redirectTo: returnPath };
 }
 
 export async function generateWeekFromTemplateAction(formData: FormData) {
@@ -333,7 +337,7 @@ export async function generateWeekFromTemplateAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const { supabase, account } = await requireAppContext();
@@ -345,7 +349,7 @@ export async function generateWeekFromTemplateAction(formData: FormData) {
     .maybeSingle();
 
   if (existingWeek?.id) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   await supabase.rpc("create_week_from_template", {
@@ -354,11 +358,8 @@ export async function generateWeekFromTemplateAction(formData: FormData) {
     p_week_start_date: payload.data.weekStartDate
   });
 
-  revalidatePath("/habits");
-  revalidatePath("/planning");
-  revalidatePath("/dashboard");
-  revalidatePath("/analytics");
-  redirectToPath(returnPath);
+  revalidatePath(returnPath.split("?")[0] || "/habits");
+  return { redirectTo: returnPath };
 }
 
 export async function addCompensationSessionAction(formData: FormData) {
@@ -371,7 +372,7 @@ export async function addCompensationSessionAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const objectiveIdRaw = formData.get("objectiveId");
@@ -386,7 +387,7 @@ export async function addCompensationSessionAction(formData: FormData) {
     const newTaskTitle = typeof newTaskTitleRaw === "string" ? newTaskTitleRaw.trim() : "";
     const isObjectiveValid = objectiveId ? z.string().uuid().safeParse(objectiveId).success : false;
     if (!isObjectiveValid || newTaskTitle.length < 2) {
-      redirectToPath(returnPath);
+      return { redirectTo: returnPath };
     }
 
     const { data: newHabit } = await supabase
@@ -405,7 +406,7 @@ export async function addCompensationSessionAction(formData: FormData) {
       .single();
 
     if (!newHabit?.id) {
-      redirectToPath(returnPath);
+      return { redirectTo: returnPath };
     }
 
     habitId = newHabit.id;
@@ -438,10 +439,36 @@ export async function addCompensationSessionAction(formData: FormData) {
     });
   }
 
-  revalidatePath("/habits");
-  revalidatePath("/dashboard");
-  revalidatePath("/analytics");
-  redirectToPath(returnPath);
+  revalidatePath(returnPath.split("?")[0] || "/habits");
+  return { redirectTo: returnPath };
+}
+
+export async function completeSessionWithHoursFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return completeSessionWithHoursAction(formData);
+}
+
+export async function syncWeekWithTemplateFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return syncWeekWithTemplateAction(formData);
+}
+
+export async function generateWeekFromTemplateFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return generateWeekFromTemplateAction(formData);
+}
+
+export async function addCompensationSessionFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return addCompensationSessionAction(formData);
 }
 
 export async function syncWeekWithTemplateAction(formData: FormData) {
@@ -451,7 +478,7 @@ export async function syncWeekWithTemplateAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const { supabase, account } = await requireAppContext();
@@ -463,7 +490,7 @@ export async function syncWeekWithTemplateAction(formData: FormData) {
     .maybeSingle();
 
   if (!existingWeek?.template_id) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const weekStartDate = new Date(`${payload.data.weekStartDate}T00:00:00`);
@@ -489,9 +516,6 @@ export async function syncWeekWithTemplateAction(formData: FormData) {
     p_week_start_date: payload.data.weekStartDate
   });
 
-  revalidatePath("/habits");
-  revalidatePath("/planning");
-  revalidatePath("/dashboard");
-  revalidatePath("/analytics");
-  redirectToPath(returnPath);
+  revalidatePath(returnPath.split("?")[0] || "/habits");
+  return { redirectTo: returnPath };
 }

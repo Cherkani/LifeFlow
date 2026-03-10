@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import type { RedirectResult } from "@/lib/action-with-state";
 import { requireAppContext } from "@/lib/server-context";
 
 const createSpaceSchema = z.object({
@@ -46,11 +46,10 @@ function getSafeReturnPath(raw: FormDataEntryValue | null, fallback: string) {
   return value;
 }
 
-function redirectWithMessage(path: string, type: "error" | "success", message: string): never {
+function redirectTarget(path: string, type: "error" | "success", message: string): { redirectTo: string } {
   const query = new URLSearchParams();
   query.set(type, message);
-  const target = `${path}?${query.toString()}`;
-  redirect(target as Parameters<typeof redirect>[0]);
+  return { redirectTo: `${path}?${query.toString()}` };
 }
 
 function mapDbErrorMessage(errorMessage: string | null | undefined) {
@@ -123,7 +122,7 @@ export async function createKnowledgeSpaceAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectWithMessage(returnPath, "error", payload.error.issues[0]?.message ?? "Invalid topic title.");
+    return redirectTarget(returnPath, "error", payload.error.issues[0]?.message ?? "Invalid topic title.");
   }
 
   const { supabase, account } = await requireAppContext();
@@ -141,16 +140,16 @@ export async function createKnowledgeSpaceAction(formData: FormData) {
     .single();
 
   if (error) {
-    redirectWithMessage(returnPath, "error", mapDbErrorMessage(error.message));
+    return redirectTarget(returnPath, "error", mapDbErrorMessage(error.message));
   }
 
   revalidateKnowledgeRoutes(space?.id);
 
   if (space?.id) {
-    redirect(`/knowledge/${space.id}?success=${encodeURIComponent("Topic created.")}`);
+    return { redirectTo: `/knowledge/${space.id}?success=${encodeURIComponent("Topic created.")}` };
   }
 
-  redirectWithMessage(returnPath, "error", "Topic was not created.");
+  return redirectTarget(returnPath, "error", "Topic was not created.");
 }
 
 export async function updateKnowledgeSpaceAction(formData: FormData) {
@@ -162,7 +161,7 @@ export async function updateKnowledgeSpaceAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectWithMessage(returnPath, "error", payload.error.issues[0]?.message ?? "Invalid topic data.");
+    return redirectTarget(returnPath, "error", payload.error.issues[0]?.message ?? "Invalid topic data.");
   }
 
   const { supabase, account } = await requireAppContext();
@@ -181,11 +180,11 @@ export async function updateKnowledgeSpaceAction(formData: FormData) {
     .single();
 
   if (error) {
-    redirectWithMessage(returnPath, "error", mapDbErrorMessage(error.message));
+    return redirectTarget(returnPath, "error", mapDbErrorMessage(error.message));
   }
 
   revalidateKnowledgeRoutes(space?.id);
-  redirect(`/knowledge/${space?.id ?? payload.data.spaceId}?success=${encodeURIComponent("Topic updated.")}`);
+  return { redirectTo: `/knowledge/${space?.id ?? payload.data.spaceId}?success=${encodeURIComponent("Topic updated.")}` };
 }
 
 export async function createKnowledgeItemAction(formData: FormData) {
@@ -199,12 +198,12 @@ export async function createKnowledgeItemAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectWithMessage(returnPath, "error", payload.error.issues[0]?.message ?? "Invalid item payload.");
+    return redirectTarget(returnPath, "error", payload.error.issues[0]?.message ?? "Invalid item payload.");
   }
 
   const validated = validateItem(payload.data.kind, payload.data.url, payload.data.content);
   if (!validated.ok) {
-    redirectWithMessage(returnPath, "error", validated.reason);
+    return redirectTarget(returnPath, "error", validated.reason);
   }
 
   const { supabase } = await requireAppContext();
@@ -222,15 +221,15 @@ export async function createKnowledgeItemAction(formData: FormData) {
     .single();
 
   if (error) {
-    redirectWithMessage(returnPath, "error", mapDbErrorMessage(error.message));
+    return redirectTarget(returnPath, "error", mapDbErrorMessage(error.message));
   }
 
   if (!item?.id) {
-    redirectWithMessage(returnPath, "error", "Item was not created.");
+    return redirectTarget(returnPath, "error", "Item was not created.");
   }
 
   revalidateKnowledgeRoutes(payload.data.spaceId);
-  redirectWithMessage(returnPath, "success", "Item added.");
+  return redirectTarget(returnPath, "success", "Item added.");
 }
 
 export async function updateKnowledgeItemAction(formData: FormData) {
@@ -244,12 +243,12 @@ export async function updateKnowledgeItemAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectWithMessage(returnPath, "error", payload.error.issues[0]?.message ?? "Invalid item payload.");
+    return redirectTarget(returnPath, "error", payload.error.issues[0]?.message ?? "Invalid item payload.");
   }
 
   const validated = validateItem(payload.data.kind, payload.data.url, payload.data.content);
   if (!validated.ok) {
-    redirectWithMessage(returnPath, "error", validated.reason);
+    return redirectTarget(returnPath, "error", validated.reason);
   }
 
   const { supabase } = await requireAppContext();
@@ -268,13 +267,41 @@ export async function updateKnowledgeItemAction(formData: FormData) {
     .single();
 
   if (error) {
-    redirectWithMessage(returnPath, "error", mapDbErrorMessage(error.message));
+    return redirectTarget(returnPath, "error", mapDbErrorMessage(error.message));
   }
 
   if (!item?.id) {
-    redirectWithMessage(returnPath, "error", "Item not found or access denied.");
+    return redirectTarget(returnPath, "error", "Item not found or access denied.");
   }
 
   revalidateKnowledgeRoutes(spaceId);
-  redirectWithMessage(returnPath, "success", "Item updated.");
+  return redirectTarget(returnPath, "success", "Item updated.");
+}
+
+export async function createKnowledgeSpaceFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return createKnowledgeSpaceAction(formData);
+}
+
+export async function updateKnowledgeSpaceFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return updateKnowledgeSpaceAction(formData);
+}
+
+export async function createKnowledgeItemFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return createKnowledgeItemAction(formData);
+}
+
+export async function updateKnowledgeItemFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return updateKnowledgeItemAction(formData);
 }

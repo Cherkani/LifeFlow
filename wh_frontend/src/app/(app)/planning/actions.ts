@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import type { RedirectResult } from "@/lib/action-with-state";
 import { requireAppContext } from "@/lib/server-context";
 
 const dateInputSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
@@ -27,10 +27,6 @@ function getSafeReturnPath(raw: FormDataEntryValue | null) {
   return value.startsWith("/planning") ? value : "/planning";
 }
 
-function redirectToPath(path: string): never {
-  redirect(path as Parameters<typeof redirect>[0]);
-}
-
 export async function createTemplateAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = createTemplateSchema.safeParse({
@@ -38,7 +34,7 @@ export async function createTemplateAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const { supabase, account } = await requireAppContext();
@@ -50,7 +46,7 @@ export async function createTemplateAction(formData: FormData) {
   });
 
   revalidatePath("/planning");
-  redirectToPath(returnPath);
+  return { redirectTo: returnPath };
 }
 
 type TemplateTaskPayload = {
@@ -178,12 +174,12 @@ export async function createTemplateWithDailyTasksAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const parsedTasks = parseTasksPayload(formData);
   if (!parsedTasks.ok) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const { supabase, account } = await requireAppContext();
@@ -198,7 +194,7 @@ export async function createTemplateWithDailyTasksAction(formData: FormData) {
     .single();
 
   if (!template?.id) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   for (const task of parsedTasks.tasks) {
@@ -235,11 +231,8 @@ export async function createTemplateWithDailyTasksAction(formData: FormData) {
     });
   }
 
-  revalidatePath("/planning");
-  revalidatePath("/habits");
-  revalidatePath("/dashboard");
-  revalidatePath("/analytics");
-  redirectToPath(returnPath);
+  revalidatePath(returnPath.split("?")[0] || "/planning");
+  return { redirectTo: returnPath };
 }
 
 export async function updateTemplateWithDailyTasksAction(formData: FormData) {
@@ -250,12 +243,12 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const parsedTasks = parseTasksPayload(formData, { allowExistingHabitIds: true });
   if (!parsedTasks.ok) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const { supabase, account } = await requireAppContext();
@@ -268,7 +261,7 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
     .maybeSingle();
 
   if (!templateRes.data) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const { data: existingEntries } = await supabase
@@ -289,7 +282,7 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
     if (task.habitId) {
       const matchingHabitExists = existingHabitIdSet.has(task.habitId);
       if (!matchingHabitExists) {
-        redirectToPath(returnPath);
+        return { redirectTo: returnPath };
       }
 
       const previousMetadata = habitMetadataById.get(task.habitId);
@@ -377,11 +370,22 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
 
   await supabase.from("templates").update({ name: payload.data.name }).eq("id", payload.data.templateId);
 
-  revalidatePath("/planning");
-  revalidatePath("/habits");
-  revalidatePath("/dashboard");
-  revalidatePath("/analytics");
-  redirectToPath(returnPath);
+  revalidatePath(returnPath.split("?")[0] || "/planning");
+  return { redirectTo: returnPath };
+}
+
+export async function createTemplateWithDailyTasksFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return createTemplateWithDailyTasksAction(formData);
+}
+
+export async function updateTemplateWithDailyTasksFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return updateTemplateWithDailyTasksAction(formData);
 }
 
 export async function generateWeekAction(formData: FormData) {
@@ -392,7 +396,7 @@ export async function generateWeekAction(formData: FormData) {
   });
 
   if (!payload.success) {
-    redirectToPath(returnPath);
+    return { redirectTo: returnPath };
   }
 
   const { supabase, account } = await requireAppContext();
@@ -403,9 +407,6 @@ export async function generateWeekAction(formData: FormData) {
     p_week_start_date: payload.data.weekStartDate
   });
 
-  revalidatePath("/planning");
-  revalidatePath("/habits");
-  revalidatePath("/dashboard");
-  revalidatePath("/analytics");
-  redirectToPath(returnPath);
+  revalidatePath(returnPath.split("?")[0] || "/planning");
+  return { redirectTo: returnPath };
 }
