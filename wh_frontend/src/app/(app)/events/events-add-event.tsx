@@ -46,6 +46,7 @@ export function EventsAddEvent({ monthKey, selectedIso }: EventsAddEventProps) {
             action={createCalendarEventFormAction}
             className="space-y-4"
             onSuccess={() => setIsOpen(false)}
+            refreshOnly
           >
             <input type="hidden" name="returnPath" value={closeModalHref} />
             <div className="space-y-2">
@@ -63,6 +64,10 @@ export function EventsAddEvent({ monthKey, selectedIso }: EventsAddEventProps) {
                 <Input id="eventDate" name="eventDate" type="date" defaultValue={selectedIso} required />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="eventTime">Time (optional)</Label>
+                <Input id="eventTime" name="eventTime" type="time" />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="eventType">Type</Label>
                 <Select id="eventType" name="eventType" defaultValue="important">
                   <option value="important">Important</option>

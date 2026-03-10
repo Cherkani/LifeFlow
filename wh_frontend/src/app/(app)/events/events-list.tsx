@@ -20,6 +20,7 @@ type CalendarEvent = {
   title: string;
   details: string | null;
   event_date: string;
+  event_time: string | null;
   event_type: "meeting" | "important" | "general";
 };
 
@@ -28,6 +29,14 @@ type EventsListProps = {
   monthKey: string;
   selectedIso: string;
 };
+
+function formatTime(time: string) {
+  const [h, m] = time.split(":");
+  const hour = parseInt(h, 10);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${m} ${ampm}`;
+}
 
 function buildEventsHref(month: string, date: string) {
   const query = new URLSearchParams();
@@ -53,6 +62,9 @@ export function EventsList({ events, monthKey, selectedIso }: EventsListProps) {
                 <div className="flex items-center gap-2">
                   <Star size={14} className="shrink-0 text-[#d17035]" />
                   <span className="font-semibold text-[#0c1d3c]">{event.title}</span>
+                  {event.event_time ? (
+                    <span className="shrink-0 text-xs text-[#4a5f83]">{formatTime(event.event_time)}</span>
+                  ) : null}
                   <span className="shrink-0 rounded-full bg-[#edf3ff] px-2 py-0.5 text-xs font-semibold text-[#23406d]">
                     {event.event_type}
                   </span>
@@ -68,7 +80,7 @@ export function EventsList({ events, monthKey, selectedIso }: EventsListProps) {
                 >
                   <Pencil size={12} />
                 </button>
-                <ActionForm action={deleteCalendarEventFormAction} className="inline">
+                <ActionForm action={deleteCalendarEventFormAction} className="inline" refreshOnly>
                   <input type="hidden" name="returnPath" value={returnPath} />
                   <input type="hidden" name="eventId" value={event.id} />
                   <button
@@ -100,6 +112,7 @@ export function EventsList({ events, monthKey, selectedIso }: EventsListProps) {
             action={updateCalendarEventFormAction}
             className="space-y-4"
             onSuccess={() => setEditingEvent(null)}
+            refreshOnly
           >
             <input type="hidden" name="returnPath" value={returnPath} />
             <input type="hidden" name="eventId" value={editingEvent.id} />
@@ -125,6 +138,15 @@ export function EventsList({ events, monthKey, selectedIso }: EventsListProps) {
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="editEventTime">Time (optional)</Label>
+                <Input
+                  id="editEventTime"
+                  name="eventTime"
+                  type="time"
+                  defaultValue={editingEvent.event_time ?? ""}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="editEventType">Type</Label>
                 <Select id="editEventType" name="eventType" defaultValue={editingEvent.event_type}>
                   <option value="important">Important</option>

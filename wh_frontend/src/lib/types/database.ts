@@ -344,6 +344,7 @@ export type Database = {
           title: string;
           details: string | null;
           event_date: string;
+          event_time: string | null;
           event_type: "meeting" | "important" | "general";
           created_at: string;
           updated_at: string;
@@ -354,6 +355,7 @@ export type Database = {
           title: string;
           details?: string | null;
           event_date: string;
+          event_time?: string | null;
           event_type?: "meeting" | "important" | "general";
           created_at?: string;
           updated_at?: string;
@@ -364,6 +366,7 @@ export type Database = {
           title?: string;
           details?: string | null;
           event_date?: string;
+          event_time?: string | null;
           event_type?: "meeting" | "important" | "general";
           created_at?: string;
           updated_at?: string;

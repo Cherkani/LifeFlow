@@ -57,7 +57,7 @@ export async function GET() {
     supabase.from("debts").select("id, name, type, principal, remaining_balance, status, due_date, created_at").eq("account_id", accountId).order("created_at", { ascending: false }),
     supabase.from("debt_payments").select("id, debt_id, amount, paid_at, method, notes").eq("account_id", accountId).order("paid_at", { ascending: false }).limit(200),
     supabase.from("subscriptions").select("id, name, amount, recurrence, next_due_date, is_active, created_at").eq("account_id", accountId).order("name"),
-    supabase.from("calendar_events").select("id, title, details, event_date, event_type, created_at").eq("account_id", accountId).order("event_date", { ascending: false }).limit(500)
+    supabase.from("calendar_events").select("id, title, details, event_date, event_time, event_type, created_at").eq("account_id", accountId).order("event_date", { ascending: false }).limit(500)
   ]);
 
   const spaces = (spacesRes.data ?? []) as Array<{ id: string }>;
@@ -204,6 +204,7 @@ export async function GET() {
     Title: e.title,
     Details: e.details,
     Date: e.event_date,
+    Time: e.event_time ?? "",
     Type: e.event_type,
     "Created at": e.created_at
   }));

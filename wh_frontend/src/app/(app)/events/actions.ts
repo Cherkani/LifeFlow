@@ -6,9 +6,15 @@ import { z } from "zod";
 import type { RedirectResult } from "@/lib/action-with-state";
 import { requireAppContext } from "@/lib/server-context";
 
+const timeSchema = z
+  .string()
+  .optional()
+  .transform((t) => (t && t.trim() && /^\d{2}:\d{2}$/.test(t.trim()) ? t.trim() : null));
+
 const createEventSchema = z.object({
   title: z.string().trim().min(2).max(180),
   eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
+  eventTime: timeSchema,
   eventType: z.enum(["meeting", "important", "general"]),
   details: z.string().trim().max(1200).optional()
 });
@@ -17,6 +23,7 @@ const updateEventSchema = z.object({
   eventId: z.string().uuid(),
   title: z.string().trim().min(2).max(180),
   eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
+  eventTime: timeSchema,
   eventType: z.enum(["meeting", "important", "general"]),
   details: z.string().trim().max(1200).optional()
 });
@@ -35,6 +42,7 @@ export async function createCalendarEventAction(formData: FormData) {
   const payload = createEventSchema.safeParse({
     title: formData.get("title"),
     eventDate: formData.get("eventDate"),
+    eventTime: formData.get("eventTime"),
     eventType: formData.get("eventType"),
     details: formData.get("details")
   });
@@ -48,6 +56,7 @@ export async function createCalendarEventAction(formData: FormData) {
     account_id: account.accountId,
     title: payload.data.title,
     event_date: payload.data.eventDate,
+    event_time: payload.data.eventTime,
     event_type: payload.data.eventType,
     details: payload.data.details?.trim() ? payload.data.details : null
   });
@@ -69,6 +78,7 @@ export async function updateCalendarEventAction(formData: FormData) {
     eventId: formData.get("eventId"),
     title: formData.get("title"),
     eventDate: formData.get("eventDate"),
+    eventTime: formData.get("eventTime"),
     eventType: formData.get("eventType"),
     details: formData.get("details")
   });
@@ -83,6 +93,7 @@ export async function updateCalendarEventAction(formData: FormData) {
     .update({
       title: payload.data.title,
       event_date: payload.data.eventDate,
+      event_time: payload.data.eventTime,
       event_type: payload.data.eventType,
       details: payload.data.details?.trim() ? payload.data.details : null
     })
