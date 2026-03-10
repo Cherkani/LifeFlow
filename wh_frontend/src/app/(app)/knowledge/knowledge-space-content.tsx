@@ -8,6 +8,7 @@ import { KnowledgeCarousel } from "./knowledge-carousel";
 import { KnowledgeRevisionCards } from "./knowledge-revision-cards";
 
 import { ActionForm } from "@/components/forms/action-form";
+import type { RedirectResult } from "@/lib/action-with-state";
 import { PexelsImagePicker } from "@/components/forms/pexels-image-picker";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Alert } from "@/components/ui/alert";
@@ -50,6 +51,97 @@ function parseBullets(content: string): string[] {
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .map((line) => (line.replace(/^[-*•]\s*/, "")));
+}
+
+type AddItemFormProps = {
+  spaceId: string;
+  returnPath: string;
+  action: (prevState: RedirectResult | null, formData: FormData) => Promise<RedirectResult | null>;
+  onSuccess: () => void;
+};
+
+function AddItemForm({ spaceId, returnPath, action, onSuccess }: AddItemFormProps) {
+  const [kind, setKind] = useState<"link" | "note" | "bullets">("note");
+
+  return (
+    <ActionForm action={action} className="space-y-4" onSuccess={onSuccess} refreshOnly>
+      <input type="hidden" name="spaceId" value={spaceId} />
+      <input type="hidden" name="returnPath" value={returnPath} />
+
+      <div className="space-y-2">
+        <Label htmlFor="new-kind">Type</Label>
+        <Select
+          id="new-kind"
+          name="kind"
+          value={kind}
+          onChange={(e) => setKind(e.target.value as "link" | "note" | "bullets")}
+        >
+          <option value="link">Link — Save a URL with optional notes</option>
+          <option value="note">Note — Free-form text</option>
+          <option value="bullets">Bullets — List items, one per line</option>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="new-title">Title</Label>
+        <Input
+          id="new-title"
+          name="title"
+          placeholder={kind === "link" ? "e.g. Article name" : kind === "bullets" ? "e.g. Key points" : "e.g. Main idea"}
+        />
+      </div>
+
+      {kind === "link" ? (
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="new-url">URL *</Label>
+            <Input id="new-url" name="url" type="url" required placeholder="https://..." />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="new-content">Notes (optional)</Label>
+            <Textarea id="new-content" name="content" placeholder="Add context or summary..." className="min-h-20" />
+          </div>
+        </>
+      ) : kind === "bullets" ? (
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="new-content">Items *</Label>
+            <Textarea
+              id="new-content"
+              name="content"
+              required
+              placeholder="One item per line:&#10;First point&#10;Second point&#10;Third point"
+              className="min-h-32 font-mono text-sm"
+            />
+            <p className="text-xs text-slate-500">Each line becomes a bullet. Prefix with - or * if you like.</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="new-url">Link (optional)</Label>
+            <Input id="new-url" name="url" type="url" placeholder="Add a Check button to open this URL" />
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="new-content">Content *</Label>
+            <Textarea
+              id="new-content"
+              name="content"
+              required
+              placeholder="Write your note here..."
+              className="min-h-32"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="new-url">Link (optional)</Label>
+            <Input id="new-url" name="url" type="url" placeholder="Add a Check button to open this URL" />
+          </div>
+        </>
+      )}
+
+      <SubmitButton label="Add item" pendingLabel="Saving..." className="w-full sm:w-auto" />
+    </ActionForm>
+  );
 }
 
 function formatDate(iso: string) {
@@ -304,43 +396,13 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
 
       {/* New item modal */}
       {activeModal === "new-item" ? (
-        <ModalShell title="Add Item" description="Create a link, note, or bullet list for this topic." onClose={closeModal}>
-          <ActionForm action={createKnowledgeItemFormAction} className="space-y-3" onSuccess={closeModal} refreshOnly>
-            <input type="hidden" name="spaceId" value={space.id} />
-            <input type="hidden" name="returnPath" value={returnPath} />
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="new-kind">Item type</Label>
-                <Select id="new-kind" name="kind" defaultValue="link">
-                  <option value="link">Link</option>
-                  <option value="note">Note</option>
-                  <option value="bullets">Bullets</option>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="new-title">Title (optional)</Label>
-                <Input id="new-title" name="title" placeholder="Short label" />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="new-url">Link URL (required for link type)</Label>
-              <Input id="new-url" name="url" placeholder="https://... (optional for notes/bullets)" />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="new-content">Note / description</Label>
-              <Textarea
-                id="new-content"
-                name="content"
-                placeholder="For note: full text. For bullets: one item per line (optional - prefix with - or *)."
-                className="min-h-24"
-              />
-            </div>
-
-            <SubmitButton label="Add item" pendingLabel="Saving..." className="w-full sm:w-auto" />
-          </ActionForm>
+        <ModalShell title="Add Item" description="Add a link to save, a note to remember, or a bullet list to track." onClose={closeModal}>
+          <AddItemForm
+            spaceId={space.id}
+            returnPath={returnPath}
+            action={createKnowledgeItemFormAction}
+            onSuccess={closeModal}
+          />
         </ModalShell>
       ) : null}
 

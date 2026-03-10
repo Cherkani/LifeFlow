@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowDownRight, ArrowUpRight, Plus } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Pencil, Plus, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
@@ -12,7 +12,9 @@ import {
   createDebtPaymentFormAction,
   createExpenseCategoryFormAction,
   createExpenseFormAction,
-  updateExpenseCategoryFormAction
+  deleteExpenseFormAction,
+  updateExpenseCategoryFormAction,
+  updateExpenseFormAction
 } from "@/app/(app)/finance/actions";
 import { ActionForm } from "@/components/forms/action-form";
 import { PexelsImagePicker } from "@/components/forms/pexels-image-picker";
@@ -145,10 +147,13 @@ export function FinanceModals({
   currencyCode
 }: FinanceModalsProps) {
   const [activeModal, setActiveModal] = useState<
-    "expense" | "debt-entry" | "expense-category" | "edit-category" | null
+    "expense" | "edit-expense" | "debt-entry" | "expense-category" | "edit-category" | null
   >(null);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [debtEntryMode, setDebtEntryMode] = useState<"debt" | "payment">("debt");
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+
+  const editingExpense = editingExpenseId ? recentExpenses.find((e) => e.id === editingExpenseId) ?? null : null;
 
   const baseHref = buildFinanceHref({ tab, period, anchor: anchorIso });
   const editingCategory = editingCategoryId ? categories.find((c) => c.id === editingCategoryId) : null;
@@ -156,6 +161,7 @@ export function FinanceModals({
   const closeModal = () => {
     setActiveModal(null);
     setEditingCategoryId(null);
+    setEditingExpenseId(null);
   };
 
   return (
@@ -320,12 +326,42 @@ export function FinanceModals({
                   {recentExpenses.map((entry) => (
                     <div key={entry.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#c7d3e8] bg-[#f8fbff] p-3">
                       <div>
-                        <p className="text-sm font-semibold text-[#0c1d3c]">{entry.notes || "Expense"}</p>
+                        <p className="text-sm font-semibold text-[#0c1d3c]">
+                          {categoryNameById[entry.category_id ?? ""] ?? "Expense"}
+                        </p>
                         <p className="text-xs text-[#4a5f83]">
-                          {entry.occurred_on} · {categoryNameById[entry.category_id ?? ""] ?? "No category"}
+                          {entry.occurred_on}
+                          {entry.notes ? ` · ${entry.notes}` : ""}
                         </p>
                       </div>
-                      <Badge variant="danger">-{money(Number(entry.amount), currencyCode)}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="danger">-{money(Number(entry.amount), currencyCode)}</Badge>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingExpenseId(entry.id);
+                            setActiveModal("edit-expense");
+                          }}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#c7d3e8] bg-white text-[#23406d] transition hover:bg-[#edf3ff]"
+                          aria-label="Edit expense"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <ActionForm action={deleteExpenseFormAction} className="inline">
+                          <input type="hidden" name="returnPath" value={baseHref} />
+                          <input type="hidden" name="expenseId" value={entry.id} />
+                          <button
+                            type="submit"
+                            onClick={(e) => {
+                              if (!confirm("Delete this expense?")) e.preventDefault();
+                            }}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#fecaca] bg-[#fef2f2] text-[#b91c1c] transition hover:bg-[#fee2e2]"
+                            aria-label="Delete expense"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </ActionForm>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -537,6 +573,55 @@ export function FinanceModals({
                 <Input id="notes" name="notes" placeholder="What was this expense?" />
               </div>
               <SubmitButton label="Save expense" pendingLabel="Saving..." className="w-full sm:w-auto" />
+            </ActionForm>
+          )}
+        </ModalShell>
+      ) : null}
+
+      {/* Edit expense modal */}
+      {activeModal === "edit-expense" && editingExpense ? (
+        <ModalShell title="Edit Expense" description="Update amount, category, date, or notes." onClose={closeModal}>
+          {categories.length === 0 ? (
+            <p className="text-sm text-[#4a5f83]">No categories available.</p>
+          ) : (
+            <ActionForm action={updateExpenseFormAction} className="space-y-4" onSuccess={closeModal}>
+              <input type="hidden" name="returnPath" value={baseHref} />
+              <input type="hidden" name="expenseId" value={editingExpense.id} />
+              <div className="space-y-2">
+                <Label htmlFor="editCategoryId">Category</Label>
+                <Select id="editCategoryId" name="categoryId" required defaultValue={editingExpense.category_id ?? ""}>
+                  <option value="">Choose category</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="editAmount">Amount</Label>
+                  <Input
+                    id="editAmount"
+                    name="amount"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    required
+                    defaultValue={editingExpense.amount}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editOccurredOn">Date</Label>
+                  <Input id="editOccurredOn" name="occurredOn" type="date" required defaultValue={editingExpense.occurred_on} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editNotes">Note (optional)</Label>
+                <Input id="editNotes" name="notes" placeholder="What was this expense?" defaultValue={editingExpense.notes ?? ""} />
+              </div>
+              <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
             </ActionForm>
           )}
         </ModalShell>

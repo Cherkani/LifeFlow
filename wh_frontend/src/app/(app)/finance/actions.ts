@@ -28,6 +28,18 @@ const createExpenseSchema = z.object({
   notes: z.string().max(1000).optional()
 });
 
+const updateExpenseSchema = z.object({
+  expenseId: z.string().uuid(),
+  categoryId: z.string().uuid(),
+  amount: z.coerce.number().positive().max(100000000),
+  occurredOn: dateInputSchema,
+  notes: z.string().max(1000).optional()
+});
+
+const deleteExpenseSchema = z.object({
+  expenseId: z.string().uuid()
+});
+
 const debtSchema = z.object({
   type: z.enum(["owed", "owing"]),
   name: z.string().trim().min(2).max(140),
@@ -104,6 +116,59 @@ export async function createExpenseAction(formData: FormData) {
     notes: payload.data.notes?.trim() || null,
     created_by: user.id
   });
+
+  revalidatePath(returnPath.split("?")[0] || "/finance");
+  return { redirectTo: returnPath };
+}
+
+export async function updateExpenseAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = updateExpenseSchema.safeParse({
+    expenseId: formData.get("expenseId"),
+    categoryId: formData.get("categoryId"),
+    amount: formData.get("amount"),
+    occurredOn: formData.get("occurredOn"),
+    notes: formData.get("notes")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  await supabase
+    .from("ledger_entries")
+    .update({
+      category_id: payload.data.categoryId,
+      amount: payload.data.amount.toFixed(2),
+      occurred_on: payload.data.occurredOn,
+      notes: payload.data.notes?.trim() || null
+    })
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.expenseId)
+    .eq("entry_type", "expense");
+
+  revalidatePath(returnPath.split("?")[0] || "/finance");
+  return { redirectTo: returnPath };
+}
+
+export async function deleteExpenseAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = deleteExpenseSchema.safeParse({
+    expenseId: formData.get("expenseId")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  await supabase
+    .from("ledger_entries")
+    .delete()
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.expenseId)
+    .eq("entry_type", "expense");
 
   revalidatePath(returnPath.split("?")[0] || "/finance");
   return { redirectTo: returnPath };
@@ -242,6 +307,20 @@ export async function createExpenseFormAction(
   formData: FormData
 ): Promise<RedirectResult | null> {
   return createExpenseAction(formData);
+}
+
+export async function updateExpenseFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return updateExpenseAction(formData);
+}
+
+export async function deleteExpenseFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return deleteExpenseAction(formData);
 }
 
 export async function createDebtFormAction(
