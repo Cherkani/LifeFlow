@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -131,7 +132,7 @@ export default async function EventsPage({
             <div className="rounded-lg border border-[#d7e0f1] bg-[#eef3fb] p-4">
               <div className="mb-3 flex items-center justify-between">
                 <Link
-                  href={buildEventsHref(prevMonthKey, selectedIso)}
+                  href={buildEventsHref(prevMonthKey, selectedIso) as Route}
                   className="inline-flex size-8 items-center justify-center rounded-md border border-[#d7e0f1] text-[#4a5f83] hover:bg-[#e3ebf9]"
                 >
                   <ChevronLeft size={16} />
@@ -140,7 +141,7 @@ export default async function EventsPage({
                   {monthStart.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
                 </p>
                 <Link
-                  href={buildEventsHref(nextMonthKey, selectedIso)}
+                  href={buildEventsHref(nextMonthKey, selectedIso) as Route}
                   className="inline-flex size-8 items-center justify-center rounded-md border border-[#d7e0f1] text-[#4a5f83] hover:bg-[#e3ebf9]"
                 >
                   <ChevronRight size={16} />
@@ -157,7 +158,7 @@ export default async function EventsPage({
                 {calendarDays.map((day) => (
                   <Link
                     key={day.iso}
-                    href={buildEventsHref(monthKey, day.iso)}
+                    href={buildEventsHref(monthKey, day.iso) as Route}
                     className={[
                       "grid h-10 place-items-center rounded-md border text-sm font-medium transition",
                       day.inCurrentMonth ? "text-[#0c1d3c]" : "text-[#8aa0c2]",
