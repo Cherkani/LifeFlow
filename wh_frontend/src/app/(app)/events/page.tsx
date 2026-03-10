@@ -1,10 +1,11 @@
-import { CalendarDays, ChevronLeft, ChevronRight, Star } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { getCalendarEvents } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
 
 import { EventsAddEvent } from "./events-add-event";
+import { EventsList } from "./events-list";
 
 type EventsSearchParams = Promise<{
   month?: string;
@@ -185,22 +186,7 @@ export default async function EventsPage({
               Events for {formatLongDate(selectedDate)}
             </h2>
 
-            {selectedEvents.length > 0 ? (
-              <ul className="space-y-2">
-                {selectedEvents.map((event) => (
-                  <li key={event.id} className="space-y-1 rounded-lg bg-[#eef3fb] px-3 py-2 text-sm text-[#4a5f83]">
-                    <div className="flex items-center gap-2">
-                      <Star size={14} className="text-[#d17035]" />
-                      <span className="font-semibold text-[#0c1d3c]">{event.title}</span>
-                      <span className="rounded-full bg-[#edf3ff] px-2 py-0.5 text-xs font-semibold text-[#23406d]">{event.event_type}</span>
-                    </div>
-                    {event.details ? <p className="text-xs text-[#4a5f83]">{event.details}</p> : null}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="rounded-lg bg-[#eef3fb] p-3 text-sm text-[#4a5f83]">No events scheduled for this day.</p>
-            )}
+            <EventsList events={selectedEvents} monthKey={monthKey} selectedIso={selectedIso} />
           </CardContent>
         </Card>
       </div>

@@ -20,7 +20,7 @@ export async function getKnowledgeSpaces(supabase: Supabase, accountId: string):
 export type KnowledgeItemRow = {
   id: string;
   space_id: string;
-  kind: "link" | "note";
+  kind: "link" | "note" | "bullets";
 };
 
 export async function getKnowledgeItems(supabase: Supabase, spaceIds: string[]): Promise<KnowledgeItemRow[]> {
@@ -53,6 +53,7 @@ export type KnowledgeItemFullRow = KnowledgeItemRow & {
   url: string | null;
   content: string | null;
   created_at: string;
+  checked: boolean;
 };
 
 export async function getKnowledgeSpaceItems(
@@ -61,8 +62,9 @@ export async function getKnowledgeSpaceItems(
 ): Promise<KnowledgeItemFullRow[]> {
   const { data } = await supabase
     .from("knowledge_items")
-    .select("id, space_id, kind, title, url, content, created_at")
+    .select("id, space_id, kind, title, url, content, created_at, checked")
     .eq("space_id", spaceId)
+    .order("checked", { ascending: true })
     .order("created_at", { ascending: false });
   return (data ?? []) as KnowledgeItemFullRow[];
 }

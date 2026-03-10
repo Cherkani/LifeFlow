@@ -13,6 +13,18 @@ const createEventSchema = z.object({
   details: z.string().trim().max(1200).optional()
 });
 
+const updateEventSchema = z.object({
+  eventId: z.string().uuid(),
+  title: z.string().trim().min(2).max(180),
+  eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
+  eventType: z.enum(["meeting", "important", "general"]),
+  details: z.string().trim().max(1200).optional()
+});
+
+const deleteEventSchema = z.object({
+  eventId: z.string().uuid()
+});
+
 function getSafeReturnPath(raw: FormDataEntryValue | null) {
   const value = typeof raw === "string" ? raw.trim() : "";
   return value.startsWith("/events") ? value : "/events";
@@ -49,4 +61,73 @@ export async function createCalendarEventFormAction(
   formData: FormData
 ): Promise<RedirectResult | null> {
   return createCalendarEventAction(formData);
+}
+
+export async function updateCalendarEventAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = updateEventSchema.safeParse({
+    eventId: formData.get("eventId"),
+    title: formData.get("title"),
+    eventDate: formData.get("eventDate"),
+    eventType: formData.get("eventType"),
+    details: formData.get("details")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  const { error } = await supabase
+    .from("calendar_events")
+    .update({
+      title: payload.data.title,
+      event_date: payload.data.eventDate,
+      event_type: payload.data.eventType,
+      details: payload.data.details?.trim() ? payload.data.details : null
+    })
+    .eq("id", payload.data.eventId)
+    .eq("account_id", account.accountId);
+
+  if (error) {
+    return { redirectTo: returnPath };
+  }
+
+  revalidatePath("/events");
+  return { redirectTo: returnPath };
+}
+
+export async function updateCalendarEventFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return updateCalendarEventAction(formData);
+}
+
+export async function deleteCalendarEventAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = deleteEventSchema.safeParse({
+    eventId: formData.get("eventId")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  await supabase
+    .from("calendar_events")
+    .delete()
+    .eq("id", payload.data.eventId)
+    .eq("account_id", account.accountId);
+
+  revalidatePath("/events");
+  return { redirectTo: returnPath };
+}
+
+export async function deleteCalendarEventFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return deleteCalendarEventAction(formData);
 }

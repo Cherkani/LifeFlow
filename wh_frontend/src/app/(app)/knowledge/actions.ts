@@ -19,7 +19,7 @@ const updateSpaceSchema = z.object({
 
 const createItemSchema = z.object({
   spaceId: z.string().uuid(),
-  kind: z.enum(["link", "note"]),
+  kind: z.enum(["link", "note", "bullets"]),
   title: z.string().trim().max(180).optional(),
   url: z.string().trim().optional(),
   content: z.string().trim().optional()
@@ -27,10 +27,18 @@ const createItemSchema = z.object({
 
 const updateItemSchema = z.object({
   itemId: z.string().uuid(),
-  kind: z.enum(["link", "note"]),
+  kind: z.enum(["link", "note", "bullets"]),
   title: z.string().trim().max(180).optional(),
   url: z.string().trim().optional(),
   content: z.string().trim().optional()
+});
+
+const deleteItemSchema = z.object({
+  itemId: z.string().uuid()
+});
+
+const toggleCheckedSchema = z.object({
+  itemId: z.string().uuid()
 });
 
 function normalizeOptional(value?: string) {
@@ -79,7 +87,7 @@ function mapDbErrorMessage(errorMessage: string | null | undefined) {
   return errorMessage;
 }
 
-function validateItem(kind: "link" | "note", url?: string, content?: string) {
+function validateItem(kind: "link" | "note" | "bullets", url?: string, content?: string) {
   if (kind === "link") {
     const normalizedUrl = normalizeOptional(url);
     if (!normalizedUrl || !URL.canParse(normalizedUrl)) {
@@ -90,10 +98,12 @@ function validateItem(kind: "link" | "note", url?: string, content?: string) {
 
   const normalizedContent = normalizeOptional(content);
   if (!normalizedContent) {
-    return { ok: false as const, reason: "Note items require content." };
+    return { ok: false as const, reason: "Note and bullets items require content." };
   }
 
-  return { ok: true as const, url: null, content: normalizedContent };
+  const normalizedUrl = normalizeOptional(url);
+  const safeUrl = normalizedUrl && URL.canParse(normalizedUrl) ? normalizedUrl : null;
+  return { ok: true as const, url: safeUrl, content: normalizedContent };
 }
 
 async function getSpaceIdByItemId(itemId: string) {
@@ -278,6 +288,68 @@ export async function updateKnowledgeItemAction(formData: FormData) {
   return redirectTarget(returnPath, "success", "Item updated.");
 }
 
+export async function deleteKnowledgeItemAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"), "/knowledge");
+  const payload = deleteItemSchema.safeParse({
+    itemId: formData.get("itemId")
+  });
+
+  if (!payload.success) {
+    return redirectTarget(returnPath, "error", "Invalid item.");
+  }
+
+  const { supabase } = await requireAppContext();
+  const spaceId = await getSpaceIdByItemId(payload.data.itemId);
+
+  const { error } = await supabase
+    .from("knowledge_items")
+    .delete()
+    .eq("id", payload.data.itemId);
+
+  if (error) {
+    return redirectTarget(returnPath, "error", mapDbErrorMessage(error.message));
+  }
+
+  revalidateKnowledgeRoutes(spaceId);
+  return redirectTarget(returnPath, "success", "Item deleted.");
+}
+
+export async function toggleKnowledgeItemCheckedAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"), "/knowledge");
+  const payload = toggleCheckedSchema.safeParse({
+    itemId: formData.get("itemId")
+  });
+
+  if (!payload.success) {
+    return redirectTarget(returnPath, "error", "Invalid item.");
+  }
+
+  const { supabase } = await requireAppContext();
+  const spaceId = await getSpaceIdByItemId(payload.data.itemId);
+
+  const { data: current } = await supabase
+    .from("knowledge_items")
+    .select("checked")
+    .eq("id", payload.data.itemId)
+    .maybeSingle();
+
+  if (!current) {
+    return redirectTarget(returnPath, "error", "Item not found.");
+  }
+
+  const { error } = await supabase
+    .from("knowledge_items")
+    .update({ checked: !current.checked })
+    .eq("id", payload.data.itemId);
+
+  if (error) {
+    return redirectTarget(returnPath, "error", mapDbErrorMessage(error.message));
+  }
+
+  revalidateKnowledgeRoutes(spaceId);
+  return { redirectTo: returnPath };
+}
+
 export async function createKnowledgeSpaceFormAction(
   _prevState: RedirectResult | null,
   formData: FormData
@@ -304,4 +376,18 @@ export async function updateKnowledgeItemFormAction(
   formData: FormData
 ): Promise<RedirectResult | null> {
   return updateKnowledgeItemAction(formData);
+}
+
+export async function deleteKnowledgeItemFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return deleteKnowledgeItemAction(formData);
+}
+
+export async function toggleKnowledgeItemCheckedFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return toggleKnowledgeItemCheckedAction(formData);
 }
