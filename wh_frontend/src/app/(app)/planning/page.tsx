@@ -1,7 +1,7 @@
-import { Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import Image from "next/image";
 
-import { createObjectiveAction } from "@/app/(app)/habits/actions";
+import { createObjectiveAction, updateObjectiveAction } from "@/app/(app)/habits/actions";
 import { PexelsImagePicker } from "@/components/forms/pexels-image-picker";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Badge } from "@/components/ui/badge";
@@ -12,13 +12,16 @@ import { ModalShell } from "@/components/ui/modal-shell";
 import { SectionHeader } from "@/components/ui/section-header";
 import { Textarea } from "@/components/ui/textarea";
 import { requireAppContext } from "@/lib/server-context";
+import { startOfIsoWeek, toDateInputValue } from "@/lib/utils";
 
 import { createTemplateWithDailyTasksAction, updateTemplateWithDailyTasksAction } from "./actions";
+import { GeneratedWeeksCalendar } from "./generated-weeks-calendar";
 import { TemplateTaskBuilder } from "./template-task-builder";
 
 type PlanningSearchParams = Promise<{
   modal?: string;
   templateId?: string;
+  objectiveId?: string;
 }>;
 
 type Objective = {
@@ -107,8 +110,7 @@ export default async function PlanningPage({
       .from("weeks")
       .select("id, template_id, week_start_date")
       .eq("account_id", account.accountId)
-      .order("week_start_date", { ascending: false })
-      .limit(12)
+      .order("week_start_date", { ascending: true })
   ]);
 
   const objectives = (objectivesRes.data ?? []) as Objective[];
@@ -129,7 +131,10 @@ export default async function PlanningPage({
       : { data: [] as TemplateEntry[] };
   const entries = (entriesRes.data ?? []) as TemplateEntry[];
   const templateIdParam = params.templateId?.trim();
+  const objectiveIdParam = params.objectiveId?.trim();
   const editingTemplateId = modal === "edit-template" ? templateIdParam : undefined;
+  const editingObjectiveId = modal === "edit-objective" ? objectiveIdParam : undefined;
+  const editingObjective = editingObjectiveId ? objectives.find((o) => o.id === editingObjectiveId) ?? null : null;
   const editingTemplate = editingTemplateId ? templates.find((template) => template.id === editingTemplateId) ?? null : null;
   const editingTemplateInitialTasks =
     editingTemplate !== null
@@ -149,6 +154,78 @@ export default async function PlanningPage({
       : [];
   const assignedWeeksCount = weeks.length;
   const totalTemplateEntries = entries.length;
+
+  const templateIdsByObjective = new Map<string, Set<string>>();
+  for (const objective of objectives) {
+    templateIdsByObjective.set(objective.id, new Set());
+  }
+  for (const entry of entries) {
+    const habit = taskById.get(entry.habit_id);
+    const objectiveId = habit?.objective_id;
+    if (objectiveId && templateIdsByObjective.has(objectiveId)) {
+      templateIdsByObjective.get(objectiveId)!.add(entry.template_id);
+    }
+  }
+
+  const assignedWeeksMap = new Map<string, { id: string; template_id: string }>();
+  for (const w of weeks) {
+    assignedWeeksMap.set(w.week_start_date, { id: w.id, template_id: w.template_id });
+  }
+  const today = new Date();
+  const currentWeekStart = startOfIsoWeek(today);
+  const currentWeekKey = toDateInputValue(currentWeekStart);
+  const firstAssignedDate =
+    weeks.length > 0 ? weeks.reduce((min, w) => (w.week_start_date < min ? w.week_start_date : min), weeks[0].week_start_date) : null;
+  const calendarWeeks: string[] = [];
+  const rangeStart = firstAssignedDate
+    ? new Date(`${firstAssignedDate}T00:00:00`)
+    : (() => {
+        const d = new Date(currentWeekStart);
+        d.setDate(d.getDate() - 28);
+        return d;
+      })();
+  const rangeEnd = new Date(currentWeekStart);
+  rangeEnd.setDate(rangeEnd.getDate() + 21);
+  const d = new Date(rangeStart);
+  while (d <= rangeEnd) {
+    calendarWeeks.push(toDateInputValue(d));
+    d.setDate(d.getDate() + 7);
+  }
+
+  const firstWeekIso = calendarWeeks[0] ?? currentWeekKey;
+  const lastWeekDate = new Date(calendarWeeks[calendarWeeks.length - 1] ?? currentWeekKey);
+  lastWeekDate.setDate(lastWeekDate.getDate() + 6);
+  const lastWeekIso = toDateInputValue(lastWeekDate);
+
+  const sessionsRes =
+    tasks.length > 0
+      ? await supabase
+          .from("habit_sessions")
+          .select("session_date, completed")
+          .in("habit_id", tasks.map((t) => t.id))
+          .gte("session_date", firstWeekIso)
+          .lte("session_date", lastWeekIso)
+      : { data: [] as Array<{ session_date: string; completed: boolean }> };
+
+  const totalTasksCountByWeek = new Map<string, number>();
+  const completedTasksCountByWeek = new Map<string, number>();
+  for (const s of sessionsRes.data ?? []) {
+    const weekStart = startOfIsoWeek(new Date(`${s.session_date}T00:00:00`));
+    const key = toDateInputValue(weekStart);
+    totalTasksCountByWeek.set(key, (totalTasksCountByWeek.get(key) ?? 0) + 1);
+    if (s.completed) {
+      completedTasksCountByWeek.set(key, (completedTasksCountByWeek.get(key) ?? 0) + 1);
+    }
+  }
+
+  const weeksByMonth = new Map<string, string[]>();
+  for (const weekKey of calendarWeeks) {
+    const monthKey = weekKey.slice(0, 7);
+    const list = weeksByMonth.get(monthKey) ?? [];
+    list.push(weekKey);
+    weeksByMonth.set(monthKey, list);
+  }
+  const sortedMonths = Array.from(weeksByMonth.keys()).sort();
 
   return (
     <div className="space-y-6">
@@ -230,17 +307,40 @@ export default async function PlanningPage({
             {objectives.length > 0 ? (
               <div className="grid gap-3 lg:grid-cols-3">
                 {objectives.map((objective) => {
-                  const templateCount = templates.filter((template) => template.objective_id === objective.id).length;
+                  const templateCount = templateIdsByObjective.get(objective.id)?.size ?? 0;
+                  const editHref = buildPlanningHref("edit-objective", { objectiveId: objective.id });
                   return (
-                    <div key={objective.id} className="rounded-lg border border-[#c7d3e8] bg-[#f8fbff] p-3">
+                    <div
+                      key={objective.id}
+                      className="group relative overflow-hidden rounded-xl border border-[#d7e0f1] bg-white shadow-[0_2px_8px_rgba(11,31,59,0.06)] transition-all duration-200 hover:border-[#b8cae8] hover:shadow-[0_8px_24px_rgba(11,31,59,0.1)]"
+                    >
                       {objective.image_url ? (
-                        <div className="relative mb-3 h-28 w-full overflow-hidden rounded-lg border border-[#d7e0f1] bg-white">
-                          <Image src={objective.image_url} alt={objective.title} fill className="object-cover" />
+                        <div className="relative h-32 w-full overflow-hidden bg-[#e8eefb]">
+                          <Image src={objective.image_url} alt={objective.title} fill className="object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                          <a
+                            href={editHref}
+                            className="absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium text-[#23406d] shadow-md backdrop-blur-sm transition hover:bg-white hover:shadow-lg"
+                          >
+                            <Pencil size={14} />
+                            Edit
+                          </a>
                         </div>
-                      ) : null}
-                      <p className="truncate text-base font-semibold text-[#0c1d3c]">{objective.title}</p>
-                      {objective.description ? <p className="mt-1 text-xs leading-5 text-[#4a5f83]">{objective.description}</p> : null}
-                      <p className="mt-1 text-xs text-[#4a5f83]">{templateCount} template{templateCount !== 1 ? "s" : ""}</p>
+                      ) : (
+                        <div className="relative h-20 w-full bg-gradient-to-br from-[#e8eefb] to-[#f0f4fc]">
+                          <a
+                            href={editHref}
+                            className="absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium text-[#23406d] shadow-md backdrop-blur-sm transition hover:bg-white hover:shadow-lg"
+                          >
+                            <Pencil size={14} />
+                            Edit
+                          </a>
+                        </div>
+                      )}
+                      <div className="p-4">
+                        <p className="truncate text-base font-semibold text-[#0c1d3c]">{objective.title}</p>
+                        {objective.description ? <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-[#4a5f83]">{objective.description}</p> : null}
+                        <p className="mt-2 text-xs font-medium text-[#6b7da1]">{templateCount} template{templateCount !== 1 ? "s" : ""}</p>
+                      </div>
                     </div>
                   );
                 })}
@@ -260,55 +360,63 @@ export default async function PlanningPage({
               templates.map((template) => {
                 const templateEntries = entries.filter((entry) => entry.template_id === template.id);
                 return (
-                  <div key={template.id} className="relative rounded-lg border border-[#c7d3e8] bg-[#f8fbff] p-3">
-                    <div className="mb-2 flex items-center gap-2 pr-10">
-                      <p className="text-sm font-semibold text-[#0c1d3c]">{template.name}</p>
-                      <Badge variant="secondary" className="ml-auto">
-                        {templateEntries.length} task(s)
+                  <div
+                    key={template.id}
+                    className="group relative overflow-hidden rounded-xl border border-[#d7e0f1] bg-white shadow-[0_2px_8px_rgba(11,31,59,0.06)] transition-all duration-200 hover:border-[#b8cae8] hover:shadow-[0_8px_24px_rgba(11,31,59,0.1)]"
+                  >
+                    <div className="relative flex items-start justify-between gap-3 border-b border-[#ecebf6] bg-[#fafbff] px-4 py-3 pr-12">
+                      <p className="min-w-0 flex-1 truncate text-sm font-semibold text-[#0c1d3c]">{template.name}</p>
+                      <Badge variant="secondary" className="shrink-0">
+                        {templateEntries.length} task{templateEntries.length !== 1 ? "s" : ""}
                       </Badge>
+                      <a
+                        href={buildPlanningHref("edit-template", { templateId: template.id })}
+                        aria-label="Edit template"
+                        className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm text-[#23406d] transition hover:bg-[#edf3ff] hover:shadow-md"
+                      >
+                        <Pencil size={14} />
+                      </a>
                     </div>
-                    {templateEntries.length > 0 ? (
-                      <ul className="space-y-2 text-sm text-[#4a5f83]">
-                        {templateEntries.map((entry) => {
-                          const task = taskById.get(entry.habit_id);
-                          const startTime = getStartTime(task?.metadata);
-                          const taskObjective = objectiveById.get(task?.objective_id ?? "")?.title ?? "Objective";
-                          return (
-                            <li key={entry.id} className="flex items-start justify-between gap-3 rounded-md border border-[#d7e0f1] bg-white px-2 py-1.5">
-                              <div>
-                                <p className="text-xs font-semibold text-[#0c1d3c]">
-                                  {dayName[entry.day_of_week - 1]} · {task?.title ?? "Task"}
-                                </p>
-                                <p className="text-[11px] text-[#4a5f83]">
-                                  {entry.planned_minutes} min planned · Minimum {entry.minimum_minutes} min
-                                  {startTime ? ` · ${startTime}` : ""}
-                                  {taskObjective ? ` · ${taskObjective}` : ""}
-                                  {entry.is_required ? " · Required" : ""}
-                                </p>
+                    <div className="p-4">
+                      {templateEntries.length > 0 ? (
+                        <div className="space-y-0">
+                          {[1, 2, 3, 4, 5, 6, 7].map((dayOfWeek) => {
+                            const dayEntries = templateEntries.filter((entry) => entry.day_of_week === dayOfWeek);
+                            if (dayEntries.length === 0) return null;
+                            return (
+                              <div key={dayOfWeek}>
+                                {dayOfWeek > 1 ? <div className="my-4 border-t-2 border-violet-200" /> : null}
+                                <div className="space-y-2">
+                                  {dayEntries.map((entry) => {
+                                    const task = taskById.get(entry.habit_id);
+                                    const startTime = getStartTime(task?.metadata);
+                                    const taskObjective = objectiveById.get(task?.objective_id ?? "")?.title ?? "Objective";
+                                    return (
+                                      <div
+                                        key={entry.id}
+                                        className="rounded-lg border border-[#e8eefb] bg-[#fafbff] px-3 py-2 transition-colors hover:border-[#d7e0f1] hover:bg-[#f8fbff]"
+                                      >
+                                        <p className="text-xs font-semibold text-[#0c1d3c]">
+                                          {dayName[dayOfWeek - 1]} · {task?.title ?? "Task"}
+                                        </p>
+                                        <p className="mt-0.5 text-[11px] leading-relaxed text-[#4a5f83]">
+                                          {entry.planned_minutes} min planned · Min {entry.minimum_minutes} min
+                                          {startTime ? ` · ${startTime}` : ""}
+                                          {taskObjective ? ` · ${taskObjective}` : ""}
+                                          {entry.is_required ? " · Required" : ""}
+                                        </p>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-[#4a5f83]">No day tasks yet.</p>
-                    )}
-                    <a
-                      href={buildPlanningHref("edit-template", { templateId: template.id })}
-                      aria-label="Edit template"
-                      className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#c7d3e8] bg-white text-[#0c1d3c] transition hover:bg-[#f1f5ff]"
-                    >
-                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        <path
-                          d="M16.5 3.5c.66-.66 1.74-.66 2.4 0l1.6 1.6c.66.66.66 1.74 0 2.4l-8.8 8.8L9 17l.7-2.7 6.8-6.8Z"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </a>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-[#6b7da1]">No day tasks yet.</p>
+                      )}
+                    </div>
                   </div>
                 );
               })
@@ -331,27 +439,23 @@ export default async function PlanningPage({
       <Card>
         <CardHeader>
           <CardTitle>Generated Weeks</CardTitle>
+          <p className="mt-1 text-sm text-[#4a5f83]">
+            Circle = not assigned · CheckCircle (outline) = assigned, no tasks done · CheckCircle2 (filled) = tasks completed.
+          </p>
         </CardHeader>
         <CardContent>
-          {weeks.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {weeks.map((week) => {
-                const template = templates.find((item) => item.id === week.template_id);
-                return (
-                  <div key={week.id} className="rounded-lg border border-[#c7d3e8] p-3">
-                    <p className="text-sm font-semibold text-[#0c1d3c]">{template?.name ?? "Template"}</p>
-                    <div className="mt-2 flex items-center justify-between">
-                      <Badge variant="secondary">Week {week.week_start_date}</Badge>
-                      <a href={`/habits?week=${encodeURIComponent(week.week_start_date)}`} className="text-xs font-semibold text-[#0b1f3b]">
-                        Open in execution
-                      </a>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          {calendarWeeks.length > 0 ? (
+            <GeneratedWeeksCalendar
+              sortedMonths={sortedMonths}
+              weeksByMonth={Object.fromEntries(weeksByMonth)}
+              assignedWeeksMap={Object.fromEntries(assignedWeeksMap)}
+              completedTasksCountByWeek={Object.fromEntries(completedTasksCountByWeek)}
+              totalTasksCountByWeek={Object.fromEntries(totalTasksCountByWeek)}
+              templates={templates.map((t) => ({ id: t.id, name: t.name }))}
+              currentWeekKey={currentWeekKey}
+            />
           ) : (
-            <p className="text-sm text-[#4a5f83]">No weeks generated yet.</p>
+            <p className="text-sm text-[#4a5f83]">Assign a template to a week in Execution to start your calendar.</p>
           )}
         </CardContent>
       </Card>
@@ -370,6 +474,44 @@ export default async function PlanningPage({
             </div>
             <PexelsImagePicker inputName="imageUrl" label="Objective image (optional)" />
             <SubmitButton label="Save objective" pendingLabel="Saving..." className="w-full sm:w-auto" />
+          </form>
+        </ModalShell>
+      ) : null}
+
+      {modal === "edit-objective" && editingObjective ? (
+        <ModalShell
+          title="Edit objective"
+          description="Update title, description, or image."
+          closeHref={buildPlanningHref()}
+        >
+          <form action={updateObjectiveAction} className="space-y-4">
+            <input type="hidden" name="returnPath" value="/planning" />
+            <input type="hidden" name="objectiveId" value={editingObjective.id} />
+            <div className="space-y-2">
+              <Label htmlFor="editObjectiveTitle">Title</Label>
+              <Input
+                id="editObjectiveTitle"
+                name="title"
+                required
+                defaultValue={editingObjective.title}
+                placeholder="e.g. Improve coding productivity"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editObjectiveDescription">Description (optional)</Label>
+              <Textarea
+                id="editObjectiveDescription"
+                name="description"
+                defaultValue={editingObjective.description ?? ""}
+                placeholder="Short context for this objective."
+              />
+            </div>
+            <PexelsImagePicker
+              inputName="imageUrl"
+              label="Objective image (optional)"
+              defaultValue={editingObjective.image_url ?? ""}
+            />
+            <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </form>
         </ModalShell>
       ) : null}

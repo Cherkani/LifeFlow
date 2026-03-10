@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink, FileText, Link2, Pencil, Plus } from "lucide-react";
 
+import { PexelsImagePicker } from "@/components/forms/pexels-image-picker";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { requireAppContext } from "@/lib/server-context";
 import { toDateInputValue } from "@/lib/utils";
 
-import { createKnowledgeItemAction, updateKnowledgeItemAction } from "../actions";
+import { createKnowledgeItemAction, updateKnowledgeItemAction, updateKnowledgeSpaceAction } from "../actions";
 
 type KnowledgeItem = {
   id: string;
@@ -27,7 +28,7 @@ type KnowledgeItem = {
   created_at: string;
 };
 
-function buildKnowledgeSpaceHref(spaceId: string, modal?: "new-item" | "edit-item", itemId?: string) {
+function buildKnowledgeSpaceHref(spaceId: string, modal?: "new-item" | "edit-item" | "edit-space", itemId?: string) {
   const params = new URLSearchParams();
   if (modal) {
     params.set("modal", modal);
@@ -56,7 +57,7 @@ export default async function KnowledgeSpacePage({
 
   const { data: space } = await supabase
     .from("knowledge_spaces")
-    .select("id, title, created_at, updated_at")
+    .select("id, title, image_url, created_at, updated_at")
     .eq("id", spaceId)
     .eq("account_id", account.accountId)
     .maybeSingle();
@@ -85,6 +86,13 @@ export default async function KnowledgeSpacePage({
         description="Simple topic workspace: add links with optional notes, or standalone notes."
         action={
           <div className="flex items-center gap-2">
+            <a
+              href={buildKnowledgeSpaceHref(space.id, "edit-space")}
+              className="inline-flex items-center gap-2 rounded-lg border border-[#c7d3e8] bg-[#edf3ff] px-3 py-2 text-sm font-medium text-[#23406d] transition hover:bg-[#e3ebf9]"
+            >
+              <Pencil size={16} />
+              Edit topic
+            </a>
             <a
               href={buildKnowledgeSpaceHref(space.id, "new-item")}
               className="inline-flex items-center gap-2 rounded-lg bg-[#0b1f3b] px-3 py-2 text-sm font-medium text-white transition hover:bg-[#102a52]"
@@ -260,6 +268,31 @@ export default async function KnowledgeSpacePage({
               />
             </div>
 
+            <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
+          </form>
+        </ModalShell>
+      ) : null}
+
+      {modal === "edit-space" ? (
+        <ModalShell title="Edit Topic" description="Update the topic title or cover image." closeHref={closeModalHref}>
+          <form action={updateKnowledgeSpaceAction} className="space-y-4">
+            <input type="hidden" name="returnPath" value={`/knowledge/${space.id}`} />
+            <input type="hidden" name="spaceId" value={space.id} />
+            <div className="space-y-2">
+              <Label htmlFor="editSpaceTitle">Topic title</Label>
+              <Input
+                id="editSpaceTitle"
+                name="title"
+                required
+                defaultValue={space.title}
+                placeholder="e.g. AI Research, Marketing"
+              />
+            </div>
+            <PexelsImagePicker
+              inputName="imageUrl"
+              label="Topic image (optional)"
+              defaultValue={space.image_url ?? ""}
+            />
             <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </form>
         </ModalShell>

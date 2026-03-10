@@ -14,6 +14,13 @@ const createObjectiveSchema = z.object({
   imageUrl: z.string().trim().optional()
 });
 
+const updateObjectiveSchema = z.object({
+  objectiveId: z.string().uuid(),
+  title: z.string().trim().min(2, "Objective title is required").max(160),
+  description: z.string().trim().max(1200).optional(),
+  imageUrl: z.string().trim().optional()
+});
+
 const createHabitSchema = z.object({
   objectiveId: z.string().uuid(),
   title: z.string().trim().min(2, "Habit title is required").max(140),
@@ -94,6 +101,40 @@ export async function createObjectiveAction(formData: FormData) {
     description: payload.data.description?.trim() ? payload.data.description : null,
     image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null
   });
+
+  revalidatePath("/habits");
+  revalidatePath("/planning");
+  redirectToPath(returnPath);
+}
+
+export async function updateObjectiveAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = updateObjectiveSchema.safeParse({
+    objectiveId: formData.get("objectiveId"),
+    title: formData.get("title"),
+    description: formData.get("description"),
+    imageUrl: formData.get("imageUrl")
+  });
+
+  if (!payload.success) {
+    redirectToPath(returnPath);
+  }
+
+  const { supabase, account } = await requireAppContext();
+
+  const { error } = await supabase
+    .from("habit_objectives")
+    .update({
+      title: payload.data.title,
+      description: payload.data.description?.trim() ? payload.data.description : null,
+      image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null
+    })
+    .eq("id", payload.data.objectiveId)
+    .eq("account_id", account.accountId);
+
+  if (error) {
+    redirectToPath(returnPath);
+  }
 
   revalidatePath("/habits");
   revalidatePath("/planning");

@@ -1,18 +1,21 @@
 import Link from "next/link";
 import type { Route } from "next";
 import Image from "next/image";
-import { Plus, Search } from "lucide-react";
+import { Pencil, Plus, Search } from "lucide-react";
 
+import { PexelsImagePicker } from "@/components/forms/pexels-image-picker";
+import { SubmitButton } from "@/components/forms/submit-button";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ModalShell } from "@/components/ui/modal-shell";
 import { SectionHeader } from "@/components/ui/section-header";
 import { requireAppContext } from "@/lib/server-context";
 
-import { createKnowledgeSpaceAction } from "./actions";
+import { createKnowledgeSpaceAction, updateKnowledgeSpaceAction } from "./actions";
 import { CreateTopicForm } from "./create-topic-form";
 
 type KnowledgeSearchParams = Promise<{
@@ -20,6 +23,7 @@ type KnowledgeSearchParams = Promise<{
   error?: string;
   success?: string;
   modal?: string;
+  spaceId?: string;
 }>;
 
 type KnowledgeItem = {
@@ -32,13 +36,16 @@ function buildKnowledgeSpaceHref(spaceId: string): Route {
   return `/knowledge/${spaceId}` as Route;
 }
 
-function buildKnowledgePageHref(query: string, modal?: string) {
+function buildKnowledgePageHref(query: string, modal?: string, spaceId?: string) {
   const params = new URLSearchParams();
   if (query.length > 0) {
     params.set("q", query);
   }
   if (modal) {
     params.set("modal", modal);
+  }
+  if (spaceId) {
+    params.set("spaceId", spaceId);
   }
   const queryString = params.toString();
   return queryString.length > 0 ? `/knowledge?${queryString}` : "/knowledge";
@@ -88,8 +95,10 @@ export default async function KnowledgePage({
   const errorMessage = params.error?.trim();
   const successMessage = params.success?.trim();
   const modal = params.modal?.trim();
+  const spaceIdParam = params.spaceId?.trim();
   const createTopicHref = buildKnowledgePageHref(query, "new-topic");
   const closeModalHref = buildKnowledgePageHref(query);
+  const editingSpace = modal === "edit-topic" && spaceIdParam ? spaces.find((s) => s.id === spaceIdParam) ?? null : null;
 
   const sortedSpaces = [...spaces].sort((a, b) => {
     const countDiff = (countsBySpace.get(b.id)?.total ?? 0) - (countsBySpace.get(a.id)?.total ?? 0);
@@ -140,27 +149,36 @@ export default async function KnowledgePage({
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {filteredSpaces.map((space) => {
                 const counts = countsBySpace.get(space.id) ?? { total: 0, links: 0, notes: 0 };
+                const editTopicHref = buildKnowledgePageHref(query, "edit-topic", space.id);
 
                 return (
-                  <Link
+                  <div
                     key={space.id}
-                    href={buildKnowledgeSpaceHref(space.id)}
-                    className="overflow-hidden rounded-xl border border-[#c7d3e8] bg-[#f2f6fe] transition hover:border-[#9eb3d8] hover:shadow-sm"
+                    className="relative overflow-hidden rounded-xl border border-[#c7d3e8] bg-[#f2f6fe] transition hover:border-[#9eb3d8] hover:shadow-sm"
                   >
-                    <div className="relative h-28 w-full bg-[#dde6f7]">
-                      {space.image_url ? (
-                        <Image src={space.image_url} alt={space.title} fill className="object-cover" />
-                      ) : null}
-                    </div>
-                    <div className="p-4">
-                      <h3 className="mb-2 text-sm font-semibold text-[#0c1d3c]">{space.title}</h3>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge>{counts.total} items</Badge>
-                        <Badge variant="secondary">{counts.links} links</Badge>
-                        <Badge variant="secondary">{counts.notes} notes</Badge>
+                    <Link href={buildKnowledgeSpaceHref(space.id)} className="block">
+                      <div className="relative h-28 w-full bg-[#dde6f7]">
+                        {space.image_url ? (
+                          <Image src={space.image_url} alt={space.title} fill className="object-cover" />
+                        ) : null}
                       </div>
-                    </div>
-                  </Link>
+                      <div className="p-4">
+                        <h3 className="mb-2 text-sm font-semibold text-[#0c1d3c]">{space.title}</h3>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge>{counts.total} items</Badge>
+                          <Badge variant="secondary">{counts.links} links</Badge>
+                          <Badge variant="secondary">{counts.notes} notes</Badge>
+                        </div>
+                      </div>
+                    </Link>
+                    <Link
+                      href={editTopicHref as Route}
+                      aria-label="Edit topic"
+                      className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#c7d3e8] bg-white text-[#0c1d3c] transition hover:bg-[#f1f5ff]"
+                    >
+                      <Pencil size={16} />
+                    </Link>
+                  </div>
                 );
               })}
             </div>
@@ -179,6 +197,35 @@ export default async function KnowledgePage({
           closeHref={closeModalHref}
         >
           <CreateTopicForm action={createKnowledgeSpaceAction} />
+        </ModalShell>
+      ) : null}
+
+      {modal === "edit-topic" && editingSpace ? (
+        <ModalShell
+          title="Edit Topic"
+          description="Update the topic title or cover image."
+          closeHref={closeModalHref}
+        >
+          <form action={updateKnowledgeSpaceAction} className="space-y-4">
+            <input type="hidden" name="returnPath" value={`/knowledge/${editingSpace.id}`} />
+            <input type="hidden" name="spaceId" value={editingSpace.id} />
+            <div className="space-y-2">
+              <Label htmlFor="editSpaceTitle">Topic title</Label>
+              <Input
+                id="editSpaceTitle"
+                name="title"
+                required
+                defaultValue={editingSpace.title}
+                placeholder="e.g. AI Research, Marketing"
+              />
+            </div>
+            <PexelsImagePicker
+              inputName="imageUrl"
+              label="Topic image (optional)"
+              defaultValue={editingSpace.image_url ?? ""}
+            />
+            <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
+          </form>
         </ModalShell>
       ) : null}
     </div>

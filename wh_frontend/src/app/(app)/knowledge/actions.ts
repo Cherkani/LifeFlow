@@ -11,6 +11,12 @@ const createSpaceSchema = z.object({
   imageUrl: z.string().trim().optional()
 });
 
+const updateSpaceSchema = z.object({
+  spaceId: z.string().uuid(),
+  title: z.string().trim().min(2, "Space title is required").max(140),
+  imageUrl: z.string().trim().optional()
+});
+
 const createItemSchema = z.object({
   spaceId: z.string().uuid(),
   kind: z.enum(["link", "note"]),
@@ -145,6 +151,41 @@ export async function createKnowledgeSpaceAction(formData: FormData) {
   }
 
   redirectWithMessage(returnPath, "error", "Topic was not created.");
+}
+
+export async function updateKnowledgeSpaceAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"), "/knowledge");
+  const payload = updateSpaceSchema.safeParse({
+    spaceId: formData.get("spaceId"),
+    title: formData.get("title"),
+    imageUrl: formData.get("imageUrl")
+  });
+
+  if (!payload.success) {
+    redirectWithMessage(returnPath, "error", payload.error.issues[0]?.message ?? "Invalid topic data.");
+  }
+
+  const { supabase, account } = await requireAppContext();
+  const imageUrl = normalizeOptional(payload.data.imageUrl);
+  const safeImageUrl = imageUrl && URL.canParse(imageUrl) ? imageUrl : null;
+
+  const { data: space, error } = await supabase
+    .from("knowledge_spaces")
+    .update({
+      title: payload.data.title,
+      image_url: safeImageUrl
+    })
+    .eq("id", payload.data.spaceId)
+    .eq("account_id", account.accountId)
+    .select("id")
+    .single();
+
+  if (error) {
+    redirectWithMessage(returnPath, "error", mapDbErrorMessage(error.message));
+  }
+
+  revalidateKnowledgeRoutes(space?.id);
+  redirect(`/knowledge/${space?.id ?? payload.data.spaceId}?success=${encodeURIComponent("Topic updated.")}`);
 }
 
 export async function createKnowledgeItemAction(formData: FormData) {
