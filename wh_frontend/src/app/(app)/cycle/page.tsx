@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { CalendarDays, ChevronDown, Droplet, Flower2, HelpCircle } from "lucide-react";
+import { CalendarDays, ChevronDown, Flower2, HelpCircle } from "lucide-react";
 
 import {
   averageCycleLength,
@@ -29,6 +29,7 @@ import { Card, CardContent } from "@/components/ui/card";
 
 import { CycleAddPeriod } from "./cycle-add-period";
 import { CycleCalendar } from "./cycle-calendar";
+import { CycleEditPeriod } from "./cycle-edit-period";
 import { CycleConfirmOvulation } from "./cycle-confirm-ovulation";
 import { CycleInfoCards } from "./cycle-info-cards";
 import { CycleLogDay } from "@/app/(app)/cycle/cycle-log-day";
@@ -71,8 +72,11 @@ function getWeekdayLabel(date: Date) {
   return date.toLocaleDateString("en-US", { weekday: "short" });
 }
 
-function formatPeriodRange(startIso: string, endIso: string) {
+function formatPeriodRange(startIso: string, endIso: string | null) {
   const start = new Date(`${startIso}T00:00:00`);
+  if (!endIso) {
+    return `${start.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} – ongoing`;
+  }
   const end = new Date(`${endIso}T00:00:00`);
   const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
   if (sameMonth) {
@@ -81,9 +85,15 @@ function formatPeriodRange(startIso: string, endIso: string) {
   return `${start.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 }
 
-function periodDurationDays(startIso: string, endIso: string) {
+function periodDurationDays(startIso: string, endIso: string | null) {
   const start = new Date(`${startIso}T00:00:00`).getTime();
-  const end = new Date(`${endIso}T00:00:00`).getTime();
+  const end = endIso
+    ? new Date(`${endIso}T00:00:00`).getTime()
+    : (() => {
+        const t = new Date();
+        t.setHours(0, 0, 0, 0);
+        return t.getTime();
+      })();
   return Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
 }
 
@@ -169,14 +179,21 @@ export default async function CyclePage({
     ? OVULATION_METHOD_LABELS[(selectedConfirmation.method ?? "other") as OvulationMethod]
     : null;
 
+  const todayIso = formatDateKey(today);
+  const periodForSelectedDate = periods.find((p) => {
+    const end = p.period_end ?? todayIso;
+    return selectedIso >= p.period_start && selectedIso <= end;
+  });
   const periodRanges = periods.map((p) => ({
     start: p.period_start,
-    end: p.period_end
+    end: p.period_end ?? todayIso
   }));
 
+  /* Use all period starts (newest first) for cycle length and predictions. Include ongoing periods
+   * so lastPeriodStart reflects the current cycle and predictions use the most recent start. */
   const periodStarts = periods.map((p) => new Date(p.period_start));
   const avgCycle = averageCycleLength(periodStarts);
-  const lastPeriodStart = periodStarts[0] ? new Date(periodStarts[0]) : null;
+  const lastPeriodStart = periodStarts[0] ?? null;
   const predictedNext = lastPeriodStart ? predictNextPeriod(lastPeriodStart, avgCycle) : null;
   const estimatedOvulation = predictedNext ? ovulationDate(predictedNext, lutealPhaseLength) : null;
   const cycleConfirmation =
@@ -309,6 +326,15 @@ export default async function CyclePage({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <CycleAddPeriod selectedIso={selectedIso} />
+          {periodForSelectedDate && (
+            <CycleEditPeriod
+              period={periodForSelectedDate}
+              formattedRange={formatPeriodRange(periodForSelectedDate.period_start, periodForSelectedDate.period_end)}
+              durationDays={periodDurationDays(periodForSelectedDate.period_start, periodForSelectedDate.period_end)}
+              periodHref={buildDateHref(periodForSelectedDate.period_start)}
+              buttonOnly
+            />
+          )}
           <CycleLogDay
             dateIso={selectedIso}
             dateLabel={formatLongDate(selectedDate)}
@@ -560,20 +586,12 @@ export default async function CyclePage({
                 <div className="flex min-w-0 items-center gap-x-2 overflow-x-auto pb-1 ">
                   {periods.slice(0, 5).map((p, index) => (
                     <div key={p.id} className="flex items-center gap-2">
-                      <Link
-                        href={buildDateHref(p.period_start)}
-                        className="flex shrink-0 items-center gap-1.5 rounded-xl border border-rose-100 bg-gradient-to-r from-rose-50/80 to-pink-50/60 px-2.5 py-2 text-xs transition hover:border-rose-200 hover:from-rose-50 hover:to-pink-50 sm:gap-2 sm:px-3 sm:py-2.5 sm:text-sm"
-                      >
-                        <Droplet size={16} className="shrink-0 text-rose-600" />
-                        <div className="text-left">
-                          <span className="font-medium text-[#3a4868]">
-                            {formatPeriodRange(p.period_start, p.period_end)}
-                          </span>
-                          <span className="ml-1.5 text-xs text-rose-600/90">
-                            {periodDurationDays(p.period_start, p.period_end)}d
-                          </span>
-                        </div>
-                      </Link>
+                      <CycleEditPeriod
+                        period={p}
+                        formattedRange={formatPeriodRange(p.period_start, p.period_end)}
+                        durationDays={periodDurationDays(p.period_start, p.period_end)}
+                        periodHref={buildDateHref(p.period_start)}
+                      />
                       {index < Math.min(periods.length, 5) - 1 && (
                         <span className="shrink-0 text-rose-300/80" aria-hidden>
                           – – – –

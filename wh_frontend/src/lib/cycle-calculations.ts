@@ -9,8 +9,12 @@ export function averageCycleLength(periodStarts: Date[], lastN = 6): number {
   let total = 0;
   let count = 0;
   for (let i = 0; i < starts.length - 1; i++) {
-    total += cycleLengthDays(starts[i + 1], starts[i]);
-    count++;
+    const len = cycleLengthDays(starts[i + 1], starts[i]);
+    /* Skip invalid cycles (< 21 or > 50 days) to avoid skewing from duplicates or data errors */
+    if (len >= 21 && len <= 50) {
+      total += len;
+      count++;
+    }
   }
   return count > 0 ? Math.round(total / count) : 28;
 }
@@ -64,10 +68,10 @@ export function dayInCycleForDate(
 ): number | null {
   if (!lastPeriodStart || avgCycle < 1) return null;
   const msPerDay = 1000 * 60 * 60 * 24;
-  let day = Math.ceil((date.getTime() - lastPeriodStart.getTime()) / msPerDay);
-  if (day < 1) day += Math.ceil(Math.abs(day) / avgCycle) * avgCycle;
-  day = ((day - 1) % avgCycle) + 1;
-  return day;
+  let day = Math.floor((date.getTime() - lastPeriodStart.getTime()) / msPerDay);
+  /* day 0 = period start = cycle day 1; day < 0 = previous cycle */
+  if (day < 0) day += Math.ceil(Math.abs(day) / avgCycle) * avgCycle;
+  return (day % avgCycle) + 1;
 }
 
 /**

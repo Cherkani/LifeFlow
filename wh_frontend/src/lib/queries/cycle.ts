@@ -4,7 +4,7 @@ export type PeriodCycleRow = {
   id: string;
   user_id: string;
   period_start: string;
-  period_end: string;
+  period_end: string | null;
   created_at: string;
 };
 

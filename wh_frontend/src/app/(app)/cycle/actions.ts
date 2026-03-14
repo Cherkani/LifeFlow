@@ -13,7 +13,13 @@ const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
 
 const logPeriodSchema = z.object({
   periodStart: dateSchema,
-  periodEnd: dateSchema
+  periodEnd: dateSchema.optional().nullable()
+});
+
+const updatePeriodSchema = z.object({
+  periodId: z.string().uuid(),
+  periodStart: dateSchema,
+  periodEnd: dateSchema.optional().nullable()
 });
 
 const logDailySchema = z.object({
@@ -38,9 +44,10 @@ export async function logPeriodFormAction(
   _prevState: RedirectResult | null,
   formData: FormData
 ): Promise<RedirectResult | null> {
+  const rawEnd = formData.get("periodEnd");
   const payload = logPeriodSchema.safeParse({
     periodStart: formData.get("periodStart"),
-    periodEnd: formData.get("periodEnd")
+    periodEnd: rawEnd === "" || rawEnd === null ? undefined : rawEnd
   });
 
   if (!payload.success) {
@@ -48,16 +55,43 @@ export async function logPeriodFormAction(
   }
 
   const { periodStart, periodEnd } = payload.data;
-  if (periodStart > periodEnd) {
-    return { redirectTo: CYCLE_PATH };
-  }
+  const endDate = periodEnd && periodEnd >= periodStart ? periodEnd : null;
 
   const { supabase, user } = await requireAppContext();
   await supabase.from("period_cycles").insert({
     user_id: user.id,
     period_start: periodStart,
-    period_end: periodEnd
+    period_end: endDate
   });
+
+  revalidatePath(CYCLE_PATH);
+  return { redirectTo: CYCLE_PATH };
+}
+
+export async function updatePeriodFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  const rawEnd = formData.get("periodEnd");
+  const payload = updatePeriodSchema.safeParse({
+    periodId: formData.get("periodId"),
+    periodStart: formData.get("periodStart"),
+    periodEnd: rawEnd === "" || rawEnd === null ? undefined : rawEnd
+  });
+
+  if (!payload.success) {
+    return { redirectTo: CYCLE_PATH };
+  }
+
+  const { periodId, periodStart, periodEnd } = payload.data;
+  const endDate = periodEnd && periodEnd >= periodStart ? periodEnd : null;
+
+  const { supabase, user } = await requireAppContext();
+  await supabase
+    .from("period_cycles")
+    .update({ period_start: periodStart, period_end: endDate })
+    .eq("id", periodId)
+    .eq("user_id", user.id);
 
   revalidatePath(CYCLE_PATH);
   return { redirectTo: CYCLE_PATH };

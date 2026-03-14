@@ -6,6 +6,7 @@ import { CirclePlus } from "lucide-react";
 import { logPeriodFormAction } from "./actions";
 import { ActionForm } from "@/components/forms/action-form";
 import { SubmitButton } from "@/components/forms/submit-button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ModalShell } from "@/components/ui/modal-shell";
@@ -22,6 +23,7 @@ function addDays(iso: string, days: number): string {
 
 export function CycleAddPeriod({ selectedIso }: CycleAddPeriodProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [includeEndDate, setIncludeEndDate] = useState(false);
   const defaultEnd = addDays(selectedIso, 5);
 
   return (
@@ -38,16 +40,22 @@ export function CycleAddPeriod({ selectedIso }: CycleAddPeriodProps) {
       {isOpen ? (
         <ModalShell
           title="Log period"
-          description="Record when your period started and ended."
-          onClose={() => setIsOpen(false)}
+          description="Record when your period started. You can add the end date later when it finishes."
+          onClose={() => {
+            setIsOpen(false);
+            setIncludeEndDate(false);
+          }}
         >
           <ActionForm
             action={logPeriodFormAction}
             className="space-y-4"
-            onSuccess={() => setIsOpen(false)}
+            onSuccess={() => {
+              setIsOpen(false);
+              setIncludeEndDate(false);
+            }}
             refreshOnly
           >
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="periodStart">Start date</Label>
                 <Input
@@ -58,16 +66,24 @@ export function CycleAddPeriod({ selectedIso }: CycleAddPeriodProps) {
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="periodEnd">End date</Label>
-                <Input
-                  id="periodEnd"
-                  name="periodEnd"
-                  type="date"
-                  defaultValue={defaultEnd}
-                  required
+              <label className="flex cursor-pointer items-center gap-2">
+                <Checkbox
+                  checked={includeEndDate}
+                  onChange={(e) => setIncludeEndDate(e.target.checked)}
                 />
-              </div>
+                <span className="text-sm text-[#3a4868]">Add end date (period finished)</span>
+              </label>
+              {includeEndDate && (
+                <div className="space-y-2">
+                  <Label htmlFor="periodEnd">End date</Label>
+                  <Input
+                    id="periodEnd"
+                    name="periodEnd"
+                    type="date"
+                    defaultValue={defaultEnd}
+                  />
+                </div>
+              )}
             </div>
             <SubmitButton label="Save period" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>
