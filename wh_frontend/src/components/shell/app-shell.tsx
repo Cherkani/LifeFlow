@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut, Menu, MessageCircle, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
+import {
+  CircleDot,
+  LogOut,
+  Menu,
+  MessageCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Settings
+} from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -15,9 +23,16 @@ type AppShellProps = {
   accountName: string;
   role: string;
   userLabel: string;
+  showCycleTracking?: boolean;
 };
 
-export function AppShell({ children, accountName, role, userLabel }: AppShellProps) {
+export function AppShell({
+  children,
+  accountName,
+  role,
+  userLabel,
+  showCycleTracking = false
+}: AppShellProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [desktopExpanded, setDesktopExpanded] = useState(true);
@@ -112,6 +127,21 @@ export function AppShell({ children, accountName, role, userLabel }: AppShellPro
               </Link>
             );
           })}
+          {showCycleTracking ? (
+            <Link
+              href="/cycle"
+              className={cn(
+                "mt-3 flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition",
+                pathname === "/cycle" || pathname.startsWith("/cycle")
+                  ? "bg-[#7270a9] text-white shadow-[0_8px_22px_rgba(72,66,126,0.24)]"
+                  : "text-[#5f6586] hover:bg-[#eceff7] hover:text-[#384064]",
+                !desktopExpanded && "md:justify-center md:px-2"
+              )}
+            >
+              <CircleDot size={17} />
+              <span className={cn(!desktopExpanded && "md:hidden")}>Cycle</span>
+            </Link>
+          ) : null}
         </nav>
 
         <div className="relative z-10 mt-auto border-t border-[#dadde9] p-3">
@@ -147,7 +177,7 @@ export function AppShell({ children, accountName, role, userLabel }: AppShellPro
         </div>
       </aside>
 
-      <div className={cn("transition-all duration-200 md:pl-72", !desktopExpanded && "md:pl-20")}>
+      <div className={cn("min-w-0 overflow-x-hidden transition-all duration-200 md:pl-72", !desktopExpanded && "md:pl-20")}>
         <header className="sticky top-0 z-20 border-b border-[#dde1ee] bg-[rgba(247,248,253,0.88)] backdrop-blur">
           <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
             <Button
@@ -167,7 +197,7 @@ export function AppShell({ children, accountName, role, userLabel }: AppShellPro
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">{children}</main>
+        <main className="mx-auto w-full max-w-7xl overflow-x-hidden px-4 py-6 sm:px-6">{children}</main>
       </div>
     </div>
   );

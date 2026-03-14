@@ -19,6 +19,8 @@ export type Database = {
           is_active: boolean;
           created_at: string;
           last_signed_in_at: string | null;
+          cycle_tracking_enabled: boolean;
+          luteal_phase_length: number;
         };
         Insert: {
           id: string;
@@ -29,6 +31,8 @@ export type Database = {
           is_active?: boolean;
           created_at?: string;
           last_signed_in_at?: string | null;
+          cycle_tracking_enabled?: boolean;
+          luteal_phase_length?: number;
         };
         Update: {
           id?: string;
@@ -39,6 +43,8 @@ export type Database = {
           is_active?: boolean;
           created_at?: string;
           last_signed_in_at?: string | null;
+          cycle_tracking_enabled?: boolean;
+          luteal_phase_length?: number;
         };
       };
       accounts: {
@@ -370,6 +376,90 @@ export type Database = {
           event_type?: "meeting" | "important" | "general";
           created_at?: string;
           updated_at?: string;
+        };
+      };
+      period_cycles: {
+        Row: {
+          id: string;
+          user_id: string;
+          period_start: string;
+          period_end: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          period_start: string;
+          period_end: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          period_start?: string;
+          period_end?: string;
+          created_at?: string;
+        };
+      };
+      period_daily_logs: {
+        Row: {
+          id: string;
+          user_id: string;
+          log_date: string;
+          flow_intensity: "spotting" | "light" | "medium" | "heavy" | null;
+          symptoms: string[];
+          moods: string[];
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          log_date: string;
+          flow_intensity?: "spotting" | "light" | "medium" | "heavy" | null;
+          symptoms?: string[];
+          moods?: string[];
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          log_date?: string;
+          flow_intensity?: "spotting" | "light" | "medium" | "heavy" | null;
+          symptoms?: string[];
+          moods?: string[];
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      ovulation_confirmations: {
+        Row: {
+          id: string;
+          user_id: string;
+          confirmed_on: string;
+          method: "opk" | "bbt" | "symptoms" | "monitoring" | "other" | null;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          confirmed_on: string;
+          method?: "opk" | "bbt" | "symptoms" | "monitoring" | "other" | null;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          confirmed_on?: string;
+          method?: "opk" | "bbt" | "symptoms" | "monitoring" | "other" | null;
+          notes?: string | null;
+          created_at?: string;
         };
       };
       finance_categories: {

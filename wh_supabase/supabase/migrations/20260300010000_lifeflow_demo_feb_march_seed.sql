@@ -38,6 +38,17 @@ begin
     timezone = excluded.timezone,
     is_active = true;
 
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'profiles' and column_name = 'cycle_tracking_enabled'
+  ) then
+    update public.profiles
+    set
+      cycle_tracking_enabled = true,
+      luteal_phase_length = 13
+    where id = v_demo_user_id;
+  end if;
+
   select id into v_profile_id from public.profiles where id = v_demo_user_id;
 
   select id into v_account_id
@@ -389,6 +400,33 @@ begin
       (v_space_ai_id, 'link', 'RAG best practices', 'https://docs.llamaindex.ai', 'Reference patterns for indexing and retrieval quality.', '2026-03-08T12:30:00Z', '2026-03-08T12:30:00Z'),
       (v_space_fitness_id, 'note', 'Progressive overload', null, 'Increase volume weekly with one lighter deload week each month.', '2026-02-09T07:40:00Z', '2026-02-09T07:40:00Z'),
       (v_space_fitness_id, 'link', 'Mobility routine', 'https://www.youtube.com/watch?v=L_xrDAtykMI', '15-minute daily mobility flow.', '2026-03-15T06:55:00Z', '2026-03-15T06:55:00Z');
+  end if;
+
+  if to_regclass('public.period_cycles') is not null then
+    delete from public.period_daily_logs where user_id = v_demo_user_id;
+    delete from public.period_cycles where user_id = v_demo_user_id;
+
+    insert into public.period_cycles (user_id, period_start, period_end)
+    values
+      (v_demo_user_id, date '2026-01-15', date '2026-01-19'),
+      (v_demo_user_id, date '2026-02-12', date '2026-02-16');
+
+    insert into public.period_daily_logs (user_id, log_date, flow_intensity, symptoms, notes, moods)
+    values
+      (v_demo_user_id, date '2026-02-12', 'medium', array['cramps', 'fatigue'], 'First day of period', array['tired', 'sensitive']),
+      (v_demo_user_id, date '2026-02-13', 'heavy', array['cramps', 'bloating'], null, array['low energy']),
+      (v_demo_user_id, date '2026-02-14', 'heavy', array['cramps'], null, array['moody']),
+      (v_demo_user_id, date '2026-02-15', 'light', array['fatigue'], null, array['calm']),
+      (v_demo_user_id, date '2026-02-16', 'spotting', '{}', null, array['relieved']),
+      (v_demo_user_id, date '2026-03-09', null, array['cramps'], 'Feeling a bit off today', array['anxious']);
+  end if;
+
+  if to_regclass('public.ovulation_confirmations') is not null then
+    delete from public.ovulation_confirmations where user_id = v_demo_user_id;
+    insert into public.ovulation_confirmations (user_id, confirmed_on, method, notes)
+    values
+      (v_demo_user_id, date '2026-02-26', 'opk', 'Positive OPK followed by temperature shift'),
+      (v_demo_user_id, date '2026-03-26', 'symptoms', 'Cervical fluid + LH strip');
   end if;
 end;
 $$;

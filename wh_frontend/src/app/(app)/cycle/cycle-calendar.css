@@ -1,0 +1,128 @@
+/* react-calendar overrides for cycle tracking */
+.cycle-calendar-wrapper {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cycle-calendar-wrapper .react-calendar {
+  width: 100% !important;
+  min-width: 0;
+  max-width: 100%;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+}
+
+.cycle-calendar-wrapper .react-calendar__navigation {
+  display: none;
+}
+
+/* Use same grid for weekdays and days so headers align with day cells */
+.cycle-calendar-wrapper .react-calendar__month-view__weekdays {
+  display: grid !important;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0 0.2rem;
+  font-weight: 600;
+  font-size: 0.65rem;
+  color: #4a5f83;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+@media (min-width: 640px) {
+  .cycle-calendar-wrapper .react-calendar__month-view__weekdays {
+    gap: 0 0.35rem;
+    font-size: 0.75rem;
+  }
+}
+
+.cycle-calendar-wrapper .react-calendar__month-view__weekdays__weekday {
+  padding: 0.5rem 0;
+  text-align: center;
+}
+
+.cycle-calendar-wrapper .react-calendar__month-view__weekdays__weekday abbr {
+  text-decoration: none;
+}
+
+.cycle-calendar-wrapper .react-calendar__month-view__days {
+  display: grid !important;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.2rem;
+}
+@media (min-width: 640px) {
+  .cycle-calendar-wrapper .react-calendar__month-view__days {
+    gap: 0.35rem;
+  }
+}
+
+.cycle-calendar-wrapper .react-calendar__month-view__days__day {
+  position: relative;
+  padding: 0.2rem;
+  min-height: 2.75rem;
+}
+@media (min-width: 640px) {
+  .cycle-calendar-wrapper .react-calendar__month-view__days__day {
+    padding: 0.35rem;
+    min-height: 3.5rem;
+  }
+}
+
+.cycle-calendar-wrapper .react-calendar__month-view__days__day button {
+  width: 100%;
+  height: 100%;
+  min-height: 2.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.1rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.2rem;
+  font-size: 0.75rem;
+}
+
+/* Keep date number in its own line - prevent overlap with icons/Day label */
+.cycle-calendar-wrapper .react-calendar__month-view__days__day button > abbr {
+  flex-shrink: 0;
+  line-height: 1.1;
+}
+
+@media (min-width: 640px) {
+  .cycle-calendar-wrapper .react-calendar__month-view__days__day button {
+    min-height: 3.25rem;
+    gap: 0.15rem;
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+    font-size: inherit;
+  }
+}
+
+
+.cycle-calendar-wrapper .react-calendar__month-view__days__day--neighboringMonth {
+  color: #8aa0c2;
+}
+
+/* Fertile window - green, override any phase border */
+.cycle-calendar-wrapper .cycle-tile-fertile {
+  border-left-color: #34d399 !important;
+  border-color: #6ee7b7 !important;
+  background-color: #ecfdf5 !important;
+  color: #047857 !important;
+}
+
+/* Phase region indicators - subtle left border line for normal days */
+.cycle-calendar-wrapper .cycle-tile-menstrual {
+  border-left: 3px solid #fda4af !important;
+}
+
+.cycle-calendar-wrapper .cycle-tile-follicular {
+  border-left: 3px solid #7dd3fc !important;
+}
+
+.cycle-calendar-wrapper .cycle-tile-ovulation {
+  border-left: 3px solid #fde047 !important;
+}
+
+.cycle-calendar-wrapper .cycle-tile-luteal {
+  border-left: 3px solid #c4b5fd !important;
+}

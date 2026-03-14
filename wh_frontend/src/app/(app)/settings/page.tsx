@@ -55,6 +55,39 @@ export default async function SettingsPage({
                   </Select>
                 </div>
               </div>
+              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/50 p-4">
+                <input
+                  type="checkbox"
+                  id="cycleTrackingEnabled"
+                  name="cycleTrackingEnabled"
+                  defaultChecked={profile?.cycle_tracking_enabled ?? false}
+                  className="size-4 rounded border-slate-300"
+                />
+                <div>
+                  <Label htmlFor="cycleTrackingEnabled" className="cursor-pointer font-medium">
+                    Enable cycle tracking
+                  </Label>
+                  <p className="text-sm text-slate-500">
+                    Track periods, predictions, and symptoms. Adds Cycle to the sidebar.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lutealPhaseLength">Luteal phase length</Label>
+                <Input
+                  id="lutealPhaseLength"
+                  name="lutealPhaseLength"
+                  type="number"
+                  min={8}
+                  max={20}
+                  step={1}
+                  required
+                  defaultValue={profile?.luteal_phase_length ?? 14}
+                />
+                <p className="text-xs text-slate-500">
+                  Most people ovulate about 14 days before their period. Adjust if you know your typical luteal phase.
+                </p>
+              </div>
               <SubmitButton label="Update profile" pendingLabel="Updating..." className="w-full" />
             </ActionForm>
           </CardContent>

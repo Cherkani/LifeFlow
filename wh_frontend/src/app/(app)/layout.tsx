@@ -11,9 +11,15 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
   const profile = await getProfile(supabase, user.id);
 
   const label = profile?.full_name || profile?.email || user.email || "Member";
+  const showCycleTracking = profile?.cycle_tracking_enabled ?? false;
 
   return (
-    <AppShell accountName={account.accountName} role={account.role} userLabel={label}>
+    <AppShell
+      accountName={account.accountName}
+      role={account.role}
+      userLabel={label}
+      showCycleTracking={showCycleTracking}
+    >
       {children}
     </AppShell>
   );
