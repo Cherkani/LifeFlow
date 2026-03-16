@@ -1,7 +1,7 @@
 {
   "name": "momentum-grid-supabase",
   "version": "1.0.0",
-  "description": "Momentum Grid Supabase backend migrations and tooling",
+  "description": "Momentum Core Supabase backend migrations and tooling",
   "type": "module",
   "scripts": {
     "run-migrations": "node scripts/run-migrations.mjs"

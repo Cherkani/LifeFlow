@@ -1,6 +1,6 @@
-# Momentum Grid
+# Momentum Core
 
-Momentum Grid is a personal productivity platform built with Next.js and Supabase.
+Momentum Core is a personal productivity platform built with Next.js and Supabase.
 
 ## Monorepo Structure
 

@@ -87,7 +87,7 @@ export function AppShell({
 
         <div className="relative z-10 flex h-16 items-center justify-between border-b border-[#dadde9] px-4">
           <Link href="/dashboard" className={cn("text-lg font-semibold tracking-tight", !desktopExpanded && "md:hidden")}>
-            Momentum Grid
+          Momentum Core
           </Link>
           <span className={cn("hidden text-lg font-semibold md:block", desktopExpanded && "md:hidden")}>MG</span>
           <Button

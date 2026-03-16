@@ -6,14 +6,23 @@ import { z } from "zod";
 import type { RedirectResult } from "@/lib/action-with-state";
 import { requireAppContext } from "@/lib/server-context";
 
-const timeSchema = z
-  .string()
-  .optional()
-  .transform((t) => (t && t.trim() && /^\d{2}:\d{2}$/.test(t.trim()) ? t.trim() : null));
+const timeSchema = z.preprocess(
+  (value) => (typeof value === "string" ? value.trim() : ""),
+  z
+    .union([z.literal(""), z.string().regex(/^\d{2}:\d{2}$/, "Invalid time")])
+    .transform((value) => (value === "" ? null : value))
+);
+
+const optionalDateSchema = z.preprocess(
+  (value) => (typeof value === "string" ? value.trim() : ""),
+  z
+    .union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date")])
+    .transform((value) => (value === "" ? null : value))
+);
 
 const createEventSchema = z.object({
   title: z.string().trim().min(2).max(180),
-  eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
+  eventDate: optionalDateSchema,
   eventTime: timeSchema,
   eventType: z.enum(["meeting", "important", "general"]),
   details: z.string().trim().max(1200).optional()
@@ -22,7 +31,7 @@ const createEventSchema = z.object({
 const updateEventSchema = z.object({
   eventId: z.string().uuid(),
   title: z.string().trim().min(2).max(180),
-  eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
+  eventDate: optionalDateSchema,
   eventTime: timeSchema,
   eventType: z.enum(["meeting", "important", "general"]),
   details: z.string().trim().max(1200).optional()
@@ -48,11 +57,12 @@ export async function createCalendarEventAction(formData: FormData) {
   });
 
   if (!payload.success) {
+    console.error("[createCalendarEventAction] Validation failed", payload.error.flatten());
     return { redirectTo: returnPath };
   }
 
   const { supabase, account } = await requireAppContext();
-  await supabase.from("calendar_events").insert({
+  const { error } = await supabase.from("calendar_events").insert({
     account_id: account.accountId,
     title: payload.data.title,
     event_date: payload.data.eventDate,
@@ -61,7 +71,12 @@ export async function createCalendarEventAction(formData: FormData) {
     details: payload.data.details?.trim() ? payload.data.details : null
   });
 
-  revalidatePath("/events");
+  if (error) {
+    console.error("[createCalendarEventAction] Insert failed", error);
+    return { redirectTo: returnPath };
+  }
+
+  revalidatePath("/events", "layout");
   return { redirectTo: returnPath };
 }
 
@@ -104,7 +119,7 @@ export async function updateCalendarEventAction(formData: FormData) {
     return { redirectTo: returnPath };
   }
 
-  revalidatePath("/events");
+  revalidatePath("/events", "layout");
   return { redirectTo: returnPath };
 }
 
@@ -132,7 +147,7 @@ export async function deleteCalendarEventAction(formData: FormData) {
     .eq("id", payload.data.eventId)
     .eq("account_id", account.accountId);
 
-  revalidatePath("/events");
+  revalidatePath("/events", "layout");
   return { redirectTo: returnPath };
 }
 

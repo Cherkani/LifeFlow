@@ -1,4 +1,4 @@
-# Momentum Grid Frontend Architecture
+# Momentum Core Frontend Architecture
 
 ## Stack
 - Next.js 15 (App Router)

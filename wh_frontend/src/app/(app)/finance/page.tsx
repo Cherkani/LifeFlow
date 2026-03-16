@@ -177,6 +177,12 @@ export default async function FinancePage({
     method: p.method,
     notes: p.notes
   }));
+  const periodExpensesForClient = periodExpenses.map((e) => ({
+    id: e.id,
+    category_id: e.category_id,
+    amount: Number(e.amount),
+    occurred_on: e.occurred_on
+  }));
 
   return (
     <div className="space-y-6">
@@ -190,6 +196,7 @@ export default async function FinancePage({
         categoryNameById={categoryNameById}
         debtNameById={debtNameById}
         recentExpenses={recentExpensesForClient}
+        periodExpenses={periodExpensesForClient}
         payments={paymentsForClient}
         debts={debts}
         dailyChartData={dailyChartData}

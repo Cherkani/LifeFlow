@@ -21,7 +21,7 @@ export default async function LoginPage({
     <Card className="auth-card">
       <CardHeader className="space-y-4 pb-5">
         <div className="space-y-1.5">
-          <CardTitle className="auth-title text-2xl">Sign in to Momentum Grid</CardTitle>
+          <CardTitle className="auth-title text-2xl">Sign in to Momentum Core</CardTitle>
           <p className="text-sm text-slate-600">Welcome back. Continue your planning and tracking flow.</p>
         </div>
         <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">

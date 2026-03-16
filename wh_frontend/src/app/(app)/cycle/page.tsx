@@ -85,6 +85,8 @@ function formatPeriodRange(startIso: string, endIso: string | null) {
   return `${start.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 }
 
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
 function periodDurationDays(startIso: string, endIso: string | null) {
   const start = new Date(`${startIso}T00:00:00`).getTime();
   const end = endIso
@@ -94,7 +96,7 @@ function periodDurationDays(startIso: string, endIso: string | null) {
         t.setHours(0, 0, 0, 0);
         return t.getTime();
       })();
-  return Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
+  return Math.round((end - start) / MS_PER_DAY) + 1;
 }
 
 export default async function CyclePage({
@@ -315,6 +317,11 @@ export default async function CyclePage({
   const hasMoods = (selectedLog?.moods?.length ?? 0) > 0;
   const hasLog = Boolean(selectedLog?.flow_intensity || hasSymptoms || hasMoods || selectedLog?.notes);
 
+  const daysUntilNext =
+    predictedNext != null ? Math.max(0, Math.round((predictedNext.getTime() - today.getTime()) / MS_PER_DAY)) : null;
+  const circularProgress =
+    daysUntilNext !== null && avgCycle > 0 ? Math.min(100, Math.max(0, Math.round(((avgCycle - daysUntilNext) / avgCycle) * 100))) : null;
+
   return (
     <div className="min-w-0 overflow-x-hidden space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -355,6 +362,56 @@ export default async function CyclePage({
           </CycleConfirmOvulation>
         </div>
       </div>
+      {predictedNext && daysUntilNext !== null ? (
+        <div className="flex flex-col gap-4 rounded-3xl border border-rose-200 bg-gradient-to-r from-rose-50 via-pink-50 to-white p-4 text-[#7a1c3c] shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="flex items-center gap-4 sm:gap-6">
+            <div className="relative h-24 w-24 flex-shrink-0">
+              <svg viewBox="0 0 120 120" className="h-full w-full">
+                <circle cx="60" cy="60" r="46" className="stroke-rose-100" fill="none" strokeWidth="10" />
+                <circle
+                  cx="60"
+                  cy="60"
+                  r="46"
+                  fill="none"
+                  strokeWidth="10"
+                  className="stroke-[#f05c7a]"
+                  strokeLinecap="round"
+                  strokeDasharray={2 * Math.PI * 46}
+                  strokeDashoffset={
+                    circularProgress !== null ? (1 - circularProgress / 100) * (2 * Math.PI * 46) : 2 * Math.PI * 46
+                  }
+                  transform="rotate(-90 60 60)"
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-[#7a1c3c]">
+                <span className="text-xs font-semibold uppercase tracking-wide text-[#f05c7a]">Days left</span>
+                <span className="text-2xl font-bold text-[#a1133f]">{daysUntilNext}</span>
+                <span className="text-[11px] text-[#7a1c3c]/80">of {avgCycle}d</span>
+              </div>
+              <div className="pointer-events-none absolute inset-1 rounded-full border border-white/70" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-[#b4284c]">Next period</p>
+              <p className="text-2xl font-bold text-[#7a1c3c]">
+                {formatLongDate(predictedNext)}
+              </p>
+              <p className="text-sm text-[#7a1c3c]/80">
+                {daysUntilNext === 0
+                  ? "Expected today"
+                  : daysUntilNext === 1
+                    ? "Starts tomorrow"
+                    : `Starts in ${daysUntilNext} days`}
+              </p>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/60 bg-white/30 px-4 py-3 text-sm text-[#7a1c3c] backdrop-blur-sm sm:text-base">
+            <p className="font-semibold">
+              Day {dayInCycle ?? "–"} of {avgCycle} • {phase ? phase.charAt(0).toUpperCase() + phase.slice(1) : "Cycle"}
+            </p>
+            <p className="text-sm text-[#7a1c3c]/80">Log flow or symptoms to keep predictions accurate.</p>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid min-w-0 gap-4 sm:gap-6 lg:grid-cols-[1fr_1fr]">
         <div className="min-w-0 space-y-6">
@@ -583,22 +640,72 @@ export default async function CyclePage({
             <Card id="periods" className="min-w-0 overflow-hidden">
               <CardContent className="space-y-4 py-4 sm:py-6">
                 <h3 className="text-lg font-semibold text-[#3a4868]">Recent periods</h3>
-                <div className="flex min-w-0 items-center gap-x-2 overflow-x-auto pb-1 ">
-                  {periods.slice(0, 5).map((p, index) => (
-                    <div key={p.id} className="flex items-center gap-2">
-                      <CycleEditPeriod
-                        period={p}
-                        formattedRange={formatPeriodRange(p.period_start, p.period_end)}
-                        durationDays={periodDurationDays(p.period_start, p.period_end)}
-                        periodHref={buildDateHref(p.period_start)}
-                      />
-                      {index < Math.min(periods.length, 5) - 1 && (
-                        <span className="shrink-0 text-rose-300/80" aria-hidden>
-                          – – – –
+                <div className="space-y-6">
+                  {periods.slice(0, 5).map((p, index, array) => {
+                    const nextPeriod = periods[index + 1];
+                    const cycleGap =
+                      nextPeriod && nextPeriod.period_start
+                        ? Math.max(
+                            0,
+                            Math.round(
+                              (new Date(p.period_start).getTime() - new Date(nextPeriod.period_start).getTime()) /
+                                (1000 * 60 * 60 * 24)
+                            )
+                          )
+                        : null;
+                    return (
+                      <div key={p.id} className="relative pl-7 sm:pl-12">
+                        {index < array.length - 1 ? (
+                          <span className="absolute left-[10px] top-6 block h-[calc(100%-1rem)] w-[2px] rounded-full bg-gradient-to-b from-rose-200 to-transparent sm:left-[18px]" aria-hidden />
+                        ) : null}
+                        <span className="absolute left-1 top-2 flex size-5 items-center justify-center rounded-full border border-white bg-rose-100 text-[10px] font-semibold text-rose-600 shadow-sm sm:left-3 sm:size-6">
+                          {index + 1}
                         </span>
-                      )}
-                    </div>
-                  ))}
+                        <div className="rounded-2xl border border-rose-100 bg-gradient-to-r from-rose-50/60 to-pink-50/40 p-3 shadow-sm sm:p-4">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex flex-1 flex-col gap-2">
+                              <CycleEditPeriod
+                                period={p}
+                                formattedRange={formatPeriodRange(p.period_start, p.period_end)}
+                                durationDays={periodDurationDays(p.period_start, p.period_end)}
+                                periodHref={buildDateHref(p.period_start)}
+                              />
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-[#4a5f83]">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-white/70 px-2 py-1 font-semibold text-rose-600 shadow-sm">
+                                  {periodDurationDays(p.period_start, p.period_end)} day period
+                                </span>
+                                {cycleGap ? (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-white/70 px-2 py-1 font-semibold text-[#1f2b4d] shadow-sm">
+                                    Cycle gap {cycleGap}d
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-white/70 px-2 py-1 font-semibold text-[#1f2b4d] shadow-sm">
+                                    Latest cycle
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="w-full border-t border-rose-100/70 pt-3 text-xs text-[#4a5f83] sm:w-auto sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
+                              <p className="font-semibold text-[#1f2b4d]">
+                                {new Date(p.period_start).toLocaleDateString("en-US", {
+                                  weekday: "long",
+                                  month: "short",
+                                  day: "numeric"
+                                })}
+                              </p>
+                              {p.period_end ? (
+                                <p>
+                                  Ended {new Date(p.period_end).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                </p>
+                              ) : (
+                                <p>Ongoing</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>

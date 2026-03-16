@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowDownRight, ArrowUpRight, Pencil, Plus, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -61,6 +61,13 @@ type ExpenseRow = {
   notes: string | null;
 };
 
+type PeriodExpenseRow = {
+  id: string;
+  category_id: string | null;
+  amount: number;
+  occurred_on: string;
+};
+
 function money(amount: number, currencyCode: string) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -74,6 +81,24 @@ function toDateInputValue(date: Date) {
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+function enumerateIsoDates(rangeStartIso: string, rangeEndIso: string) {
+  const dates: string[] = [];
+  const start = new Date(`${rangeStartIso}T00:00:00`);
+  const end = new Date(`${rangeEndIso}T00:00:00`);
+  for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+    dates.push(cursor.toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
+function formatDayLabel(isoDate: string, period: "day" | "week" | "month") {
+  const date = new Date(`${isoDate}T00:00:00`);
+  if (period === "week") {
+    return date.toLocaleDateString("en-US", { weekday: "short" });
+  }
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function buildFinanceHref(options?: {
@@ -103,6 +128,7 @@ type FinanceModalsProps = {
   categoryNameById: Record<string, string>;
   debtNameById: Record<string, string>;
   recentExpenses: ExpenseRow[];
+  periodExpenses: PeriodExpenseRow[];
   payments: PaymentRow[];
   debts: DebtRow[];
   dailyChartData: Array<{ day: string; amount: number }>;
@@ -130,6 +156,7 @@ export function FinanceModals({
   categoryNameById,
   debtNameById,
   recentExpenses,
+  periodExpenses,
   payments,
   debts,
   dailyChartData,
@@ -152,16 +179,72 @@ export function FinanceModals({
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [debtEntryMode, setDebtEntryMode] = useState<"debt" | "payment">("debt");
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+  const [recentSearch, setRecentSearch] = useState("");
 
   const editingExpense = editingExpenseId ? recentExpenses.find((e) => e.id === editingExpenseId) ?? null : null;
 
   const baseHref = buildFinanceHref({ tab, period, anchor: anchorIso });
   const editingCategory = editingCategoryId ? categories.find((c) => c.id === editingCategoryId) : null;
+  const activeCategoryName = activeCategoryId ? categoryNameById[activeCategoryId] ?? null : null;
+
+  const timelineDates = useMemo(() => enumerateIsoDates(rangeStartIso, rangeEndIso), [rangeStartIso, rangeEndIso]);
+  const filteredDailyChartData = useMemo(() => {
+    if (!activeCategoryId) {
+      return dailyChartData;
+    }
+    const totals = new Map<string, number>();
+    for (const expense of periodExpenses) {
+      if (expense.category_id !== activeCategoryId) continue;
+      totals.set(expense.occurred_on, (totals.get(expense.occurred_on) ?? 0) + Number(expense.amount));
+    }
+    return timelineDates.map((isoDate) => ({
+      day: formatDayLabel(isoDate, period),
+      amount: Number((totals.get(isoDate) ?? 0).toFixed(2))
+    }));
+  }, [activeCategoryId, dailyChartData, periodExpenses, timelineDates, period]);
+
+  const filteredCategoryChartData = useMemo(() => {
+    if (!activeCategoryId) {
+      return categoryChartData;
+    }
+    const category = categoryMetrics.find((entry) => entry.id === activeCategoryId);
+    if (!category) {
+      return categoryChartData;
+    }
+    return [
+      {
+        name: category.name,
+        spent: Number(category.spent.toFixed(2)),
+        limit: Number(category.limit.toFixed(2))
+      }
+    ];
+  }, [activeCategoryId, categoryChartData, categoryMetrics]);
+
+  const normalizedSearch = recentSearch.trim().toLowerCase();
+  const filteredRecentExpenses = useMemo(() => {
+    const categoryFiltered = activeCategoryId
+      ? recentExpenses.filter((entry) => entry.category_id === activeCategoryId)
+      : recentExpenses;
+    if (!normalizedSearch) {
+      return categoryFiltered;
+    }
+    return categoryFiltered.filter((entry) => {
+      const categoryLabel = (categoryNameById[entry.category_id ?? ""] ?? "Expense").toLowerCase();
+      const note = (entry.notes ?? "").toLowerCase();
+      return (
+        categoryLabel.includes(normalizedSearch) ||
+        note.includes(normalizedSearch) ||
+        entry.occurred_on.includes(normalizedSearch)
+      );
+    });
+  }, [activeCategoryId, recentExpenses, normalizedSearch, categoryNameById]);
 
   const closeModal = () => {
     setActiveModal(null);
     setEditingCategoryId(null);
     setEditingExpenseId(null);
+    setActiveCategoryId(null);
   };
 
   return (
@@ -310,20 +393,72 @@ export function FinanceModals({
             </Card>
           </div>
 
+          {categories.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Filter by category</CardTitle>
+                <p className="text-sm text-[#4a5f83]">
+                  {activeCategoryName ? `Showing data for ${activeCategoryName}` : "Showing all categories"}
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveCategoryId(null)}
+                    className={[
+                      "rounded-full border px-3 py-1 text-sm font-medium transition",
+                      activeCategoryId === null
+                        ? "border-[#0b1f3b] bg-[#0b1f3b] text-white"
+                        : "border-[#c7d3e8] bg-white text-[#23406d] hover:bg-[#f2f6ff]"
+                    ].join(" ")}
+                  >
+                    All categories
+                  </button>
+                  {categories.map((category) => (
+                    <button
+                      type="button"
+                      key={category.id}
+                      onClick={() =>
+                        setActiveCategoryId((current) => (current === category.id ? null : category.id))
+                      }
+                      className={[
+                        "rounded-full border px-3 py-1 text-sm font-medium transition",
+                        activeCategoryId === category.id
+                          ? "border-[#0b1f3b] bg-[#0b1f3b] text-white"
+                          : "border-[#c7d3e8] bg-white text-[#23406d] hover:bg-[#f2f6ff]"
+                      ].join(" ")}
+                    >
+                      {category.name}
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <FinanceCharts
-            dailyExpenses={dailyChartData}
-            categories={categoryChartData}
+            dailyExpenses={filteredDailyChartData}
+            categories={filteredCategoryChartData}
             currencyCode={currencyCode}
           />
 
           <Card>
-            <CardHeader>
-              <CardTitle>Recent expenses</CardTitle>
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle>
+                Recent expenses{activeCategoryName ? ` · ${activeCategoryName}` : ""}
+              </CardTitle>
+              <Input
+                value={recentSearch}
+                onChange={(event) => setRecentSearch(event.target.value)}
+                placeholder="Search notes or category"
+                className="w-full max-w-xs"
+              />
             </CardHeader>
             <CardContent>
-              {recentExpenses.length > 0 ? (
+              {filteredRecentExpenses.length > 0 ? (
                 <div className="space-y-3">
-                  {recentExpenses.map((entry) => (
+                  {filteredRecentExpenses.map((entry) => (
                     <div key={entry.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#c7d3e8] bg-[#f8fbff] p-3">
                       <div>
                         <p className="text-sm font-semibold text-[#0c1d3c]">
@@ -366,7 +501,9 @@ export function FinanceModals({
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-[#4a5f83]">No expenses yet.</p>
+                <p className="text-sm text-[#4a5f83]">
+                  {activeCategoryName ? `No expenses recorded in ${activeCategoryName}.` : "No expenses yet."}
+                </p>
               )}
             </CardContent>
           </Card>

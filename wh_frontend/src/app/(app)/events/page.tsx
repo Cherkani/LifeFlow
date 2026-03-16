@@ -1,13 +1,15 @@
 import type { Route } from "next";
 import Link from "next/link";
-import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { getCalendarEvents } from "@/lib/queries";
+import { getCalendarEvents, getCalendarUndatedEvents } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
 
 import { EventsAddEvent } from "./events-add-event";
-import { EventsList } from "./events-list";
+import { EventsSidePanel } from "./events-side-panel";
+
+export const dynamic = "force-dynamic";
 
 type EventsSearchParams = Promise<{
   month?: string;
@@ -18,7 +20,7 @@ type CalendarEvent = {
   id: string;
   title: string;
   details: string | null;
-  event_date: string;
+  event_date: string | null;
   event_time: string | null;
   event_type: "meeting" | "important" | "general";
 };
@@ -87,9 +89,11 @@ export default async function EventsPage({
     formatDateKey(monthStart),
     formatDateKey(monthEnd)
   )) as CalendarEvent[];
+  const backlogEvents = (await getCalendarUndatedEvents(supabase, account.accountId)) as CalendarEvent[];
 
   const eventsByDate = new Map<string, CalendarEvent[]>();
   for (const event of events) {
+    if (!event.event_date) continue;
     const existing = eventsByDate.get(event.event_date) ?? [];
     existing.push(event);
     eventsByDate.set(event.event_date, existing);
@@ -111,6 +115,7 @@ export default async function EventsPage({
   });
 
   const selectedEvents = eventsByDate.get(selectedIso) ?? [];
+  const selectedDateLabel = formatLongDate(selectedDate);
 
   return (
     <div className="space-y-6">
@@ -184,12 +189,13 @@ export default async function EventsPage({
 
         <Card>
           <CardContent className="space-y-4 py-6">
-            <h2 className="flex items-center gap-2 text-4xl font-semibold text-[#0c1d3c]">
-              <CalendarDays size={24} className="text-[#c38f4f]" />
-              Events for {formatLongDate(selectedDate)}
-            </h2>
-
-            <EventsList events={selectedEvents} monthKey={monthKey} selectedIso={selectedIso} />
+            <EventsSidePanel
+              scheduledEvents={selectedEvents}
+              backlogEvents={backlogEvents}
+              monthKey={monthKey}
+              selectedIso={selectedIso}
+              selectedDateLabel={selectedDateLabel}
+            />
           </CardContent>
         </Card>
       </div>

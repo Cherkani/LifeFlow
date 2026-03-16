@@ -59,7 +59,7 @@ export default async function DashboardPage() {
         <CardContent className="relative space-y-4 py-8">
           <div className="absolute right-0 top-0 h-28 w-28 rounded-bl-full bg-[#dbe5f7]" />
           <div className="absolute bottom-0 left-0 h-20 w-20 rounded-tr-full bg-[#e8eefb]" />
-          <h1 className="relative text-4xl font-bold tracking-tight text-[#0b1f3b]">Welcome back, Momentum Grid</h1>
+          <h1 className="relative text-4xl font-bold tracking-tight text-[#0b1f3b]">Welcome back, Momentum Core</h1>
           <p className="relative max-w-3xl text-base text-[#4a5f83]">
             Build objectives, execute tasks, monitor spend, and inspect results from one command center.
           </p>

@@ -65,7 +65,6 @@ export function CycleCalendar({
   const predEndIso = predictedNextIso
     ? formatDateKey(new Date(new Date(predictedNextIso).getTime() + 5 * 24 * 60 * 60 * 1000))
     : null;
-
   const confirmedSet = useMemo(() => new Set(confirmedOvulationIsos), [confirmedOvulationIsos]);
   const getTileStatus = useCallback(
     (date: Date) => {
@@ -149,7 +148,7 @@ export function CycleCalendar({
           "!border-[#e4e8f5] !bg-white hover:!bg-[#e3ebf9] hover:!scale-105"
       );
     },
-    [getTileStatus, getPhaseForTile, monthStart, selectedIso]
+    [getTileStatus, getPhaseForTile, monthStart]
   );
 
   const tileContent = useCallback(

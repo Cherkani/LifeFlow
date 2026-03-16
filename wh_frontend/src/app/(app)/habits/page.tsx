@@ -10,6 +10,7 @@ import {
 import { ExecutionBoard } from "@/app/(app)/habits/execution-board";
 import { WeekResetModal } from "@/app/(app)/habits/week-reset-modal";
 import { DailyObjectiveChart } from "@/app/(app)/habits/daily-objective-chart";
+import { CategoryObjectiveChart } from "@/app/(app)/habits/category-objective-chart";
 import { ActionForm } from "@/components/forms/action-form";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,7 @@ type HabitsSearchParams = Promise<{
   week?: string;
   session?: string;
   logDate?: string;
+  objectiveId?: string;
 }>;
 
 type Category = {
@@ -74,6 +76,7 @@ function weekHref(
   options?: {
     sessionId?: string;
     logDate?: string;
+    objectiveId?: string;
   }
 ) {
   const query = new URLSearchParams();
@@ -83,6 +86,9 @@ function weekHref(
   }
   if (options?.logDate) {
     query.set("logDate", options.logDate);
+  }
+  if (options?.objectiveId) {
+    query.set("objectiveId", options.objectiveId);
   }
   return `/habits?${query.toString()}` as Route;
 }
@@ -105,6 +111,7 @@ export default async function HabitsPage({
   const weekEndIso = formatWeekKey(selectedWeekEnd);
   const monthStart = new Date(selectedWeekStart.getFullYear(), selectedWeekStart.getMonth(), 1).toISOString().slice(0, 10);
   const monthEnd = new Date(selectedWeekStart.getFullYear(), selectedWeekStart.getMonth() + 1, 0).toISOString().slice(0, 10);
+  const selectedObjectiveId = typeof params.objectiveId === "string" ? params.objectiveId : undefined;
 
   const previousWeek = new Date(selectedWeekStart);
   previousWeek.setDate(previousWeek.getDate() - 7);
@@ -144,18 +151,26 @@ export default async function HabitsPage({
   }
 
 
-  const weekPlannedMinutes = sessions.reduce((sum, session) => sum + session.planned_minutes, 0);
-  const weekDoneMinutes = sessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
+  const filteredSessions =
+    selectedObjectiveId && selectedObjectiveId !== ""
+      ? sessions.filter((session) => {
+          const category = categoryById.get(session.habit_id);
+          return category?.objective_id === selectedObjectiveId;
+        })
+      : sessions;
+
+  const weekPlannedMinutes = filteredSessions.reduce((sum, session) => sum + session.planned_minutes, 0);
+  const weekDoneMinutes = filteredSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
   const monthDoneMinutes = monthSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
-  const plannedSessions = sessions.filter((session) => session.planned_minutes > 0);
+  const plannedSessions = filteredSessions.filter((session) => session.planned_minutes > 0);
   const weekCompletion =
     plannedSessions.length > 0 ? Math.round((plannedSessions.filter((session) => session.completed).length / plannedSessions.length) * 100) : 0;
-  const compensationMinutes = sessions
+  const compensationMinutes = filteredSessions
     .filter((session) => session.planned_minutes === 0)
     .reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
 
   const sessionsByDate = new Map<string, Session[]>();
-  for (const session of sessions) {
+  for (const session of filteredSessions) {
     const list = sessionsByDate.get(session.session_date) ?? [];
     list.push(session);
     sessionsByDate.set(session.session_date, list);
@@ -168,32 +183,128 @@ export default async function HabitsPage({
   });
 
   const todayKey = formatWeekKey(new Date());
-  const dailyChart = weekDates.map((dateKey) => {
-    const daySessions = sessionsByDate.get(dateKey) ?? [];
-    const dayPlannedSessions = daySessions.filter((session) => session.planned_minutes > 0);
-    const plannedMinutes = dayPlannedSessions.reduce((sum, session) => sum + session.planned_minutes, 0);
-    const doneMinutes = daySessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
-    const doneWithinPlan = Math.min(doneMinutes, plannedMinutes);
-    const remainingMinutes = Math.max(plannedMinutes - doneWithinPlan, 0);
-    const overrunMinutes = Math.max(doneMinutes - plannedMinutes, 0);
+  const dayObjectiveTotals = new Map<
+    string,
+    Map<
+      string,
+      {
+        objectiveId: string;
+        label: string;
+        plannedMinutes: number;
+        doneMinutes: number;
+      }
+    >
+  >();
+  for (const session of filteredSessions) {
+    const dateKey = session.session_date;
+    const category = categoryById.get(session.habit_id);
+    if (!category) continue;
+    const objective = category.objective_id ? objectiveById.get(category.objective_id) : undefined;
+    const objectiveId = objective?.id ?? `unassigned-${category.id}`;
+    const label = objective?.title ?? `${category.title} (No objective)`;
+    const dayMap = dayObjectiveTotals.get(dateKey) ?? new Map<string, { objectiveId: string; label: string; plannedMinutes: number; doneMinutes: number }>();
+    if (!dayObjectiveTotals.has(dateKey)) {
+      dayObjectiveTotals.set(dateKey, dayMap);
+    }
+    const existing =
+      dayMap.get(objectiveId) ?? {
+        objectiveId,
+        label,
+        plannedMinutes: 0,
+        doneMinutes: 0
+      };
+    const plannedContribution = session.planned_minutes > 0 ? session.planned_minutes : 0;
+    const doneContribution = session.actual_minutes ?? 0;
+    existing.plannedMinutes += plannedContribution;
+    existing.doneMinutes += doneContribution;
+    dayMap.set(objectiveId, existing);
+  }
+  const dailyChartData = weekDates.map((dateKey) => {
+    const label = weekdayName(dateKey);
+    const dayMap = dayObjectiveTotals.get(dateKey) ?? new Map();
+    const objectives = Array.from(dayMap.values()).map((entry) => {
+      const doneWithinPlan = Math.min(entry.doneMinutes, entry.plannedMinutes);
+      const remainingMinutes = Math.max(entry.plannedMinutes - doneWithinPlan, 0);
+      const overrunMinutes = Math.max(entry.doneMinutes - entry.plannedMinutes, 0);
+      return {
+        objectiveId: entry.objectiveId,
+        label: entry.label,
+        plannedMinutes: entry.plannedMinutes,
+        doneMinutes: entry.doneMinutes,
+        doneWithinPlan,
+        remainingMinutes,
+        overrunMinutes
+      };
+    });
+    const plannedMinutes = objectives.reduce((sum, entry) => sum + entry.plannedMinutes, 0);
+    const doneMinutes = objectives.reduce((sum, entry) => sum + entry.doneMinutes, 0);
+    const doneWithinPlan = objectives.reduce((sum, entry) => sum + entry.doneWithinPlan, 0);
+    const remainingMinutes = objectives.reduce((sum, entry) => sum + entry.remainingMinutes, 0);
+    const overrunMinutes = objectives.reduce((sum, entry) => sum + entry.overrunMinutes, 0);
     return {
       dateKey,
-      label: weekdayName(dateKey),
+      day: label,
       plannedMinutes,
       doneMinutes,
       doneWithinPlan,
       remainingMinutes,
-      overrunMinutes
+      overrunMinutes,
+      objectives
     };
   });
-  const dailyChartData = dailyChart.map((day) => ({
-    day: day.label,
-    plannedMinutes: day.plannedMinutes,
-    doneWithinPlan: day.doneWithinPlan,
-    remainingMinutes: day.remainingMinutes,
-    overrunMinutes: day.overrunMinutes,
-    doneMinutes: day.doneMinutes
-  }));
+  const hasDailyChartData = dailyChartData.some((day) => day.plannedMinutes > 0 || day.doneMinutes > 0);
+
+  const objectiveChartMap = new Map<
+    string,
+    {
+      objectiveId: string;
+      label: string;
+      plannedMinutes: number;
+      doneMinutes: number;
+      doneWithinPlan: number;
+      remainingMinutes: number;
+      overrunMinutes: number;
+    }
+  >();
+  for (const session of filteredSessions) {
+    const category = categoryById.get(session.habit_id);
+    if (!category) continue;
+    const objective = category.objective_id ? objectiveById.get(category.objective_id) : undefined;
+    const objectiveId = objective?.id ?? `unassigned-${category.id}`;
+    const label = objective?.title ?? `${category.title} (No objective)`;
+    const existing = objectiveChartMap.get(objectiveId) ?? {
+      objectiveId,
+      label,
+      plannedMinutes: 0,
+      doneMinutes: 0,
+      doneWithinPlan: 0,
+      remainingMinutes: 0,
+      overrunMinutes: 0
+    };
+    const planned = session.planned_minutes;
+    const done = session.actual_minutes ?? 0;
+    const doneWithinPlan = Math.min(done, planned);
+    const remaining = Math.max(planned - doneWithinPlan, 0);
+    const overrun = Math.max(done - planned, 0);
+    existing.plannedMinutes += planned;
+    existing.doneMinutes += done;
+    existing.doneWithinPlan += doneWithinPlan;
+    existing.remainingMinutes += remaining;
+    existing.overrunMinutes += overrun;
+    objectiveChartMap.set(objectiveId, existing);
+  }
+  const objectiveChartData = Array.from(objectiveChartMap.values())
+    .map((entry) => ({
+      objectiveId: entry.objectiveId,
+      label: entry.label,
+      plannedMinutes: entry.plannedMinutes,
+      doneWithinPlan: entry.doneWithinPlan,
+      remainingMinutes: entry.remainingMinutes,
+      overrunMinutes: entry.overrunMinutes,
+      doneMinutes: entry.doneMinutes
+    }))
+    .sort((a, b) => b.plannedMinutes - a.plannedMinutes);
+
 
   return (
     <div className="space-y-6">
@@ -225,6 +336,7 @@ export default async function HabitsPage({
                 defaultValue={weekStartIso}
                 className="h-8 rounded-md border border-[#c7d3e8] bg-white px-2 text-sm text-[#0c1d3c] focus:border-[#1e3a6d] focus:ring-2 focus:ring-[#d6e0f2]"
               />
+              {selectedObjectiveId ? <input type="hidden" name="objectiveId" value={selectedObjectiveId} /> : null}
               <button type="submit" className="inline-flex h-8 items-center justify-center rounded-md border border-[#c7d3e8] bg-[#f8fbff] px-3 font-semibold text-[#23406d] transition hover:bg-[#edf3ff]">
                 Go
               </button>
@@ -280,6 +392,7 @@ export default async function HabitsPage({
             <Badge variant="secondary">Completion: {weekCompletion}%</Badge>
             {compensationMinutes > 0 ? <Badge variant="warning">Compensation: +{compensationMinutes} min</Badge> : null}
           </div>
+
         </CardContent>
       </Card>
 
@@ -294,7 +407,7 @@ export default async function HabitsPage({
         categories={categories}
         objectives={objectives}
         todayKey={todayKey}
-        weekHref={weekHref(selectedWeekStart)}
+        weekHref={weekHref(selectedWeekStart, selectedObjectiveId ? { objectiveId: selectedObjectiveId } : undefined)}
       />
 
       <Card>
@@ -302,11 +415,20 @@ export default async function HabitsPage({
           <CardTitle>Daily Objective Bars</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {dailyChart.every((day) => day.plannedMinutes === 0 && day.doneMinutes === 0) ? (
+          {!hasDailyChartData ? (
             <p className="text-sm text-[#4a5f83]">No planned tasks this week yet.</p>
           ) : (
             <DailyObjectiveChart data={dailyChartData} />
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Category Objective Bars</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <CategoryObjectiveChart data={objectiveChartData} />
         </CardContent>
       </Card>
 

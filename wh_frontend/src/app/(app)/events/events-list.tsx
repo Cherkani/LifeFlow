@@ -19,7 +19,7 @@ type CalendarEvent = {
   id: string;
   title: string;
   details: string | null;
-  event_date: string;
+  event_date: string | null;
   event_time: string | null;
   event_type: "meeting" | "important" | "general";
 };
@@ -28,6 +28,7 @@ type EventsListProps = {
   events: CalendarEvent[];
   monthKey: string;
   selectedIso: string;
+  emptyMessage?: string;
 };
 
 function formatTime(time: string) {
@@ -45,9 +46,10 @@ function buildEventsHref(month: string, date: string) {
   return `/events?${query.toString()}`;
 }
 
-export function EventsList({ events, monthKey, selectedIso }: EventsListProps) {
+export function EventsList({ events, monthKey, selectedIso, emptyMessage }: EventsListProps) {
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const returnPath = buildEventsHref(monthKey, selectedIso);
+  const fallbackEmptyMessage = emptyMessage ?? "No events scheduled for this day.";
 
   return (
     <>
@@ -99,7 +101,7 @@ export function EventsList({ events, monthKey, selectedIso }: EventsListProps) {
           ))}
         </ul>
       ) : (
-        <p className="rounded-lg bg-[#eef3fb] p-3 text-sm text-[#4a5f83]">No events scheduled for this day.</p>
+        <p className="rounded-lg bg-[#eef3fb] p-3 text-sm text-[#4a5f83]">{fallbackEmptyMessage}</p>
       )}
 
       {editingEvent ? (
@@ -128,13 +130,12 @@ export function EventsList({ events, monthKey, selectedIso }: EventsListProps) {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="editEventDate">Date</Label>
+                <Label htmlFor="editEventDate">Date (optional)</Label>
                 <Input
                   id="editEventDate"
                   name="eventDate"
                   type="date"
-                  required
-                  defaultValue={editingEvent.event_date}
+                  defaultValue={editingEvent.event_date ?? ""}
                 />
               </div>
               <div className="space-y-2">
