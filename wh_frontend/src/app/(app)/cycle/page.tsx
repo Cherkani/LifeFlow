@@ -1,6 +1,17 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { CalendarDays, ChevronDown, Flower2, HelpCircle } from "lucide-react";
+import {
+  Calendar,
+  CalendarCheck,
+  CalendarClock,
+  CalendarDays,
+  ChevronDown,
+  Droplet,
+  Flower2,
+  HelpCircle,
+  Sparkles,
+  TrendingUp
+} from "lucide-react";
 
 import {
   averageCycleLength,
@@ -106,6 +117,7 @@ export default async function CyclePage({
 }) {
   const params = await searchParams;
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const selectedDate =
     typeof params.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(params.date)
       ? new Date(`${params.date}T00:00:00`)
@@ -186,16 +198,54 @@ export default async function CyclePage({
     const end = p.period_end ?? todayIso;
     return selectedIso >= p.period_start && selectedIso <= end;
   });
+  /* Is today inside an active period? Prefer a period that clearly contains today; if "next period" is today,
+   * also treat an ongoing period (no end) that started in the last 14 days as current so we show "Day 6" not "Day 1". */
+  const periodContainingToday =
+    periods.find((p) => {
+      const end = p.period_end ?? todayIso;
+      return todayIso >= p.period_start && todayIso <= end;
+    }) ??
+    periods.find((p) => {
+      if (p.period_end != null) return false;
+      const start = new Date(p.period_start + "T00:00:00");
+      const daysSinceStart = (today.getTime() - start.getTime()) / MS_PER_DAY;
+      return daysSinceStart >= 0 && daysSinceStart <= 14 && todayIso >= p.period_start;
+    });
+  const todayInPeriod = Boolean(periodContainingToday);
+  const dayOfPeriod =
+    periodContainingToday
+      ? Math.max(
+          1,
+          Math.floor(
+            (today.getTime() - new Date(periodContainingToday.period_start + "T00:00:00").getTime()) / MS_PER_DAY
+          ) + 1
+        )
+      : null;
+  const daysRemainingInPeriod =
+    periodContainingToday?.period_end
+      ? Math.max(
+          0,
+          Math.round(
+            (new Date(periodContainingToday.period_end + "T00:00:00").getTime() - today.getTime()) / MS_PER_DAY
+          )
+        )
+      : null;
   const periodRanges = periods.map((p) => ({
     start: p.period_start,
     end: p.period_end ?? todayIso
   }));
 
-  /* Use all period starts (newest first) for cycle length and predictions. Include ongoing periods
-   * so lastPeriodStart reflects the current cycle and predictions use the most recent start. */
-  const periodStarts = periods.map((p) => new Date(p.period_start));
+  /* Use all period starts (newest first) for cycle length and predictions. Normalize to midnight for comparisons. */
+  const periodStarts = periods.map((p) => {
+    const d = new Date(p.period_start);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
   const avgCycle = averageCycleLength(periodStarts);
-  const lastPeriodStart = periodStarts[0] ?? null;
+  /* Use the most recent period start that is on or before today for prediction.
+   * Otherwise a future-dated or mis-entered period would show "52 days left" instead of the real count. */
+  const lastPeriodStart =
+    periodStarts.find((d) => d.getTime() <= today.getTime()) ?? periodStarts[0] ?? null;
   const predictedNext = lastPeriodStart ? predictNextPeriod(lastPeriodStart, avgCycle) : null;
   const estimatedOvulation = predictedNext ? ovulationDate(predictedNext, lutealPhaseLength) : null;
   const cycleConfirmation =
@@ -317,19 +367,35 @@ export default async function CyclePage({
   const hasMoods = (selectedLog?.moods?.length ?? 0) > 0;
   const hasLog = Boolean(selectedLog?.flow_intensity || hasSymptoms || hasMoods || selectedLog?.notes);
 
+  /* Use UTC date for "today" so days left is consistent globally (same result in any timezone). */
+  const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  const predictedNextUTC =
+    predictedNext
+      ? new Date(
+          Date.UTC(predictedNext.getUTCFullYear(), predictedNext.getUTCMonth(), predictedNext.getUTCDate())
+        )
+      : null;
   const daysUntilNext =
-    predictedNext != null ? Math.max(0, Math.round((predictedNext.getTime() - today.getTime()) / MS_PER_DAY)) : null;
+    predictedNextUTC != null
+      ? Math.max(0, Math.round((predictedNextUTC.getTime() - todayUTC.getTime()) / MS_PER_DAY))
+      : null;
+  /* Circle = time remaining: full when many days left, empty when 0 days left. */
   const circularProgress =
-    daysUntilNext !== null && avgCycle > 0 ? Math.min(100, Math.max(0, Math.round(((avgCycle - daysUntilNext) / avgCycle) * 100))) : null;
+    daysUntilNext !== null && avgCycle > 0 ? Math.min(100, Math.max(0, Math.round((daysUntilNext / avgCycle) * 100))) : null;
 
   return (
     <div className="min-w-0 overflow-x-hidden space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-[#3a4868] sm:text-4xl">Cycle</h1>
-          <p className="mt-1 text-sm text-[#4a5f83] sm:text-base">
-            Track your period, view predictions, and log symptoms.
-          </p>
+        <div className="min-w-0 flex items-start gap-3">
+          <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-100 to-pink-100 text-rose-600 sm:size-14">
+            <Droplet size={28} className="sm:w-8 sm:h-8" aria-hidden />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-[#3a4868] sm:text-4xl">Cycle</h1>
+            <p className="mt-1 text-sm text-[#4a5f83] sm:text-base">
+              Track your period, view predictions, and log symptoms.
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <CycleAddPeriod selectedIso={selectedIso} />
@@ -362,7 +428,78 @@ export default async function CyclePage({
           </CycleConfirmOvulation>
         </div>
       </div>
-      {predictedNext && daysUntilNext !== null ? (
+      {todayInPeriod ? (
+        <div className="flex flex-col gap-4 rounded-3xl border border-rose-200 bg-gradient-to-r from-rose-50 via-pink-50 to-white p-4 text-[#7a1c3c] shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="flex items-center gap-4 sm:gap-6">
+            <div className="relative h-24 w-24 flex-shrink-0">
+              <svg viewBox="0 0 120 120" className="h-full w-full">
+                <circle cx="60" cy="60" r="46" className="stroke-rose-100" fill="none" strokeWidth="10" />
+                <circle
+                  cx="60"
+                  cy="60"
+                  r="46"
+                  fill="none"
+                  strokeWidth="10"
+                  className="stroke-[#f05c7a]"
+                  strokeLinecap="round"
+                  strokeDasharray={2 * Math.PI * 46}
+                  strokeDashoffset={0}
+                  transform="rotate(-90 60 60)"
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-[#7a1c3c]">
+                {daysRemainingInPeriod !== null ? (
+                  <>
+                    <span className="text-xs font-semibold uppercase tracking-wide text-[#f05c7a]">Days left</span>
+                    <span className="text-2xl font-bold text-[#a1133f]">{daysRemainingInPeriod}</span>
+                    <span className="text-[11px] text-[#7a1c3c]/80">in period</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs font-semibold uppercase tracking-wide text-[#f05c7a]">Your period</span>
+                    <span className="text-2xl font-bold text-[#a1133f]">Day {dayOfPeriod}</span>
+                    <span className="text-[11px] text-[#7a1c3c]/80">Add end when finished</span>
+                  </>
+                )}
+              </div>
+              <div className="pointer-events-none absolute inset-1 rounded-full border border-white/70" />
+            </div>
+            <div>
+              <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[#b4284c]">
+                <Droplet size={16} className="shrink-0" aria-hidden />
+                Period in progress
+              </p>
+              <p className="text-2xl font-bold text-[#7a1c3c]">
+                {periodContainingToday
+                  ? formatPeriodRange(periodContainingToday.period_start, periodContainingToday.period_end)
+                  : "–"}
+              </p>
+              <p className="text-sm text-[#7a1c3c]/80">
+                {daysRemainingInPeriod !== null
+                  ? daysRemainingInPeriod === 0
+                    ? "Last day of period."
+                    : `${daysRemainingInPeriod} day${daysRemainingInPeriod === 1 ? "" : "s"} left until end.`
+                  : "Log flow or symptoms. Add end date when it finishes."}
+              </p>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/60 bg-white/30 px-4 py-3 text-sm text-[#7a1c3c] backdrop-blur-sm sm:text-base">
+            <p className="font-semibold">
+              Day {dayOfPeriod} of period
+              {periodContainingToday?.period_end && daysRemainingInPeriod !== null
+                ? daysRemainingInPeriod === 0
+                  ? " • Ends today"
+                  : ` • ${daysRemainingInPeriod} day${daysRemainingInPeriod === 1 ? "" : "s"} left`
+                : ""}
+            </p>
+            <p className="text-sm text-[#7a1c3c]/80">
+              {periodContainingToday?.period_end
+                ? "Update or log symptoms anytime."
+                : "Mark period end when it finishes for better predictions."}
+            </p>
+          </div>
+        </div>
+      ) : predictedNext && daysUntilNext !== null ? (
         <div className="flex flex-col gap-4 rounded-3xl border border-rose-200 bg-gradient-to-r from-rose-50 via-pink-50 to-white p-4 text-[#7a1c3c] shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div className="flex items-center gap-4 sm:gap-6">
             <div className="relative h-24 w-24 flex-shrink-0">
@@ -384,20 +521,33 @@ export default async function CyclePage({
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-[#7a1c3c]">
-                <span className="text-xs font-semibold uppercase tracking-wide text-[#f05c7a]">Days left</span>
-                <span className="text-2xl font-bold text-[#a1133f]">{daysUntilNext}</span>
-                <span className="text-[11px] text-[#7a1c3c]/80">of {avgCycle}d</span>
+                {daysUntilNext === 0 ? (
+                  <>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[#f05c7a]">Due</span>
+                    <span className="text-lg font-bold leading-tight text-[#a1133f]">Today</span>
+                    <span className="text-[11px] text-[#7a1c3c]/80">Log start when it begins</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs font-semibold uppercase tracking-wide text-[#f05c7a]">Days left</span>
+                    <span className="text-2xl font-bold text-[#a1133f]">{daysUntilNext}</span>
+                    <span className="text-[11px] text-[#7a1c3c]/80">of {avgCycle}d</span>
+                  </>
+                )}
               </div>
               <div className="pointer-events-none absolute inset-1 rounded-full border border-white/70" />
             </div>
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-[#b4284c]">Next period</p>
-              <p className="text-2xl font-bold text-[#7a1c3c]">
-                {formatLongDate(predictedNext)}
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[#b4284c]">
+                <CalendarClock size={16} className="shrink-0" aria-hidden />
+                Next period
               </p>
-              <p className="text-sm text-[#7a1c3c]/80">
+              <p className="text-2xl font-bold text-[#7a1c3c]">
+                {daysUntilNext === 0 ? "Expected today" : formatLongDate(predictedNext)}
+              </p>
+              <p className="mt-0.5 text-sm text-[#7a1c3c]/80">
                 {daysUntilNext === 0
-                  ? "Expected today"
+                  ? "Log when it starts to keep predictions accurate."
                   : daysUntilNext === 1
                     ? "Starts tomorrow"
                     : `Starts in ${daysUntilNext} days`}
@@ -406,7 +556,11 @@ export default async function CyclePage({
           </div>
           <div className="rounded-2xl border border-white/60 bg-white/30 px-4 py-3 text-sm text-[#7a1c3c] backdrop-blur-sm sm:text-base">
             <p className="font-semibold">
-              Day {dayInCycle ?? "–"} of {avgCycle} • {phase ? phase.charAt(0).toUpperCase() + phase.slice(1) : "Cycle"}
+              {daysUntilNext === 0 ? (
+                <>Menstrual • Due today</>
+              ) : (
+                <>Day {dayInCycle != null ? Math.max(1, dayInCycle) : "–"} of {avgCycle} • {phase ? phase.charAt(0).toUpperCase() + phase.slice(1) : "Cycle"}</>
+              )}
             </p>
             <p className="text-sm text-[#7a1c3c]/80">Log flow or symptoms to keep predictions accurate.</p>
           </div>
@@ -425,9 +579,10 @@ export default async function CyclePage({
                 {selectedIso !== formatDateKey(today) && (
                   <Link
                     href={buildDateHref(formatDateKey(today))}
-                    className="w-fit rounded-lg border border-[#c7d3e8] bg-white px-3 py-1.5 text-sm font-semibold text-[#4a5f83] transition hover:bg-[#e3ebf9] hover:text-[#3a4868]"
+                    className="flex w-fit items-center gap-2 rounded-lg border border-[#c7d3e8] bg-white px-3 py-1.5 text-sm font-semibold text-[#4a5f83] transition hover:bg-[#e3ebf9] hover:text-[#3a4868]"
                     aria-label="Go to today"
                   >
+                    <Calendar size={16} className="shrink-0" aria-hidden />
                     Today
                   </Link>
                 )}
@@ -484,7 +639,8 @@ export default async function CyclePage({
               <div className="min-w-0 space-y-3 rounded-xl border border-[#e4e8f5] bg-[#f7f8fd] p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-[#5c678c]">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[#5c678c]">
+                      <CalendarDays size={14} className="shrink-0 text-[#7c77c2]" aria-hidden />
                       Around selected day
                     </div>
                     <div className="mt-0.5 text-[11px] text-[#8b93b8]">
@@ -639,8 +795,11 @@ export default async function CyclePage({
           {periods.length > 0 && (
             <Card id="periods" className="min-w-0 overflow-hidden">
               <CardContent className="space-y-4 py-4 sm:py-6">
-                <h3 className="text-lg font-semibold text-[#3a4868]">Recent periods</h3>
-                <div className="space-y-6">
+                <h3 className="flex items-center gap-2 text-lg font-semibold text-[#3a4868]">
+                  <Droplet size={20} className="shrink-0 text-rose-500" aria-hidden />
+                  Recent periods
+                </h3>
+                <div className="max-h-[22rem] overflow-y-auto pr-1 -mr-1 space-y-6">
                   {periods.slice(0, 5).map((p, index, array) => {
                     const nextPeriod = periods[index + 1];
                     const cycleGap =
@@ -716,52 +875,77 @@ export default async function CyclePage({
         <div className="min-w-0 space-y-4">
           <Card id="overview" className="min-w-0 overflow-hidden">
             <CardContent className="space-y-4 py-4 sm:py-6">
-              <h3 className="text-lg font-semibold text-[#3a4868]">Overview</h3>
+              <h3 className="flex items-center gap-2 text-lg font-semibold text-[#3a4868]">
+                <TrendingUp size={20} className="shrink-0 text-[#5c678c]" aria-hidden />
+                Overview
+              </h3>
               <dl className="space-y-3 text-sm">
                 {phase && (
-                  <div className="flex justify-between">
-                    <dt className="text-[#4a5f83]">Current phase</dt>
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="flex items-center gap-2 text-[#4a5f83]">
+                      <Flower2 size={16} className="shrink-0 text-rose-400" aria-hidden />
+                      Current phase
+                    </dt>
                     <dd className="font-medium capitalize text-[#3a4868]">{phase}</dd>
                   </div>
                 )}
                 {dayInCycle !== null && dayInCycle > 0 && (
-                  <div className="flex justify-between">
-                    <dt className="text-[#4a5f83]">Day in cycle</dt>
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="flex items-center gap-2 text-[#4a5f83]">
+                      <Calendar size={16} className="shrink-0 text-[#7c77c2]" aria-hidden />
+                      Day in cycle
+                    </dt>
                     <dd className="font-medium text-[#3a4868]">{dayInCycle}</dd>
                   </div>
                 )}
                 {predictedNext && (
-                  <div className="flex justify-between">
-                    <dt className="text-[#4a5f83]">Predicted next period</dt>
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="flex items-center gap-2 text-[#4a5f83]">
+                      <CalendarClock size={16} className="shrink-0 text-rose-400" aria-hidden />
+                      Predicted next period
+                    </dt>
                     <dd className="font-medium text-[#3a4868]">{formatLongDate(predictedNext)}</dd>
                   </div>
                 )}
                 {ovulation && ovulationSource && (
-                  <div className="flex justify-between">
-                    <dt className="text-[#4a5f83]">
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="flex items-center gap-2 text-[#4a5f83]">
+                      <Sparkles size={16} className="shrink-0 text-amber-500" aria-hidden />
                       {ovulationSource === "confirmed" ? "Confirmed ovulation" : "Estimated ovulation"}
                     </dt>
                     <dd className="font-medium text-[#3a4868]">{formatLongDate(ovulation)}</dd>
                   </div>
                 )}
                 {lastConfirmedDate && (!ovulation || lastConfirmedDate.getTime() !== ovulation.getTime()) && (
-                  <div className="flex justify-between">
-                    <dt className="text-[#4a5f83]">Last confirmed ovulation</dt>
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="flex items-center gap-2 text-[#4a5f83]">
+                      <Sparkles size={16} className="shrink-0 text-violet-400" aria-hidden />
+                      Last confirmed ovulation
+                    </dt>
                     <dd className="font-medium text-[#3a4868]">{formatLongDate(lastConfirmedDate)}</dd>
                   </div>
                 )}
                 {periods.length > 0 && (
-                  <div className="flex justify-between">
-                    <dt className="text-[#4a5f83]">Avg cycle length</dt>
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="flex items-center gap-2 text-[#4a5f83]">
+                      <TrendingUp size={16} className="shrink-0 text-[#5c678c]" aria-hidden />
+                      Avg cycle length
+                    </dt>
                     <dd className="font-medium text-[#3a4868]">{avgCycle} days</dd>
                   </div>
                 )}
-                <div className="flex justify-between">
-                  <dt className="text-[#4a5f83]">Luteal phase length</dt>
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="flex items-center gap-2 text-[#4a5f83]">
+                    <CalendarCheck size={16} className="shrink-0 text-[#6b7297]" aria-hidden />
+                    Luteal phase length
+                  </dt>
                   <dd className="font-medium text-[#3a4868]">{lutealPhaseLength} days</dd>
                 </div>
                 {periods.length === 0 && !phase && !predictedNext && (
-                  <p className="text-[#4a5f83]">Log your first period to see predictions.</p>
+                  <p className="flex items-center gap-2 text-[#4a5f83]">
+                    <Droplet size={16} className="shrink-0 text-rose-300" aria-hidden />
+                    Log your first period to see predictions.
+                  </p>
                 )}
               </dl>
             </CardContent>
@@ -791,21 +975,36 @@ export default async function CyclePage({
             <div className="min-w-0 space-y-4 border-t border-[#e4e8f5] px-4 pb-6 pt-4 sm:space-y-6 sm:px-6 sm:pb-8 sm:pt-6">
               <div className="grid min-w-0 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
             <div className="space-y-2 rounded-xl border border-[#e4e8f5] bg-white p-4">
-              <h3 className="font-semibold text-[#3a4868]">1. Log your period</h3>
+              <h3 className="flex items-center gap-2 font-semibold text-[#3a4868]">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-rose-100 text-rose-600">
+                  <Droplet size={18} aria-hidden />
+                </span>
+                1. Log your period
+              </h3>
               <p className="text-sm text-[#4a5f83]">
                 Use <strong>Log period</strong> when your period starts. The app records the date range and uses it to predict your next period and fertile window.
               </p>
             </div>
 
             <div className="space-y-2 rounded-xl border border-[#e4e8f5] bg-white p-4">
-              <h3 className="font-semibold text-[#3a4868]">2. Track symptoms & flow</h3>
+              <h3 className="flex items-center gap-2 font-semibold text-[#3a4868]">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-pink-100 text-pink-600">
+                  <CalendarCheck size={18} aria-hidden />
+                </span>
+                2. Track symptoms & flow
+              </h3>
               <p className="text-sm text-[#4a5f83]">
                 Use <strong>Log symptoms or flow</strong> for any day to record cramps, flow intensity, mood, and notes. This helps you spot patterns over time.
               </p>
             </div>
 
             <div className="space-y-2 rounded-xl border border-[#e4e8f5] bg-white p-4">
-              <h3 className="font-semibold text-[#3a4868]">3. Confirm ovulation</h3>
+              <h3 className="flex items-center gap-2 font-semibold text-[#3a4868]">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
+                  <Sparkles size={18} aria-hidden />
+                </span>
+                3. Confirm ovulation
+              </h3>
               <p className="text-sm text-[#4a5f83]">
                 Use <strong>Confirm ovulation</strong> when you have data (OPK, BBT, symptoms) that ovulation happened. This locks in the date and improves future predictions.
               </p>

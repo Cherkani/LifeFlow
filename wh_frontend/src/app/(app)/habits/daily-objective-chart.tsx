@@ -31,10 +31,11 @@ type DailyObjectiveChartProps = {
   data: DailyObjectivePoint[];
 };
 
+/* Execution: platform soft; overrun = strong purple. */
 const chartColors = {
-  done: "#d8bb6a",
-  remaining: "#d39a6a",
-  overrun: "#9a6fe8"
+  done: "#4a6ba3",
+  remaining: "#b8c9e4",
+  overrun: "#7c3aed"
 } as const;
 
 function DailyChartTooltip({ active, payload, label }: TooltipContentProps<ValueType, NameType>) {

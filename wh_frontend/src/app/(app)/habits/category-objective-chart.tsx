@@ -22,11 +22,12 @@ type CategoryObjectiveChartProps = {
   data: CategoryObjectivePoint[];
 };
 
-const donutColors = ["#9a6fe8", "#d8bb6a", "#4a90e2", "#ef8f6c", "#6bd5b1", "#f2c94c", "#c986f7"];
+/* Execution: platform soft; overrun = strong purple. */
+const donutColors = ["#4a6ba3", "#6b8ab8", "#8ba3cc", "#a5b8d4", "#b8c9e4", "#d0dcef"];
 const barColors = {
-  done: "#d8bb6a",
-  remaining: "#d39a6a",
-  overrun: "#9a6fe8"
+  done: "#4a6ba3",
+  remaining: "#b8c9e4",
+  overrun: "#7c3aed"
 } as const;
 
 function CategoryChartTooltip({ active, payload, label }: TooltipContentProps<ValueType, NameType>) {
