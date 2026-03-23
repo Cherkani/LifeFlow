@@ -27,18 +27,19 @@ const donutColors = ["#4a6ba3", "#6b8ab8", "#8ba3cc", "#a5b8d4", "#b8c9e4", "#d0
 const barColors = {
   done: "#4a6ba3",
   remaining: "#b8c9e4",
-  overrun: "#7c3aed"
+  overrun: "#6d4fc2"
 } as const;
 
 function CategoryChartTooltip({ active, payload, label }: TooltipContentProps<ValueType, NameType>) {
   if (!active || !payload?.length) return null;
   const done = payload.find((item) => item.dataKey === "doneWithinPlan");
-  const remaining = payload.find((item) => item.dataKey === "remainingMinutes");
-  const overrun = payload.find((item) => item.dataKey === "overrunMinutes");
+  const remaining = payload.find((item) => item.dataKey === "remainingAfterCoverMinutes");
+  const coveredElsewhere = payload.find((item) => item.dataKey === "overrunCoverMinutes");
   const plannedValue = Number((done?.payload as CategoryObjectivePoint)?.plannedMinutes ?? 0);
+  const overrunTotalValue = Number((done?.payload as CategoryObjectivePoint)?.overrunMinutes ?? 0);
   const doneValue = Number(done?.value ?? 0);
   const remainingValue = Number(remaining?.value ?? 0);
-  const overrunValue = Number(overrun?.value ?? 0);
+  const coveredElsewhereValue = Number(coveredElsewhere?.value ?? 0);
   const completion = plannedValue > 0 ? Math.round((Math.min(doneValue, plannedValue) / plannedValue) * 100) : doneValue > 0 ? 100 : 0;
 
   return (
@@ -63,9 +64,13 @@ function CategoryChartTooltip({ active, payload, label }: TooltipContentProps<Va
         <p className="flex items-center justify-between gap-3">
           <span className="flex items-center gap-1 font-medium">
             <span className="inline-block size-2.5 rounded-full" style={{ background: barColors.overrun }} />
-            Overrun
+            Covered in other days
           </span>
-          <span>{formatHoursFromMinutes(overrunValue)}</span>
+          <span>{formatHoursFromMinutes(coveredElsewhereValue)}</span>
+        </p>
+        <p className="flex items-center justify-between gap-3">
+          <span className="font-medium text-[#6b7da1]">Overrun total</span>
+          <span>{formatHoursFromMinutes(overrunTotalValue)}</span>
         </p>
       </div>
     </div>
@@ -99,6 +104,19 @@ export function CategoryObjectiveChart({ data }: CategoryObjectiveChartProps) {
     }
     return data.filter((item) => selectedObjectives.includes(item.objectiveId));
   }, [data, selectedObjectives]);
+  const chartData = useMemo(
+    () =>
+      filteredData.map((entry) => {
+        const overrunCoverMinutes = Math.min(entry.overrunMinutes, entry.remainingMinutes);
+        const remainingAfterCoverMinutes = Math.max(entry.remainingMinutes - overrunCoverMinutes, 0);
+        return {
+          ...entry,
+          overrunCoverMinutes,
+          remainingAfterCoverMinutes
+        };
+      }),
+    [filteredData]
+  );
   const totalDoneAcrossFiltered = filteredData.reduce((sum, entry) => sum + entry.doneMinutes, 0);
   const selectionTotals = useMemo(() => {
     return filteredData.reduce(
@@ -127,7 +145,7 @@ export function CategoryObjectiveChart({ data }: CategoryObjectiveChartProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-[#4a5f83]">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--app-text-muted)]">
         <span className="font-medium">Objectives:</span>
         {objectiveIds.length === 0 ? (
           <span className="text-[#8e9bb8]">Nothing to filter yet.</span>
@@ -165,31 +183,31 @@ export function CategoryObjectiveChart({ data }: CategoryObjectiveChartProps) {
       </div>
 
       {filteredData.length === 0 ? (
-        <p className="text-sm text-[#4a5f83]">{emptyState}</p>
+        <p className="text-sm text-[var(--app-text-muted)]">{emptyState}</p>
       ) : (
         <div className="flex flex-col gap-4 md:flex-row">
-          <div className="flex w-full flex-1 flex-col rounded-xl border border-[#d7e0f1] bg-[#f8fbff] p-4">
-            <div className="mb-3 grid gap-2 text-xs text-[#1f2b4d] sm:grid-cols-4">
-              <div className="rounded-lg border border-[#d7e0f1] bg-white p-3">
-                <p className="text-[11px] uppercase text-[#6b7da1]">Planned</p>
+          <div className="flex w-full flex-1 flex-col rounded-xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-4">
+            <div className="mb-3 grid gap-2 text-xs text-[var(--app-text-strong)] sm:grid-cols-4">
+              <div className="rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] p-3">
+                <p className="text-[11px] uppercase text-[var(--app-text-muted)]">Planned</p>
                 <p className="text-lg font-semibold">{formatHoursFromMinutes(selectionTotals.plannedMinutes)}</p>
               </div>
-              <div className="rounded-lg border border-[#d7e0f1] bg-white p-3">
-                <p className="text-[11px] uppercase text-[#6b7da1]">Done</p>
+              <div className="rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] p-3">
+                <p className="text-[11px] uppercase text-[var(--app-text-muted)]">Done</p>
                 <p className="text-lg font-semibold">{formatHoursFromMinutes(selectionTotals.doneMinutes)}</p>
               </div>
-              <div className="rounded-lg border border-[#d7e0f1] bg-white p-3">
-                <p className="text-[11px] uppercase text-[#6b7da1]">Overrun</p>
+              <div className="rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] p-3">
+                <p className="text-[11px] uppercase text-[var(--app-text-muted)]">Overrun</p>
                 <p className="text-lg font-semibold">{formatHoursFromMinutes(selectionTotals.overrunMinutes)}</p>
               </div>
-              <div className="rounded-lg border border-[#d7e0f1] bg-white p-3">
-                <p className="text-[11px] uppercase text-[#6b7da1]">Completion</p>
+              <div className="rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] p-3">
+                <p className="text-[11px] uppercase text-[var(--app-text-muted)]">Completion</p>
                 <p className="text-lg font-semibold">{selectionCompletion}%</p>
               </div>
             </div>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={filteredData}
+                data={chartData}
                 layout="vertical"
                 margin={{
                   top: 8,
@@ -198,49 +216,55 @@ export function CategoryObjectiveChart({ data }: CategoryObjectiveChartProps) {
                   left: 40
                 }}
               >
-                <CartesianGrid strokeDasharray="4 4" horizontal={false} stroke="#d7e0f1" />
+                <CartesianGrid strokeDasharray="4 4" horizontal={false} stroke="var(--chart-grid)" />
                 <XAxis
                   type="number"
-                  tick={{ fontSize: 11, fill: "#6b7da1" }}
+                  tick={{ fontSize: 11, fill: "var(--chart-axis-muted)" }}
                   tickFormatter={(value) => formatHoursFromMinutes(value as number)}
                   axisLine={false}
                   tickLine={false}
                 />
-                <YAxis dataKey="label" type="category" tick={{ fontSize: 12, fill: "#4a5f83" }} width={120} axisLine={false} tickLine={false} />
+                <YAxis dataKey="label" type="category" tick={{ fontSize: 12, fill: "var(--chart-axis)" }} width={120} axisLine={false} tickLine={false} />
                 <Tooltip cursor={{ fill: "#edf3ff" }} content={CategoryChartTooltip} />
                 <Bar dataKey="doneWithinPlan" stackId="time" name="Done" fill={barColors.done} radius={[0, 4, 4, 0]} />
-                <Bar dataKey="remainingMinutes" stackId="time" name="Remaining" fill={barColors.remaining} />
-                <Bar dataKey="overrunMinutes" stackId="time" name="Overrun" fill={barColors.overrun} />
+                <Bar
+                  dataKey="overrunCoverMinutes"
+                  stackId="time"
+                  name="Covered in other days"
+                  fill={barColors.overrun}
+                  fillOpacity={0.48}
+                />
+                <Bar dataKey="remainingAfterCoverMinutes" stackId="time" name="Remaining" fill={barColors.remaining} />
               </BarChart>
             </ResponsiveContainer>
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-[11px] font-semibold text-[#4a5f83]">
-              <span className="inline-flex items-center gap-1 rounded-full border border-[#d7e0f1] bg-white px-2.5 py-1">
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-[11px] font-semibold text-[var(--app-text-muted)]">
+              <span className="inline-flex items-center gap-1 rounded-full border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] px-2.5 py-1">
                 <span className="inline-block size-2 rounded-full" style={{ background: barColors.done }} />
                 Done
               </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-[#d7e0f1] bg-white px-2.5 py-1">
+              <span className="inline-flex items-center gap-1 rounded-full border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] px-2.5 py-1">
                 <span className="inline-block size-2 rounded-full" style={{ background: barColors.remaining }} />
                 Remaining
               </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-[#d7e0f1] bg-white px-2.5 py-1">
+              <span className="inline-flex items-center gap-1 rounded-full border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] px-2.5 py-1">
                 <span className="inline-block size-2 rounded-full" style={{ background: barColors.overrun }} />
-                Overrun
+                Covered in other days
               </span>
             </div>
           </div>
 
-          <div className="rounded-xl border border-[#d7e0f1] bg-[#f8fbff] p-4 md:w-[260px] md:flex-shrink-0">
-            <div className="mb-3 space-y-1 text-xs text-[#4a5f83]">
+          <div className="rounded-xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-4 md:w-[260px] md:flex-shrink-0">
+            <div className="mb-3 space-y-1 text-xs text-[var(--app-text-muted)]">
               <p className="font-medium">Done share vs other objectives</p>
               {topObjective ? (
-                <p className="text-[11px] uppercase text-[#6b7da1]">
-                  Top objective: <span className="text-[#1f2b4d]">{topObjective.label}</span> (
+                <p className="text-[11px] uppercase text-[var(--app-text-muted)]">
+                  Top objective: <span className="text-[var(--app-text-strong)]">{topObjective.label}</span> (
                   {formatHoursFromMinutes(topObjective.doneMinutes)})
                 </p>
               ) : null}
             </div>
             {totalDoneAcrossFiltered === 0 ? (
-              <p className="text-sm text-[#4a5f83]">No completed minutes yet for the selected objectives.</p>
+              <p className="text-sm text-[var(--app-text-muted)]">No completed minutes yet for the selected objectives.</p>
             ) : (
               <>
                 <div className="mx-auto w-full max-w-[220px] md:max-w-full">
@@ -256,14 +280,14 @@ export function CategoryObjectiveChart({ data }: CategoryObjectiveChartProps) {
                   />
                   </div>
                 </div>
-                <div className="mt-3 grid gap-2 text-xs text-[#4a5f83] sm:grid-cols-2">
+                <div className="mt-3 grid gap-2 text-xs text-[var(--app-text-muted)] sm:grid-cols-2">
                   {filteredData.map((objective, index) => {
                     const percentage = totalDoneAcrossFiltered > 0 ? Math.round((objective.doneMinutes / totalDoneAcrossFiltered) * 100) : 0;
                     return (
-                      <div key={objective.objectiveId} className="flex items-center gap-2 rounded-lg border border-[#d7e0f1] bg-white p-2">
+                      <div key={objective.objectiveId} className="flex items-center gap-2 rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] p-2">
                         <span className="inline-block size-3 rounded-full" style={{ backgroundColor: donutColors[index % donutColors.length] }} />
                         <div>
-                          <p className="font-semibold text-[#1f2b4d]">{objective.label}</p>
+                          <p className="font-semibold text-[var(--app-text-strong)]">{objective.label}</p>
                           <p>
                             {percentage}% • {formatHoursFromMinutes(objective.doneMinutes)}
                           </p>

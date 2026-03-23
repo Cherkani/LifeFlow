@@ -9,11 +9,11 @@ type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
 };
 
 const variantClasses: Record<BadgeVariant, string> = {
-  default: "bg-[#0b1f3b] text-white",
-  secondary: "bg-[#dbe5f7] text-[#23406d]",
-  success: "bg-emerald-100 text-emerald-700",
-  warning: "bg-amber-100 text-amber-700",
-  danger: "bg-rose-100 text-rose-700"
+  default: "bg-[var(--ui-badge-default-bg)] text-[var(--ui-badge-default-fg)]",
+  secondary: "bg-[var(--ui-badge-secondary-bg)] text-[var(--ui-badge-secondary-fg)]",
+  success: "bg-[var(--ui-badge-success-bg)] text-[var(--ui-badge-success-fg)]",
+  warning: "bg-[var(--ui-badge-warning-bg)] text-[var(--ui-badge-warning-fg)]",
+  danger: "bg-[var(--ui-badge-danger-bg)] text-[var(--ui-badge-danger-fg)]"
 };
 
 export function Badge({ className, variant = "default", ...props }: BadgeProps) {

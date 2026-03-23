@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import "@/app/globals.css";
 
 export const metadata: Metadata = {
-  title: "Momentum Core",
+  title: "Momentum Grid",
   description: "A personal ERP for strategy, planning, execution, finance, and analytics."
 };
 

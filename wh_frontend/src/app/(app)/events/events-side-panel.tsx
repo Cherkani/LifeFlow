@@ -69,13 +69,15 @@ export function EventsSidePanel({
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex rounded-lg border border-[#c7d3e8] bg-white p-1">
+            <div className="inline-flex rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-1">
               <button
                 type="button"
                 onClick={() => setTab("scheduled")}
                 className={[
-                  "rounded-md px-3 py-1.5 text-sm font-semibold",
-                  tab === "scheduled" ? "bg-[#0b1f3b] text-white" : "text-[#23406d]"
+                  "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
+                  tab === "scheduled"
+                    ? "bg-[var(--app-btn-primary-bg)] text-[var(--app-btn-primary-fg)] shadow-sm"
+                    : "text-[var(--app-btn-secondary-fg)] hover:bg-[var(--app-btn-secondary-bg)]"
                 ].join(" ")}
               >
                 Scheduled
@@ -84,8 +86,10 @@ export function EventsSidePanel({
                 type="button"
                 onClick={() => setTab("backlog")}
                 className={[
-                  "rounded-md px-3 py-1.5 text-sm font-semibold",
-                  tab === "backlog" ? "bg-[#0b1f3b] text-white" : "text-[#23406d]"
+                  "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
+                  tab === "backlog"
+                    ? "bg-[var(--app-btn-primary-bg)] text-[var(--app-btn-primary-fg)] shadow-sm"
+                    : "text-[var(--app-btn-secondary-fg)] hover:bg-[var(--app-btn-secondary-bg)]"
                 ].join(" ")}
               >
                 Backlog

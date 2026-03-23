@@ -35,7 +35,7 @@ type DailyObjectiveChartProps = {
 const chartColors = {
   done: "#4a6ba3",
   remaining: "#b8c9e4",
-  overrun: "#7c3aed"
+  overrun: "#6d4fc2"
 } as const;
 
 function DailyChartTooltip({ active, payload, label }: TooltipContentProps<ValueType, NameType>) {
@@ -164,8 +164,8 @@ export function DailyObjectiveChart({ data }: DailyObjectiveChartProps) {
   };
 
   return (
-    <div className="rounded-xl border border-[#d7e0f1] bg-[#f8fbff] p-4">
-      <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-[#4a5f83]">
+    <div className="rounded-xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-4">
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-[var(--app-text-muted)]">
         <span className="font-medium">Objectives:</span>
         {noObjectivesAvailable ? (
           <span className="text-[#8e9bb8]">None logged yet.</span>
@@ -202,34 +202,34 @@ export function DailyObjectiveChart({ data }: DailyObjectiveChartProps) {
       </div>
 
       {!hasSelection ? (
-        <p className="text-sm text-[#4a5f83]">Select at least one objective to see the per-day breakdown.</p>
+        <p className="text-sm text-[var(--app-text-muted)]">Select at least one objective to see the per-day breakdown.</p>
       ) : (
         <>
-          <div className="mb-3 grid gap-2 text-xs text-[#1f2b4d] md:grid-cols-4">
-            <div className="rounded-lg border border-[#d7e0f1] bg-white p-3">
-              <p className="text-[11px] uppercase text-[#6b7da1]">Planned</p>
+          <div className="mb-3 grid gap-2 text-xs text-[var(--app-text-strong)] md:grid-cols-4">
+            <div className="rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] p-3">
+              <p className="text-[11px] uppercase text-[var(--app-text-muted)]">Planned</p>
               <p className="text-lg font-semibold">{formatHoursFromMinutes(selectionTotals.plannedMinutes)}</p>
             </div>
-            <div className="rounded-lg border border-[#d7e0f1] bg-white p-3">
-              <p className="text-[11px] uppercase text-[#6b7da1]">Done</p>
+            <div className="rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] p-3">
+              <p className="text-[11px] uppercase text-[var(--app-text-muted)]">Done</p>
               <p className="text-lg font-semibold">{formatHoursFromMinutes(selectionTotals.doneMinutes)}</p>
             </div>
-            <div className="rounded-lg border border-[#d7e0f1] bg-white p-3">
-              <p className="text-[11px] uppercase text-[#6b7da1]">Overrun</p>
+            <div className="rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] p-3">
+              <p className="text-[11px] uppercase text-[var(--app-text-muted)]">Overrun</p>
               <p className="text-lg font-semibold">{formatHoursFromMinutes(selectionTotals.overrunMinutes)}</p>
             </div>
-            <div className="rounded-lg border border-[#d7e0f1] bg-white p-3">
-              <p className="text-[11px] uppercase text-[#6b7da1]">Completion</p>
+            <div className="rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] p-3">
+              <p className="text-[11px] uppercase text-[var(--app-text-muted)]">Completion</p>
               <p className="text-lg font-semibold">{completionRate}%</p>
             </div>
           </div>
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartRows} margin={{ top: 8, right: 12, bottom: 8, left: 0 }}>
-                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#d7e0f1" />
-                <XAxis dataKey="day" tick={{ fontSize: 12, fill: "#4a5f83" }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--chart-grid)" />
+                <XAxis dataKey="day" tick={{ fontSize: 12, fill: "var(--chart-axis)" }} axisLine={false} tickLine={false} />
                 <YAxis
-                  tick={{ fontSize: 11, fill: "#6b7da1" }}
+                  tick={{ fontSize: 11, fill: "var(--chart-axis-muted)" }}
                   tickFormatter={(value) => formatHoursFromMinutes(value as number)}
                   width={60}
                   axisLine={false}
@@ -242,33 +242,33 @@ export function DailyObjectiveChart({ data }: DailyObjectiveChartProps) {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-[11px] font-semibold text-[#4a5f83]">
-            <span className="inline-flex items-center gap-1 rounded-full border border-[#d7e0f1] bg-white px-2.5 py-1">
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-[11px] font-semibold text-[var(--app-text-muted)]">
+            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] px-2.5 py-1">
               <span className="inline-block size-2 rounded-full" style={{ background: chartColors.done }} />
               Done
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-[#d7e0f1] bg-white px-2.5 py-1">
+            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] px-2.5 py-1">
               <span className="inline-block size-2 rounded-full" style={{ background: chartColors.remaining }} />
               Remaining
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-[#d7e0f1] bg-white px-2.5 py-1">
+            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] px-2.5 py-1">
               <span className="inline-block size-2 rounded-full" style={{ background: chartColors.overrun }} />
               Overrun
             </span>
           </div>
 
           {bestDay && toughestDay ? (
-            <div className="mt-3 grid gap-2 text-xs text-[#4a5f83] md:grid-cols-2">
-              <div className="rounded-lg border border-[#d7e0f1] bg-white p-3">
-                <p className="text-[11px] uppercase text-[#6b7da1]">Strongest day</p>
-                <p className="font-semibold text-[#1f2b4d]">{bestDay.day}</p>
+            <div className="mt-3 grid gap-2 text-xs text-[var(--app-text-muted)] md:grid-cols-2">
+              <div className="rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] p-3">
+                <p className="text-[11px] uppercase text-[var(--app-text-muted)]">Strongest day</p>
+                <p className="font-semibold text-[var(--app-text-strong)]">{bestDay.day}</p>
                 <p>
                   {formatHoursFromMinutes(bestDay.doneMinutes)} done / {formatHoursFromMinutes(bestDay.plannedMinutes)} planned
                 </p>
               </div>
-              <div className="rounded-lg border border-[#d7e0f1] bg-white p-3">
-                <p className="text-[11px] uppercase text-[#6b7da1]">Needs attention</p>
-                <p className="font-semibold text-[#1f2b4d]">{toughestDay.day}</p>
+              <div className="rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] p-3">
+                <p className="text-[11px] uppercase text-[var(--app-text-muted)]">Needs attention</p>
+                <p className="font-semibold text-[var(--app-text-strong)]">{toughestDay.day}</p>
                 <p>
                   {formatHoursFromMinutes(toughestDay.doneMinutes)} done / {formatHoursFromMinutes(toughestDay.plannedMinutes)} planned
                 </p>

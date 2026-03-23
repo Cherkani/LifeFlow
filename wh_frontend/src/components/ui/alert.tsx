@@ -9,9 +9,9 @@ type AlertProps = HTMLAttributes<HTMLDivElement> & {
 };
 
 const variantClasses: Record<AlertVariant, string> = {
-  default: "border-[#c7d3e8] bg-[#edf3ff] text-[#25406d]",
-  error: "border-rose-200 bg-rose-50 text-rose-700",
-  success: "border-emerald-200 bg-emerald-50 text-emerald-700"
+  default: "border-[var(--ui-alert-default-border)] bg-[var(--ui-alert-default-bg)] text-[var(--ui-alert-default-fg)]",
+  error: "border-[var(--ui-alert-error-border)] bg-[var(--ui-alert-error-bg)] text-[var(--ui-alert-error-fg)]",
+  success: "border-[var(--ui-alert-success-border)] bg-[var(--ui-alert-success-bg)] text-[var(--ui-alert-success-fg)]"
 };
 
 export function Alert({ className, variant = "default", ...props }: AlertProps) {

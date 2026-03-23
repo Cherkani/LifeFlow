@@ -30,9 +30,18 @@ export async function updateSession(request: NextRequest) {
     }
   });
 
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  let user = null;
+  try {
+    const {
+      data: { user: resolvedUser }
+    } = await supabase.auth.getUser();
+    user = resolvedUser;
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+    if (code !== "refresh_token_not_found") {
+      throw error;
+    }
+  }
 
   return { response, user };
 }

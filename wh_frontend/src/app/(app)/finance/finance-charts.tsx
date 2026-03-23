@@ -41,15 +41,15 @@ function money(amount: number, currencyCode: string) {
 export function FinanceCharts({ dailyExpenses, categories, currencyCode }: FinanceChartsProps) {
   return (
     <div className="grid gap-4 xl:grid-cols-2">
-      <div className="rounded-xl border border-[#c7d3e8] bg-[#f8fbff] p-4">
-        <p className="mb-3 text-sm font-semibold text-[#0c1d3c]">Daily expenses histogram</p>
+      <div className="rounded-xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-4">
+        <p className="mb-3 text-sm font-semibold text-[var(--app-text-strong)]">Daily expenses histogram</p>
         <div className="h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={dailyExpenses}>
-              <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#d7e0f1" />
-              <XAxis dataKey="day" tick={{ fill: "#4a5f83", fontSize: 10 }} axisLine={false} tickLine={false} />
+              <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--chart-grid)" />
+              <XAxis dataKey="day" tick={{ fill: "var(--chart-axis)", fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis
-                tick={{ fill: "#6b7da1", fontSize: 11 }}
+                tick={{ fill: "var(--chart-axis-muted)", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(value) => money(Number(value ?? 0), currencyCode)}
@@ -62,15 +62,15 @@ export function FinanceCharts({ dailyExpenses, categories, currencyCode }: Finan
         </div>
       </div>
 
-      <div className="rounded-xl border border-[#c7d3e8] bg-[#f8fbff] p-4">
-        <p className="mb-3 text-sm font-semibold text-[#0c1d3c]">Category spend vs limit</p>
+      <div className="rounded-xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-4">
+        <p className="mb-3 text-sm font-semibold text-[var(--app-text-strong)]">Category spend vs limit</p>
         <div className="h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={categories}>
-              <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#d7e0f1" />
-              <XAxis dataKey="name" tick={{ fill: "#4a5f83", fontSize: 10 }} axisLine={false} tickLine={false} />
+              <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--chart-grid)" />
+              <XAxis dataKey="name" tick={{ fill: "var(--chart-axis)", fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis
-                tick={{ fill: "#6b7da1", fontSize: 11 }}
+                tick={{ fill: "var(--chart-axis-muted)", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(value) => money(Number(value ?? 0), currencyCode)}

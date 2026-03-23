@@ -44,7 +44,7 @@ type AnalyticsChartsProps = {
   currencyCode: string;
 };
 
-const pieColors = ["#0b1f3b", "#274881", "#4f6fa8", "#7e9ac8", "#a7bde0", "#d7e2f5"];
+const pieColors = ["#4f8cff", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#14b8a6", "#f97316", "#eab308"];
 
 function money(amount: number, currencyCode: string) {
   return new Intl.NumberFormat("en-US", {
@@ -58,14 +58,14 @@ export function AnalyticsCharts({ weekly, monthly, expenseCategories, currencyCo
   return (
     <div className="space-y-4">
       <div className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-xl border border-[#c7d3e8] bg-[#f8fbff] p-4">
-          <p className="mb-3 text-sm font-semibold text-[#0c1d3c]">Weekly Planned vs Done (Hours)</p>
+        <div className="rounded-xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-4">
+          <p className="mb-3 text-sm font-semibold text-[var(--app-text-strong)]">Weekly Planned vs Done (Hours)</p>
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={weekly}>
-                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#d7e0f1" />
-                <XAxis dataKey="day" tick={{ fill: "#4a5f83", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#6b7da1", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--chart-grid)" />
+                <XAxis dataKey="day" tick={{ fill: "var(--chart-axis)", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "var(--chart-axis-muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip formatter={(value, name) => [Number(value ?? 0).toFixed(1), String(name)]} />
                 <Legend />
                 <Bar dataKey="plannedHours" name="Planned" fill="#d39a6a" radius={[6, 6, 0, 0]} />
@@ -75,14 +75,14 @@ export function AnalyticsCharts({ weekly, monthly, expenseCategories, currencyCo
           </div>
         </div>
 
-        <div className="rounded-xl border border-[#c7d3e8] bg-[#f8fbff] p-4">
-          <p className="mb-3 text-sm font-semibold text-[#0c1d3c]">Weekly Completion % by Day</p>
+        <div className="rounded-xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-4">
+          <p className="mb-3 text-sm font-semibold text-[var(--app-text-strong)]">Weekly Completion % by Day</p>
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={weekly}>
-                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#d7e0f1" />
-                <XAxis dataKey="day" tick={{ fill: "#4a5f83", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis domain={[0, 100]} tick={{ fill: "#6b7da1", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--chart-grid)" />
+                <XAxis dataKey="day" tick={{ fill: "var(--chart-axis)", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, 100]} tick={{ fill: "var(--chart-axis-muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip formatter={(value) => [`${Number(value ?? 0)}%`, "Completion"]} />
                 <Line type="monotone" dataKey="completion" stroke="#0b1f3b" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
               </LineChart>
@@ -92,15 +92,15 @@ export function AnalyticsCharts({ weekly, monthly, expenseCategories, currencyCo
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-        <div className="rounded-xl border border-[#c7d3e8] bg-[#f8fbff] p-4">
-          <p className="mb-3 text-sm font-semibold text-[#0c1d3c]">Monthly Trend (Hours + Expenses)</p>
+        <div className="rounded-xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-4">
+          <p className="mb-3 text-sm font-semibold text-[var(--app-text-strong)]">Monthly Trend (Hours + Expenses)</p>
           <div className="h-80 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={monthly}>
-                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#d7e0f1" />
-                <XAxis dataKey="day" tick={{ fill: "#4a5f83", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis yAxisId="left" tick={{ fill: "#6b7da1", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fill: "#6b7da1", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--chart-grid)" />
+                <XAxis dataKey="day" tick={{ fill: "var(--chart-axis)", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="left" tick={{ fill: "var(--chart-axis-muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fill: "var(--chart-axis-muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip
                   formatter={(value, name) => {
                     if (String(name) === "Expense") {
@@ -118,14 +118,26 @@ export function AnalyticsCharts({ weekly, monthly, expenseCategories, currencyCo
           </div>
         </div>
 
-        <div className="rounded-xl border border-[#c7d3e8] bg-[#f8fbff] p-4">
-          <p className="mb-3 text-sm font-semibold text-[#0c1d3c]">Expense Split by Category</p>
+        <div className="rounded-xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-4">
+          <p className="mb-3 text-sm font-semibold text-[var(--app-text-strong)]">Expense Split by Category</p>
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Tooltip formatter={(value) => [money(Number(value ?? 0), currencyCode), "Spent"]} />
-                <Legend />
-                <Pie data={expenseCategories} dataKey="spent" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={2}>
+                <Legend
+                  wrapperStyle={{ color: "var(--app-text-strong)" }}
+                  formatter={(value) => <span style={{ color: "var(--app-text-strong)" }}>{value}</span>}
+                />
+                <Pie
+                  data={expenseCategories}
+                  dataKey="spent"
+                  nameKey="name"
+                  innerRadius={55}
+                  outerRadius={95}
+                  paddingAngle={2}
+                  stroke="var(--app-panel-bg-soft)"
+                  strokeWidth={2}
+                >
                   {expenseCategories.map((entry, index) => (
                     <Cell key={entry.name} fill={pieColors[index % pieColors.length]} />
                   ))}

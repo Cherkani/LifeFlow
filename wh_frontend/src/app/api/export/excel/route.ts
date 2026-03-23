@@ -1,14 +1,24 @@
 import { NextResponse } from "next/server";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 import { getPrimaryAccountForUser } from "@/lib/server-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-function rowsToSheet<T extends Record<string, unknown>>(rows: T[]): XLSX.WorkSheet {
+function addRowsSheet(workbook: ExcelJS.Workbook, name: string, rows: Array<Record<string, unknown>>) {
+  const worksheet = workbook.addWorksheet(name);
   if (rows.length === 0) {
-    return XLSX.utils.aoa_to_sheet([["(no data)"]]);
+    worksheet.addRow(["(no data)"]);
+    return;
   }
-  return XLSX.utils.json_to_sheet(rows);
+  const headers = Object.keys(rows[0]);
+  worksheet.columns = headers.map((key) => ({
+    header: key,
+    key
+  }));
+  rows.forEach((row) => {
+    const record = Object.fromEntries(headers.map((header) => [header, row[header] ?? ""]));
+    worksheet.addRow(record);
+  });
 }
 
 export async function GET() {
@@ -83,17 +93,17 @@ export async function GET() {
     return templateIds.includes(e.template_id);
   });
 
-  const wb = XLSX.utils.book_new();
+  const wb = new ExcelJS.Workbook();
 
   const profileRows = profileRes.data ? [profileRes.data as Record<string, unknown>] : [];
-  XLSX.utils.book_append_sheet(wb, rowsToSheet(profileRows), "Profile");
+  addRowsSheet(wb, "Profile", profileRows);
 
   const knowledgeRows = (spacesRes.data ?? []).map((s: Record<string, unknown>) => ({
     Topic: s.title,
     "Image URL": s.image_url,
     "Created at": s.created_at
   }));
-  XLSX.utils.book_append_sheet(wb, rowsToSheet(knowledgeRows), "Knowledge Topics");
+  addRowsSheet(wb, "Knowledge Topics", knowledgeRows);
 
   const itemsRows = (itemsData as Array<Record<string, unknown>>).map((i) => ({
     "Space ID": i.space_id,
@@ -104,14 +114,14 @@ export async function GET() {
     Checked: i.checked,
     "Created at": i.created_at
   }));
-  XLSX.utils.book_append_sheet(wb, rowsToSheet(itemsRows), "Knowledge Items");
+  addRowsSheet(wb, "Knowledge Items", itemsRows);
 
   const objectivesRows = (objectivesRes.data ?? []).map((o: Record<string, unknown>) => ({
     Title: o.title,
     Description: o.description,
     "Created at": o.created_at
   }));
-  XLSX.utils.book_append_sheet(wb, rowsToSheet(objectivesRows), "Habit Objectives");
+  addRowsSheet(wb, "Habit Objectives", objectivesRows);
 
   const habitsRows = (habitsRes.data ?? []).map((h: Record<string, unknown>) => ({
     Title: h.title,
@@ -121,7 +131,7 @@ export async function GET() {
     "Is active": h.is_active,
     "Created at": h.created_at
   }));
-  XLSX.utils.book_append_sheet(wb, rowsToSheet(habitsRows), "Habits");
+  addRowsSheet(wb, "Habits", habitsRows);
 
   const sessionsRows = sessionsData.map((s: Record<string, unknown>) => ({
     "Habit ID": s.habit_id,
@@ -131,19 +141,19 @@ export async function GET() {
     Completed: s.completed,
     Notes: s.notes
   }));
-  XLSX.utils.book_append_sheet(wb, rowsToSheet(sessionsRows), "Habit Sessions");
+  addRowsSheet(wb, "Habit Sessions", sessionsRows);
 
   const templatesRows = (templatesRes.data ?? []).map((t: Record<string, unknown>) => ({
     Name: t.name,
     "Created at": t.created_at
   }));
-  XLSX.utils.book_append_sheet(wb, rowsToSheet(templatesRows), "Templates");
+  addRowsSheet(wb, "Templates", templatesRows);
 
   const weeksRows = (weeksRes.data ?? []).map((w: Record<string, unknown>) => ({
     "Week start": w.week_start_date,
     "Created at": w.created_at
   }));
-  XLSX.utils.book_append_sheet(wb, rowsToSheet(weeksRows), "Weeks");
+  addRowsSheet(wb, "Weeks", weeksRows);
 
   const entriesRows = entriesData.map((e: Record<string, unknown>) => ({
     "Template ID": e.template_id,
@@ -153,7 +163,7 @@ export async function GET() {
     "Minimum (min)": e.minimum_minutes,
     Required: e.is_required
   }));
-  XLSX.utils.book_append_sheet(wb, rowsToSheet(entriesRows), "Template Entries");
+  addRowsSheet(wb, "Template Entries", entriesRows);
 
   const categoriesRows = (categoriesRes.data ?? []).map((c: Record<string, unknown>) => ({
     Name: c.name,
@@ -161,7 +171,7 @@ export async function GET() {
     "Monthly limit": c.monthly_limit,
     "Created at": c.created_at
   }));
-  XLSX.utils.book_append_sheet(wb, rowsToSheet(categoriesRows), "Finance Categories");
+  addRowsSheet(wb, "Finance Categories", categoriesRows);
 
   const ledgerRows = (ledgerRes.data ?? []).map((l: Record<string, unknown>) => ({
     Type: l.entry_type,
@@ -170,7 +180,7 @@ export async function GET() {
     Notes: l.notes,
     "Created at": l.created_at
   }));
-  XLSX.utils.book_append_sheet(wb, rowsToSheet(ledgerRows), "Ledger Entries");
+  addRowsSheet(wb, "Ledger Entries", ledgerRows);
 
   const debtsRows = (debtsRes.data ?? []).map((d: Record<string, unknown>) => ({
     Name: d.name,
@@ -180,7 +190,7 @@ export async function GET() {
     Status: d.status,
     "Due date": d.due_date
   }));
-  XLSX.utils.book_append_sheet(wb, rowsToSheet(debtsRows), "Debts");
+  addRowsSheet(wb, "Debts", debtsRows);
 
   const paymentsRows = (paymentsRes.data ?? []).map((p: Record<string, unknown>) => ({
     "Debt ID": p.debt_id,
@@ -189,7 +199,7 @@ export async function GET() {
     Method: p.method,
     Notes: p.notes
   }));
-  XLSX.utils.book_append_sheet(wb, rowsToSheet(paymentsRows), "Debt Payments");
+  addRowsSheet(wb, "Debt Payments", paymentsRows);
 
   const subsRows = (subsRes.data ?? []).map((s: Record<string, unknown>) => ({
     Name: s.name,
@@ -198,7 +208,7 @@ export async function GET() {
     "Next due": s.next_due_date,
     Active: s.is_active
   }));
-  XLSX.utils.book_append_sheet(wb, rowsToSheet(subsRows), "Subscriptions");
+  addRowsSheet(wb, "Subscriptions", subsRows);
 
   const eventsRows = (eventsRes.data ?? []).map((e: Record<string, unknown>) => ({
     Title: e.title,
@@ -208,10 +218,10 @@ export async function GET() {
     Type: e.event_type,
     "Created at": e.created_at
   }));
-  XLSX.utils.book_append_sheet(wb, rowsToSheet(eventsRows), "Calendar Events");
+  addRowsSheet(wb, "Calendar Events", eventsRows);
 
-  const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-  const filename = `life-flow-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const buffer = await wb.xlsx.writeBuffer();
+  const filename = `momentum-grid-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
 
   return new NextResponse(buffer, {
     status: 200,

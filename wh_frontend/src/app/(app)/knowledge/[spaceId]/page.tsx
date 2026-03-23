@@ -35,7 +35,7 @@ export default async function KnowledgeSpacePage({
   const items = (await getKnowledgeSpaceItems(supabase, spaceId)) as KnowledgeItem[];
 
   return (
-    <div className="space-y-6">
+    <div className="knowledge-theme space-y-6">
       <KnowledgeSpaceContent
         space={space}
         items={items}

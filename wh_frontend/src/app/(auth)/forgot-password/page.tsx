@@ -16,7 +16,7 @@ export default async function ForgotPasswordPage({
   const params = await searchParams;
 
   return (
-    <Card>
+    <Card className="mx-auto w-full max-w-md">
       <CardHeader className="space-y-3">
         <Link href="/login" className="inline-flex items-center text-sm text-slate-600 hover:text-slate-900">
           <ArrowLeft size={16} className="mr-2" />

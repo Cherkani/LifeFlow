@@ -54,6 +54,10 @@ const completeSessionSchema = z.object({
   actualMinutes: z.union([z.literal(""), z.coerce.number().int().min(0).max(100000)]).optional()
 });
 
+const deleteSessionSchema = z.object({
+  sessionId: z.string().uuid()
+});
+
 const generateWeekSchema = z.object({
   templateId: z.string().uuid(),
   weekStartDate: dateInputSchema
@@ -334,6 +338,44 @@ export async function completeSessionWithHoursAction(formData: FormData) {
   return { redirectTo: returnPath };
 }
 
+export async function deleteSessionAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = deleteSessionSchema.safeParse({
+    sessionId: formData.get("sessionId")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  const { data: session } = await supabase
+    .from("habit_sessions")
+    .select("id, habit_id")
+    .eq("id", payload.data.sessionId)
+    .maybeSingle();
+
+  if (!session) {
+    return { redirectTo: returnPath };
+  }
+
+  const { data: habit } = await supabase
+    .from("habits")
+    .select("id")
+    .eq("id", session.habit_id)
+    .eq("account_id", account.accountId)
+    .maybeSingle();
+
+  if (!habit) {
+    return { redirectTo: returnPath };
+  }
+
+  await supabase.from("habit_sessions").delete().eq("id", session.id);
+
+  revalidatePath(returnPath.split("?")[0] || "/habits");
+  return { redirectTo: returnPath };
+}
+
 export async function generateWeekFromTemplateAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = generateWeekSchema.safeParse({
@@ -513,6 +555,13 @@ export async function completeSessionWithHoursFormAction(
   formData: FormData
 ): Promise<RedirectResult | null> {
   return completeSessionWithHoursAction(formData);
+}
+
+export async function deleteSessionFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return deleteSessionAction(formData);
 }
 
 export async function syncWeekWithTemplateFormAction(

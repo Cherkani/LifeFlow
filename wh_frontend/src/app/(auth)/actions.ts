@@ -16,7 +16,7 @@ const loginSchema = z.object({
 const signUpSchema = loginSchema.extend({
   fullName: z.string().trim().min(2, "Full name is required").max(120),
   timezone: z.string().trim().min(2, "Timezone is required").max(100),
-  accountName: z.string().trim().min(2, "Account name is required").max(120)
+  accountName: z.string().trim().max(120).optional()
 });
 
 export async function loginAction(formData: FormData) {
@@ -53,6 +53,8 @@ export async function signUpAction(formData: FormData) {
     redirect(`/signup?error=${encodeURIComponent(payload.error.issues[0]?.message ?? "Invalid signup data")}`);
   }
 
+  const accountName = payload.data.accountName?.trim() || payload.data.fullName || "My Life";
+
   const supabase = await createServerSupabaseClient();
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -69,7 +71,7 @@ export async function signUpAction(formData: FormData) {
       user_metadata: {
         full_name: payload.data.fullName,
         timezone: payload.data.timezone,
-        account_name: payload.data.accountName
+        account_name: accountName
       }
     });
 
@@ -101,7 +103,7 @@ export async function signUpAction(formData: FormData) {
       data: {
         full_name: payload.data.fullName,
         timezone: payload.data.timezone,
-        account_name: payload.data.accountName
+        account_name: accountName
       }
     }
   });
@@ -169,15 +171,15 @@ function getSafeNextPath(raw: FormDataEntryValue | null) {
 }
 
 async function resolveSiteUrl() {
-  if (process.env.NEXT_PUBLIC_SITE_URL) {
-    return process.env.NEXT_PUBLIC_SITE_URL;
-  }
-
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
   const proto = requestHeaders.get("x-forwarded-proto") ?? "http";
   if (host) {
     return `${proto}://${host}`;
+  }
+
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "");
   }
 
   return "http://localhost:3000";
@@ -233,9 +235,9 @@ export async function loginDemoUserAction() {
         password,
         email_confirm: true,
         user_metadata: {
-          full_name: "Momentum Core Demo",
+          full_name: "Momentum Grid Demo",
           timezone: "Africa/Casablanca",
-          account_name: "Momentum Core Demo"
+          account_name: "Momentum Grid Demo"
         }
       });
 
@@ -254,9 +256,9 @@ export async function loginDemoUserAction() {
         password,
         options: {
           data: {
-            full_name: "Momentum Core Demo",
+            full_name: "Momentum Grid Demo",
             timezone: "Africa/Casablanca",
-            account_name: "Momentum Core Demo"
+            account_name: "Momentum Grid Demo"
           }
         }
       });

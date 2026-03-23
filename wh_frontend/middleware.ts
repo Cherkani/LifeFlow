@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { updateSession } from "@/lib/supabase/middleware";
 
-const PUBLIC_ROUTES = ["/login", "/signup"];
+const PUBLIC_ROUTES = ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/auth/callback"];
 
 export async function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
@@ -24,6 +24,12 @@ export async function middleware(request: NextRequest) {
 
   if (isAsset) {
     return NextResponse.next();
+  }
+
+  if (pathname === "/" && searchParams.has("code")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/callback";
+    return NextResponse.redirect(url);
   }
 
   const { response, user } = await updateSession(request);

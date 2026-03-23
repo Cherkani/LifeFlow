@@ -16,7 +16,6 @@ import { SubmitButton } from "@/components/forms/submit-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
-import { SectionHeader } from "@/components/ui/section-header";
 import {
   getHabitsPageData,
   getMonthSessions,
@@ -68,7 +67,10 @@ function parseWeekStart(raw: string | undefined) {
 }
 
 function formatWeekKey(date: Date) {
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function weekHref(
@@ -308,24 +310,33 @@ export default async function HabitsPage({
 
   return (
     <div className="space-y-6">
-      <SectionHeader title="Execution Weekly Tracker" description="Assign a template for the week once, then track tasks by day in minutes." />
+      <header className="space-y-1">
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--app-text-strong)]">Execution Weekly Tracker</h1>
+        <p className="text-sm text-[var(--app-text-muted)]">Assign a template for the week once, then track tasks by day in minutes.</p>
+      </header>
 
-      <Card>
+      <Card className="border-[var(--app-panel-border)] bg-[var(--app-panel-bg)]">
         <CardHeader>
-          <CardTitle>Week Selector & Template</CardTitle>
+          <CardTitle className="text-[var(--app-text-strong)]">Week Selector & Template</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Link href={weekHref(previousWeek)} className="inline-flex size-9 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] text-[#23406d]">
+            <Link
+              href={weekHref(previousWeek)}
+              className="inline-flex size-9 items-center justify-center rounded-lg border border-[var(--app-panel-border-strong)] bg-[var(--app-btn-secondary-bg)] text-[var(--app-btn-secondary-fg)]"
+            >
               <ChevronLeft size={16} />
             </Link>
-            <span className="text-sm font-semibold text-[#0c1d3c]">
+            <span className="text-sm font-semibold text-[var(--app-text-strong)]">
               {selectedWeekStart.toLocaleDateString("en-US")} - {selectedWeekEnd.toLocaleDateString("en-US")}
             </span>
-            <Link href={weekHref(nextWeek)} className="inline-flex size-9 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] text-[#23406d]">
+            <Link
+              href={weekHref(nextWeek)}
+              className="inline-flex size-9 items-center justify-center rounded-lg border border-[var(--app-panel-border-strong)] bg-[var(--app-btn-secondary-bg)] text-[var(--app-btn-secondary-fg)]"
+            >
               <ChevronRight size={16} />
             </Link>
-            <form action="/habits" method="get" className="ml-auto flex items-center gap-2 text-xs text-[#4a5f83]">
+            <form action="/habits" method="get" className="ml-auto flex items-center gap-2 text-xs text-[var(--app-text-muted)]">
               <label htmlFor="jumpToWeek" className="font-medium">
                 Jump to week
               </label>
@@ -334,22 +345,25 @@ export default async function HabitsPage({
                 name="week"
                 type="date"
                 defaultValue={weekStartIso}
-                className="h-8 rounded-md border border-[#c7d3e8] bg-white px-2 text-sm text-[#0c1d3c] focus:border-[#1e3a6d] focus:ring-2 focus:ring-[#d6e0f2]"
+                className="h-8 rounded-md border border-[var(--ui-input-border)] bg-[var(--ui-input-bg)] px-2 text-sm text-[var(--ui-input-text)] focus:border-[var(--ui-input-focus-border)] focus:ring-2 focus:ring-[var(--ui-input-focus-ring)]"
               />
               {selectedObjectiveId ? <input type="hidden" name="objectiveId" value={selectedObjectiveId} /> : null}
-              <button type="submit" className="inline-flex h-8 items-center justify-center rounded-md border border-[#c7d3e8] bg-[#f8fbff] px-3 font-semibold text-[#23406d] transition hover:bg-[#edf3ff]">
+              <button
+                type="submit"
+                className="inline-flex h-8 items-center justify-center rounded-md border border-[var(--app-panel-border-strong)] bg-[var(--app-btn-secondary-bg)] px-3 font-semibold text-[var(--app-btn-secondary-fg)] transition hover:bg-[var(--app-btn-secondary-hover)]"
+              >
                 Go
               </button>
             </form>
           </div>
 
           {templates.length === 0 ? (
-            <p className="text-sm text-[#4a5f83]">No templates yet. Create one from Planner first.</p>
+            <p className="text-sm text-[var(--app-text-muted)]">No templates yet. Create one from Planner first.</p>
           ) : currentWeek?.template_id ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#c7d3e8] bg-[#edf3ff] p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--app-panel-border-strong)] bg-[var(--app-btn-secondary-bg)] p-3">
               <div>
-                <p className="text-xs font-medium text-[#4a5f83]">Template for this week</p>
-                <p className="text-sm font-semibold text-[#0c1d3c]">{selectedTemplate?.name ?? "Selected template"}</p>
+                <p className="text-xs font-medium text-[var(--app-text-muted)]">Template for this week</p>
+                <p className="text-sm font-semibold text-[var(--app-text-strong)]">{selectedTemplate?.name ?? "Selected template"}</p>
               </div>
               <WeekResetModal
                 templates={templates}
@@ -366,7 +380,7 @@ export default async function HabitsPage({
               <input type="hidden" name="returnPath" value={weekHref(selectedWeekStart)} />
               <input type="hidden" name="weekStartDate" value={weekStartIso} />
               <div className="space-y-1">
-                <p className="text-xs font-medium text-[#4a5f83]">Template for this week</p>
+                <p className="text-xs font-medium text-[var(--app-text-muted)]">Template for this week</p>
                 <Select name="templateId" required>
                   <option value="">Choose template</option>
                   {templates.map((template) => (
@@ -376,20 +390,24 @@ export default async function HabitsPage({
                   ))}
                 </Select>
               </div>
-              <SubmitButton label="Assign Template to Week" pendingLabel="Assigning..." className="md:w-auto" />
+              <SubmitButton
+                label="Assign Template to Week"
+                pendingLabel="Assigning..."
+                className="bg-[var(--app-btn-primary-bg)] text-[var(--app-btn-primary-fg)] hover:bg-[var(--app-btn-primary-hover)] md:w-auto"
+              />
             </ActionForm>
           )}
 
           <div className="flex flex-wrap items-center gap-2">
             {currentWeek?.template_id ? (
-              <Badge variant="secondary">Template: {selectedTemplate?.name ?? "Assigned"}</Badge>
+              <Badge variant="secondary" className="bg-[var(--app-chip-bg)] text-[var(--app-chip-fg)]">Template: {selectedTemplate?.name ?? "Assigned"}</Badge>
             ) : (
               <Badge variant="warning">No template selected</Badge>
             )}
-            <Badge variant="secondary">Week planned: {weekPlannedMinutes} min</Badge>
-            <Badge>Week done: {weekDoneMinutes} min</Badge>
-            <Badge variant="secondary">Month done: {monthDoneMinutes} min</Badge>
-            <Badge variant="secondary">Completion: {weekCompletion}%</Badge>
+            <Badge variant="secondary" className="bg-[var(--app-chip-bg)] text-[var(--app-chip-fg)]">Week planned: {weekPlannedMinutes} min</Badge>
+            <Badge className="bg-[var(--app-btn-primary-bg)] text-[var(--app-btn-primary-fg)]">Week done: {weekDoneMinutes} min</Badge>
+            <Badge variant="secondary" className="bg-[var(--app-chip-bg)] text-[var(--app-chip-fg)]">Month done: {monthDoneMinutes} min</Badge>
+            <Badge variant="secondary" className="bg-[var(--app-chip-bg)] text-[var(--app-chip-fg)]">Completion: {weekCompletion}%</Badge>
             {compensationMinutes > 0 ? <Badge variant="warning">Compensation: +{compensationMinutes} min</Badge> : null}
           </div>
 
@@ -410,22 +428,22 @@ export default async function HabitsPage({
         weekHref={weekHref(selectedWeekStart, selectedObjectiveId ? { objectiveId: selectedObjectiveId } : undefined)}
       />
 
-      <Card>
+      <Card className="border-[var(--app-panel-border)] bg-[var(--app-panel-bg)]">
         <CardHeader>
-          <CardTitle>Daily Objective Bars</CardTitle>
+          <CardTitle className="text-[var(--app-text-strong)]">Daily Objective Bars</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {!hasDailyChartData ? (
-            <p className="text-sm text-[#4a5f83]">No planned tasks this week yet.</p>
+            <p className="text-sm text-[var(--app-text-muted)]">No planned tasks this week yet.</p>
           ) : (
             <DailyObjectiveChart data={dailyChartData} />
           )}
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="border-[var(--app-panel-border)] bg-[var(--app-panel-bg)]">
         <CardHeader>
-          <CardTitle>Category Objective Bars</CardTitle>
+          <CardTitle className="text-[var(--app-text-strong)]">Category Objective Bars</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <CategoryObjectiveChart data={objectiveChartData} />

@@ -12,9 +12,18 @@ export type AppAccount = {
 
 export async function requireUser() {
   const supabase = await createServerSupabaseClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  let user: User | null = null;
+  try {
+    const {
+      data: { user: resolvedUser }
+    } = await supabase.auth.getUser();
+    user = resolvedUser;
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+    if (code !== "refresh_token_not_found") {
+      throw error;
+    }
+  }
 
   if (!user) {
     redirect("/login");

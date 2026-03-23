@@ -162,6 +162,7 @@ type KnowledgeSpaceContentProps = {
 export function KnowledgeSpaceContent({ space, items, errorMessage, successMessage }: KnowledgeSpaceContentProps) {
   const [activeModal, setActiveModal] = useState<"new-item" | "edit-item" | "edit-space" | null>(null);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const [revisionMode, setRevisionMode] = useState(false);
 
   const editingItem = editingItemId ? items.find((i) => i.id === editingItemId) ?? null : null;
@@ -336,11 +337,9 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
                           <input type="hidden" name="returnPath" value={returnPath} />
                           <input type="hidden" name="itemId" value={item.id} />
                           <button
-                            type="submit"
+                            type="button"
                             aria-label="Delete item"
-                            onClick={(e) => {
-                              if (!confirm("Delete this item?")) e.preventDefault();
-                            }}
+                            onClick={() => setDeletingItemId(item.id)}
                             className="inline-flex items-center gap-1 rounded-md border border-[#fecaca] bg-[#fef2f2] px-2 py-1 text-xs font-medium text-[#b91c1c] hover:bg-[#fee2e2]"
                           >
                             <Trash2 size={12} />
@@ -453,10 +452,8 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
                 <input type="hidden" name="returnPath" value={returnPath} />
                 <input type="hidden" name="itemId" value={editingItem.id} />
                 <button
-                  type="submit"
-                  onClick={(e) => {
-                    if (!confirm("Delete this item? This cannot be undone.")) e.preventDefault();
-                  }}
+                  type="button"
+                  onClick={() => setDeletingItemId(editingItem.id)}
                   className="inline-flex items-center gap-2 rounded-md border border-[#fecaca] bg-[#fef2f2] px-3 py-2 text-sm font-medium text-[#b91c1c] hover:bg-[#fee2e2]"
                 >
                   <Trash2 size={14} />
@@ -486,6 +483,35 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
             </div>
             <PexelsImagePicker inputName="imageUrl" label="Topic image (optional)" defaultValue={space.image_url ?? ""} />
             <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
+          </ActionForm>
+        </ModalShell>
+      ) : null}
+
+      {deletingItemId ? (
+        <ModalShell title="Delete this item?" description="This action cannot be undone." onClose={() => setDeletingItemId(null)}>
+          <ActionForm
+            action={deleteKnowledgeItemFormAction}
+            className="flex items-center justify-end gap-2"
+            onSuccess={() => {
+              setDeletingItemId(null);
+              closeModal();
+            }}
+            refreshOnly
+          >
+            <input type="hidden" name="returnPath" value={returnPath} />
+            <input type="hidden" name="itemId" value={deletingItemId} />
+            <button
+              type="button"
+              onClick={() => setDeletingItemId(null)}
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-btn-secondary-bg)] px-4 py-2 text-sm font-medium text-[var(--app-btn-secondary-fg)] transition hover:bg-[var(--app-btn-secondary-hover)]"
+            >
+              Cancel
+            </button>
+            <SubmitButton
+              label="Delete"
+              pendingLabel="Deleting..."
+              className="h-10 rounded-lg border border-[var(--app-panel-border)] bg-[var(--ui-badge-danger-bg)] px-4 py-2 text-sm font-medium text-[var(--ui-badge-danger-fg)] hover:brightness-95"
+            />
           </ActionForm>
         </ModalShell>
       ) : null}

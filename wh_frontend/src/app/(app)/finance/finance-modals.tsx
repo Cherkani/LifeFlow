@@ -88,7 +88,7 @@ function enumerateIsoDates(rangeStartIso: string, rangeEndIso: string) {
   const start = new Date(`${rangeStartIso}T00:00:00`);
   const end = new Date(`${rangeEndIso}T00:00:00`);
   for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
-    dates.push(cursor.toISOString().slice(0, 10));
+    dates.push(toDateInputValue(cursor));
   }
   return dates;
 }
@@ -173,12 +173,14 @@ export function FinanceModals({
   nextAnchorIso,
   currencyCode
 }: FinanceModalsProps) {
+  const todayIso = toDateInputValue(new Date());
   const [activeModal, setActiveModal] = useState<
     "expense" | "edit-expense" | "debt-entry" | "expense-category" | "edit-category" | null
   >(null);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [debtEntryMode, setDebtEntryMode] = useState<"debt" | "payment">("debt");
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [recentSearch, setRecentSearch] = useState("");
 
@@ -350,6 +352,17 @@ export function FinanceModals({
             >
               <ArrowUpRight size={16} />
             </Link>
+            <Link
+              href={buildFinanceHref({ tab, period, anchor: todayIso }) as Route}
+              className={[
+                "inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition",
+                anchorIso === todayIso
+                  ? "border-[#0b1f3b] bg-[#0b1f3b] text-white"
+                  : "border-[#c7d3e8] bg-[#edf3ff] text-[#23406d] hover:bg-[#e3ebf9]"
+              ].join(" ")}
+            >
+              Today
+            </Link>
           </div>
         </CardContent>
       </Card>
@@ -486,10 +499,8 @@ export function FinanceModals({
                           <input type="hidden" name="returnPath" value={baseHref} />
                           <input type="hidden" name="expenseId" value={entry.id} />
                           <button
-                            type="submit"
-                            onClick={(e) => {
-                              if (!confirm("Delete this expense?")) e.preventDefault();
-                            }}
+                            type="button"
+                            onClick={() => setDeletingExpenseId(entry.id)}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#fecaca] bg-[#fef2f2] text-[#b91c1c] transition hover:bg-[#fee2e2]"
                             aria-label="Delete expense"
                           >
@@ -702,7 +713,7 @@ export function FinanceModals({
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="occurredOn">Date</Label>
-                  <Input id="occurredOn" name="occurredOn" type="date" required defaultValue={toDateInputValue(new Date())} />
+                  <Input id="occurredOn" name="occurredOn" type="date" required defaultValue={anchorIso} />
                 </div>
               </div>
               <div className="space-y-2">
@@ -712,6 +723,35 @@ export function FinanceModals({
               <SubmitButton label="Save expense" pendingLabel="Saving..." className="w-full sm:w-auto" />
             </ActionForm>
           )}
+        </ModalShell>
+      ) : null}
+
+      {deletingExpenseId ? (
+        <ModalShell
+          title="Delete this expense?"
+          description="This action cannot be undone."
+          onClose={() => setDeletingExpenseId(null)}
+        >
+          <ActionForm
+            action={deleteExpenseFormAction}
+            className="flex items-center justify-end gap-2"
+            onSuccess={() => setDeletingExpenseId(null)}
+          >
+            <input type="hidden" name="returnPath" value={baseHref} />
+            <input type="hidden" name="expenseId" value={deletingExpenseId} />
+            <button
+              type="button"
+              onClick={() => setDeletingExpenseId(null)}
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-btn-secondary-bg)] px-4 py-2 text-sm font-medium text-[var(--app-btn-secondary-fg)] transition hover:bg-[var(--app-btn-secondary-hover)]"
+            >
+              Cancel
+            </button>
+            <SubmitButton
+              label="Delete"
+              pendingLabel="Deleting..."
+              className="h-10 rounded-lg border border-[var(--app-panel-border)] bg-[var(--ui-badge-danger-bg)] px-4 py-2 text-sm font-medium text-[var(--ui-badge-danger-fg)] hover:brightness-95"
+            />
+          </ActionForm>
         </ModalShell>
       ) : null}
 

@@ -56,7 +56,7 @@ export default async function KnowledgePage({
       : sortedSpaces;
 
   return (
-    <div className="space-y-6">
+    <div className="knowledge-theme space-y-6">
       <KnowledgeModals
         spaces={spaces}
         filteredSpaces={filteredSpaces}

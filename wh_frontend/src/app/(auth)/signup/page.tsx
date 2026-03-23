@@ -1,12 +1,10 @@
 import Link from "next/link";
-import { Building2, Globe, Lock, Mail, User } from "lucide-react";
+import { Globe, Lock, Mail, User } from "lucide-react";
 
-import { loginDemoUserAction, signUpAction } from "@/app/(auth)/actions";
+import { signInWithGoogleAction, signUpAction } from "@/app/(auth)/actions";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Alert } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -19,50 +17,38 @@ export default async function SignUpPage({
   const params = await searchParams;
 
   return (
-    <Card className="auth-card">
-      <CardHeader className="space-y-3">
-        <CardTitle className="auth-title text-2xl">Create an account</CardTitle>
-        <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
-          <Link
-            href="/login"
-            className="rounded-lg px-3 py-2 text-center text-sm font-semibold text-slate-600 transition-all duration-200 hover:bg-white/70 hover:text-slate-800"
-          >
-            Sign in
-          </Link>
-          <Link
-            href="/signup"
-            className="rounded-lg bg-white px-3 py-2 text-center text-sm font-semibold text-slate-900 shadow-sm transition-all duration-200 hover:-translate-y-0.5"
-          >
-            Sign up
-          </Link>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
+    <Card className="auth-card relative mx-auto w-full max-w-xl border-[#d7cdea] bg-white shadow-[0_18px_36px_rgba(58,39,89,0.16)] backdrop-blur-0">
+      <CardContent className="relative space-y-5 pb-16 pt-6">
         {params.error ? <Alert variant="error">{params.error}</Alert> : null}
 
-        <form action={signUpAction} className="space-y-4">
+        <form action={signUpAction} className="auth-fade-item space-y-4 px-1">
           <div className="space-y-2">
-            <Label htmlFor="fullName">Full Name</Label>
+            <Label htmlFor="fullName" className="text-[#4c3e73]">Full Name</Label>
             <div className="relative">
-              <User size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input id="fullName" name="fullName" type="text" required autoFocus placeholder="John Doe" className="pl-9" />
+              <User size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#8f84b2]" />
+              <Input
+                id="fullName"
+                name="fullName"
+                type="text"
+                required
+                autoFocus
+                placeholder="John Doe"
+                className="h-11 rounded-xl border-[#ddd4ef] bg-white pl-9 focus:border-[#8c7ab5] focus:ring-[#8c7ab5]"
+              />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="accountName">Workspace Name</Label>
+            <Label htmlFor="timezone" className="text-[#4c3e73]">Timezone</Label>
             <div className="relative">
-              <Building2 size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input id="accountName" name="accountName" type="text" required placeholder="My Life" className="pl-9" />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="timezone">Timezone</Label>
-            <div className="relative">
-              <Globe size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Select id="timezone" name="timezone" required defaultValue="Africa/Casablanca" className="pl-9">
+              <Globe size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#8f84b2]" />
+              <Select
+                id="timezone"
+                name="timezone"
+                required
+                defaultValue="Africa/Casablanca"
+                className="h-11 rounded-xl border-[#ddd4ef] bg-white pl-9 text-[#4c3e73] focus:border-[#8c7ab5] focus:ring-[#8c7ab5]"
+              >
                 <option value="Africa/Casablanca">Africa/Casablanca (Morocco)</option>
                 <option value="UTC">UTC</option>
                 <option value="Europe/Paris">Europe/Paris</option>
@@ -74,49 +60,72 @@ export default async function SignUpPage({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-[#4c3e73]">Email</Label>
             <div className="relative">
-              <Mail size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input id="email" name="email" type="email" required placeholder="example@company.com" className="pl-9" />
+              <Mail size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#8f84b2]" />
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                required
+                placeholder="example@company.com"
+                className="h-11 rounded-xl border-[#ddd4ef] bg-white pl-9 focus:border-[#8c7ab5] focus:ring-[#8c7ab5]"
+              />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password" className="text-[#4c3e73]">Password</Label>
             <div className="relative">
-              <Lock size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input id="password" name="password" type="password" minLength={8} required placeholder="Password" className="pl-9" />
+              <Lock size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#8f84b2]" />
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                minLength={8}
+                required
+                placeholder="Password"
+                className="h-11 rounded-xl border-[#ddd4ef] bg-white pl-9 focus:border-[#8c7ab5] focus:ring-[#8c7ab5]"
+              />
             </div>
           </div>
 
-          <label htmlFor="terms" className="inline-flex items-start gap-2 text-sm text-slate-600">
-            <Checkbox id="terms" name="terms" required className="mt-0.5" />
-            <span>I agree to the <span className="font-semibold text-slate-900">terms and conditions</span></span>
-          </label>
-
-          <SubmitButton label="Sign up" pendingLabel="Creating..." className="auth-primary-btn w-full" />
+          <div className="flex justify-center pt-1">
+            <SubmitButton
+              label="Sign up"
+              pendingLabel="Creating..."
+              className="auth-primary-btn h-11 min-w-44 rounded-xl bg-[#6f5aa5] font-semibold hover:bg-[#5f4b92]"
+            />
+          </div>
         </form>
 
-        <div className="pt-1">
-          <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">Google (soon)</p>
-          <div className="flex items-center justify-center gap-2">
-            <Button type="button" variant="outline" size="icon" disabled aria-label="Continue with Google (coming soon)">
-              <span className="text-base font-bold text-slate-600">G</span>
-            </Button>
-            <form action={loginDemoUserAction}>
-              <button
-                type="submit"
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-[#8c88bc] bg-[#f5f4fb] px-3 text-sm font-semibold text-[#5e5a87] transition-colors hover:bg-[#eceaf7]"
-              >
-                Demo
-              </button>
-            </form>
-          </div>
+        <form action={signInWithGoogleAction} className="auth-fade-item flex justify-center">
+          <input type="hidden" name="next" value="/dashboard" />
+          <button
+            type="submit"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#c8b9e6] bg-white text-sm font-bold text-[#5f4b92] transition-all duration-300 hover:scale-105 hover:bg-[#f6f1ff]"
+            aria-label="Continue with Google"
+            title="Continue with Google"
+          >
+            G
+          </button>
+        </form>
+
+        <div className="relative text-center">
+          <span className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-[#d9d0eb]" />
+          <span className="relative bg-white px-3 text-xs font-semibold uppercase tracking-[0.14em] text-[#8b7bac]">or continue with email</span>
         </div>
 
-        <p className="text-center text-sm text-slate-600">
-          Already have an account? <Link href="/login" className="font-semibold text-slate-900">Login here</Link>
+        <p className="flex items-center justify-center gap-2 text-center text-sm text-[#6b5a91]">
+          <span>Already have an account?</span>
+          <Link
+            href="/login"
+            className="rounded-full border border-[#cbbce8] bg-white px-3 py-1 font-semibold text-[#4c3e73] transition-colors duration-200 hover:bg-[#f3ecff]"
+          >
+            Login here
+          </Link>
         </p>
+
       </CardContent>
     </Card>
   );

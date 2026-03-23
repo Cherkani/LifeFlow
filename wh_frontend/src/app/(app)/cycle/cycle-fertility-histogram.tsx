@@ -41,14 +41,14 @@ export function CycleFertilityHistogram({
         <BarChart data={data} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
           <XAxis
             dataKey="day"
-            tick={{ fill: "#4a5f83", fontSize: 10 }}
+            tick={{ fill: "var(--chart-axis)", fontSize: 10 }}
             axisLine={false}
             tickLine={false}
             interval={cycleLength <= 28 ? 0 : 1}
           />
           <YAxis
             domain={[0, 40]}
-            tick={{ fill: "#6b7da1", fontSize: 10 }}
+            tick={{ fill: "var(--chart-axis-muted)", fontSize: 10 }}
             axisLine={false}
             tickLine={false}
             tickFormatter={(v) => `${v}%`}
@@ -58,8 +58,9 @@ export function CycleFertilityHistogram({
             formatter={(value) => [`${Number(value ?? 0)}%`, "Chance to conceive"]}
             labelFormatter={(label) => `Day ${label}`}
             contentStyle={{
-              backgroundColor: "#fff",
-              border: "1px solid #d7e0f1",
+              backgroundColor: "var(--chart-tooltip-bg)",
+              border: "1px solid var(--chart-tooltip-border)",
+              color: "var(--chart-tooltip-text)",
               borderRadius: "8px",
               fontSize: "12px"
             }}

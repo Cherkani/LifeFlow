@@ -82,6 +82,7 @@ export function ExecutionBoard({
 }: ExecutionBoardProps) {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [selectedLogDate, setSelectedLogDate] = useState<string | null>(null);
+  const mobileFocusDate = weekDates.includes(todayKey) ? todayKey : weekDates[0] ?? null;
 
   const allSessions = Object.values(sessionsByDate).flat();
   const selectedSession = selectedSessionId ? allSessions.find((s) => s.id === selectedSessionId) ?? null : null;
@@ -89,9 +90,9 @@ export function ExecutionBoard({
 
   return (
     <>
-      <Card>
+      <Card className="border-[var(--app-panel-border)] bg-[var(--app-panel-bg)]">
         <CardHeader>
-          <CardTitle>Execution Board (7 Days)</CardTitle>
+          <CardTitle className="text-[var(--app-text-strong)]">Execution Board (7 Days)</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 md:grid-cols-7">
@@ -125,34 +126,37 @@ export function ExecutionBoard({
                 <div
                   key={dateKey}
                   className={[
-                    "flex min-h-[340px] flex-col rounded-xl border p-2",
-                    isCurrentDay ? "border-[#dccf94] bg-[#f3ebc8]" : "border-[#c7d3e8] bg-[#f8fbff]"
+                    dateKey === mobileFocusDate ? "flex" : "hidden md:flex",
+                    "min-h-[340px] flex-col rounded-xl border p-2",
+                    isCurrentDay
+                      ? "border-[#c6ba86] bg-[color-mix(in_srgb,var(--app-panel-bg-soft)_78%,#eedf9c_22%)]"
+                      : "border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg-soft)]"
                   ].join(" ")}
                 >
-                  <div className="rounded-lg border border-[#d7e0f1] bg-white px-3 py-2">
+                  <div className="rounded-lg border border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg)] px-3 py-2">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="text-[11px] font-semibold uppercase text-[#4a5f83]">{weekDay}</p>
-                        <p className="text-xl font-semibold leading-none text-[#0c1d3c]">{dayNumber(dateKey)}</p>
+                        <p className="text-[11px] font-semibold uppercase text-[var(--app-text-muted)]">{weekDay}</p>
+                        <p className="text-xl font-semibold leading-none text-[var(--app-text-strong)]">{dayNumber(dateKey)}</p>
                       </div>
                       {categories.length > 0 ? (
                         <button
                           type="button"
                           onClick={() => setSelectedLogDate(dateKey)}
-                          className="inline-flex h-7 items-center justify-center rounded-md border border-[#c7d3e8] bg-[#edf3ff] px-2 text-xs font-medium text-[#23406d] transition hover:bg-[#e3ebf9]"
+                          className="inline-flex h-7 items-center justify-center rounded-md border border-[var(--app-panel-border-strong)] bg-[var(--app-btn-secondary-bg)] px-2 text-xs font-medium text-[var(--app-btn-secondary-fg)] transition hover:bg-[var(--app-btn-secondary-hover)]"
                         >
                           + Add
                         </button>
                       ) : null}
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-1">
-                      <Badge variant="secondary" className="px-2 py-0 text-[10px]">
+                      <Badge variant="secondary" className="bg-[var(--app-chip-bg)] px-2 py-0 text-[10px] text-[var(--app-chip-fg)]">
                         {formatMinutesLabel(dayDoneMinutes)} done
                       </Badge>
-                      <Badge variant="secondary" className="px-2 py-0 text-[10px]">
+                      <Badge variant="secondary" className="bg-[var(--app-chip-bg)] px-2 py-0 text-[10px] text-[var(--app-chip-fg)]">
                         {formatMinutesLabel(dayPlannedMinutes)} planned
                       </Badge>
-                      <Badge variant={dayProgress >= 100 ? "secondary" : "warning"} className="px-2 py-0 text-[10px]">
+                      <Badge variant={dayProgress >= 100 ? "default" : "warning"} className="px-2 py-0 text-[10px]">
                         {dayProgress}%
                       </Badge>
                     </div>
@@ -171,31 +175,31 @@ export function ExecutionBoard({
                             key={session.id}
                             type="button"
                             onClick={() => setSelectedSessionId(session.id)}
-                            className="flex w-full items-center justify-between gap-2 rounded-md border border-[#d7e0f1] bg-white px-2 py-2 text-left transition hover:bg-[#f8fbff]"
+                            className="flex w-full items-center justify-between gap-2 rounded-md border border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg)] px-2 py-2 text-left transition hover:bg-[var(--app-panel-bg-soft)]"
                           >
                             <div className="flex flex-1 items-center gap-2 overflow-hidden">
                               {objectiveImageUrl ? (
-                                <div className="relative size-10 shrink-0 overflow-hidden rounded-md border border-[#d7e0f1] bg-white">
+                                <div className="relative size-10 shrink-0 overflow-hidden rounded-md border border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg)]">
                                   <Image src={objectiveImageUrl} alt={habitTitle} fill sizes="40px" className="object-cover" />
                                 </div>
                               ) : (
-                                <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-dashed border-[#d7e0f1] bg-[#f8fbff] text-xs font-semibold uppercase text-[#23406d]">
+                                <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-dashed border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg-soft)] text-xs font-semibold uppercase text-[var(--app-btn-secondary-fg)]">
                                   {fallbackInitial}
                                 </div>
                               )}
-                              <p className="min-w-0 flex-1 truncate text-xs font-semibold text-[#0c1d3c]">{habitTitle}</p>
+                              <p className="min-w-0 flex-1 truncate text-xs font-semibold text-[var(--app-text-strong)]">{habitTitle}</p>
                             </div>
                             {session.completed ? (
                               <CheckSquare size={16} className="shrink-0 text-emerald-600" />
                             ) : (
-                              <Square size={16} className="shrink-0 text-[#4a5f83]" />
+                              <Square size={16} className="shrink-0 text-[var(--app-text-muted)]" />
                             )}
                           </button>
                         );
                       })
                     ) : (
-                      <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-[#d7e0f1] text-center">
-                        <p className="text-xs italic text-[#6b7da1]">No tasks assigned</p>
+                      <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-[var(--app-panel-border-strong)] text-center">
+                        <p className="text-xs italic text-[var(--app-text-muted)]">No tasks assigned</p>
                       </div>
                     )}
                   </div>
@@ -235,7 +239,7 @@ export function ExecutionBoard({
             <input type="hidden" name="returnPath" value={weekHref} />
             <input type="hidden" name="sessionDate" value={selectedLogDay} />
             <div className="space-y-2">
-              <p className="text-xs font-medium text-[#4a5f83]">Objective</p>
+              <p className="text-xs font-medium text-[var(--app-text-muted)]">Objective</p>
               <Select name="objectiveId" required defaultValue="">
                 <option value="" disabled>
                   Choose objective
@@ -248,11 +252,11 @@ export function ExecutionBoard({
               </Select>
             </div>
             <div className="space-y-2">
-              <p className="text-xs font-medium text-[#4a5f83]">Task title</p>
+              <p className="text-xs font-medium text-[var(--app-text-muted)]">Task title</p>
               <Input name="newTaskTitle" placeholder="e.g. Extra cardio" required />
             </div>
             <div className="space-y-2">
-              <p className="text-xs font-medium text-[#4a5f83]">Minutes done</p>
+              <p className="text-xs font-medium text-[var(--app-text-muted)]">Minutes done</p>
               <Input name="doneMinutes" type="number" min={1} defaultValue={30} required />
             </div>
             <div className="flex items-center gap-2">
@@ -260,7 +264,7 @@ export function ExecutionBoard({
               <button
                 type="button"
                 onClick={() => setSelectedLogDate(null)}
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] px-4 py-2 text-sm font-medium text-[#23406d] transition hover:bg-[#e3ebf9]"
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-[var(--app-panel-border-strong)] bg-[var(--app-btn-secondary-bg)] px-4 py-2 text-sm font-medium text-[var(--app-btn-secondary-fg)] transition hover:bg-[var(--app-btn-secondary-hover)]"
               >
                 Back
               </button>

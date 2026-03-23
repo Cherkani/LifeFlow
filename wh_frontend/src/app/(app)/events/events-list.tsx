@@ -48,6 +48,7 @@ function buildEventsHref(month: string, date: string) {
 
 export function EventsList({ events, monthKey, selectedIso, emptyMessage }: EventsListProps) {
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [deletingEvent, setDeletingEvent] = useState<CalendarEvent | null>(null);
   const returnPath = buildEventsHref(monthKey, selectedIso);
   const fallbackEmptyMessage = emptyMessage ?? "No events scheduled for this day.";
 
@@ -86,11 +87,9 @@ export function EventsList({ events, monthKey, selectedIso, emptyMessage }: Even
                   <input type="hidden" name="returnPath" value={returnPath} />
                   <input type="hidden" name="eventId" value={event.id} />
                   <button
-                    type="submit"
+                    type="button"
                     aria-label="Delete event"
-                    onClick={(e) => {
-                      if (!confirm("Delete this event?")) e.preventDefault();
-                    }}
+                    onClick={() => setDeletingEvent(event)}
                     className="inline-flex size-7 items-center justify-center rounded-md text-[#b91c1c] hover:bg-[#fee2e2]"
                   >
                     <Trash2 size={12} />
@@ -166,6 +165,36 @@ export function EventsList({ events, monthKey, selectedIso, emptyMessage }: Even
               />
             </div>
             <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
+          </ActionForm>
+        </ModalShell>
+      ) : null}
+
+      {deletingEvent ? (
+        <ModalShell
+          title="Delete this event?"
+          description="This action cannot be undone."
+          onClose={() => setDeletingEvent(null)}
+        >
+          <ActionForm
+            action={deleteCalendarEventFormAction}
+            className="flex items-center justify-end gap-2"
+            onSuccess={() => setDeletingEvent(null)}
+            refreshOnly
+          >
+            <input type="hidden" name="returnPath" value={returnPath} />
+            <input type="hidden" name="eventId" value={deletingEvent.id} />
+            <button
+              type="button"
+              onClick={() => setDeletingEvent(null)}
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-btn-secondary-bg)] px-4 py-2 text-sm font-medium text-[var(--app-btn-secondary-fg)] transition hover:bg-[var(--app-btn-secondary-hover)]"
+            >
+              Cancel
+            </button>
+            <SubmitButton
+              label="Delete"
+              pendingLabel="Deleting..."
+              className="h-10 rounded-lg border border-[var(--app-panel-border)] bg-[var(--ui-badge-danger-bg)] px-4 py-2 text-sm font-medium text-[var(--ui-badge-danger-fg)] hover:brightness-95"
+            />
           </ActionForm>
         </ModalShell>
       ) : null}

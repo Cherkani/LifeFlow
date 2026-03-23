@@ -38,7 +38,7 @@ export function ModalShell({ title, closeHref, onClose, description, children }:
       type="button"
       onClick={onClose}
       aria-label="Close"
-      className="inline-flex size-8 items-center justify-center rounded-md text-[#4a5f83] hover:bg-[#e3ebf9] hover:text-[#0c1d3c]"
+      className="inline-flex size-8 items-center justify-center rounded-md text-[var(--app-text-muted)] hover:bg-[var(--app-btn-secondary-bg)] hover:text-[var(--app-text-strong)]"
     >
       <X size={16} />
     </button>
@@ -46,7 +46,7 @@ export function ModalShell({ title, closeHref, onClose, description, children }:
     <Link
       href={closeHref as Route}
       aria-label="Close"
-      className="inline-flex size-8 items-center justify-center rounded-md text-[#4a5f83] hover:bg-[#e3ebf9] hover:text-[#0c1d3c]"
+      className="inline-flex size-8 items-center justify-center rounded-md text-[var(--app-text-muted)] hover:bg-[var(--app-btn-secondary-bg)] hover:text-[var(--app-text-strong)]"
       scroll={false}
     >
       <X size={16} />
@@ -54,14 +54,14 @@ export function ModalShell({ title, closeHref, onClose, description, children }:
   ) : null;
 
   const modalContent = (
-    <div className="fixed inset-0 z-50 overflow-y-auto p-4">
+    <div className="app-modal fixed inset-0 z-50 overflow-y-auto p-4">
       {backdrop}
 
-      <div className="relative z-10 mx-auto my-6 flex w-full max-w-2xl max-h-[90vh] flex-col rounded-2xl border border-[#c7d3e8] bg-[#f2f6fe] shadow-xl">
-        <div className="flex items-start justify-between border-b border-[#d7e0f1] px-5 py-4">
+      <div className="relative z-10 mx-auto my-6 flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] shadow-xl">
+        <div className="flex items-start justify-between border-b border-[var(--app-panel-border)] px-5 py-4">
           <div>
-            <h2 className="text-base font-semibold text-[#0c1d3c]">{title}</h2>
-            {description ? <p className="mt-1 text-sm text-[#4a5f83]">{description}</p> : null}
+            <h2 className="text-base font-semibold text-[var(--app-text-strong)]">{title}</h2>
+            {description ? <p className="mt-1 text-sm text-[var(--app-text-muted)]">{description}</p> : null}
           </div>
           {closeButton}
         </div>
