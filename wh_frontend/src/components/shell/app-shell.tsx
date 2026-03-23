@@ -77,6 +77,7 @@ export function AppShell({
   }, [theme]);
 
   const isDark = theme === "dark";
+  const firstNameInitial = (accountName.trim().split(/\s+/)[0] || userLabel || "U").slice(0, 1).toUpperCase();
 
   return (
     <div
@@ -99,7 +100,7 @@ export function AppShell({
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-72 flex-col transition-transform duration-200",
+          "fixed inset-y-0 left-0 z-40 flex w-72 flex-col transition-transform duration-[900ms] ease-in-out",
           isDark
             ? "border-r border-[#2c3e5f] bg-[linear-gradient(170deg,#0b172a_0%,#0d1b30_40%,#101f36_100%)]"
             : "border-r border-[#dadde9] bg-[linear-gradient(170deg,#f6f7fc_0%,#f0f2f8_40%,#f8f9fd_100%)]",
@@ -143,7 +144,18 @@ export function AppShell({
         <div className={cn("relative z-10 border-b px-4 py-4", isDark ? "border-[#2c3e5f]" : "border-[#dadde9]", !desktopExpanded && "md:px-3")}>
           <p className={cn("text-xs uppercase tracking-wide", isDark ? "text-[#91a7cb]" : "text-[#7a819f]", !desktopExpanded && "md:hidden")}>Menu</p>
           <p className={cn("text-sm font-medium", isDark ? "text-[#e3edff]" : "text-[#374067]", !desktopExpanded && "md:hidden")}>{accountName}</p>
-          <p className={cn("hidden text-xs font-semibold uppercase md:block", isDark ? "text-[#91a7cb]" : "text-[#7a819f]", desktopExpanded && "md:hidden")}>{userLabel.slice(0, 1)}</p>
+          <div className={cn("hidden md:flex md:items-center md:justify-center", desktopExpanded && "md:hidden")}>
+            <span
+              className={cn(
+                "inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold",
+                isDark ? "border border-[#3f5d87] bg-[#13233d] text-[#e6efff]" : "border border-[#c7d3e8] bg-[#edf3ff] text-[#23406d]"
+              )}
+              aria-label="User initial"
+              title={accountName}
+            >
+              {firstNameInitial}
+            </span>
+          </div>
         </div>
 
         <nav className="relative z-10 flex-1 space-y-1 p-3">

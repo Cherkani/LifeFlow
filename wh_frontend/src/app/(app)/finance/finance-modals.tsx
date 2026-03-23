@@ -289,12 +289,14 @@ export function FinanceModals({
 
       <Card>
         <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
-          <div className="inline-flex rounded-lg border border-[#c7d3e8] bg-white p-1">
+          <div className="inline-flex rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-1">
             <Link
               href={buildFinanceHref({ tab: "expenses", period, anchor: anchorIso }) as Route}
               className={[
-                "rounded-md px-3 py-1.5 text-sm font-semibold",
-                tab === "expenses" ? "bg-[#0b1f3b] text-white" : "text-[#23406d]"
+                "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
+                tab === "expenses"
+                  ? "bg-[var(--app-btn-primary-bg)] text-[var(--app-btn-primary-fg)] shadow-sm"
+                  : "text-[var(--app-btn-secondary-fg)] hover:bg-[var(--app-btn-secondary-bg)]"
               ].join(" ")}
             >
               Expenses
@@ -302,8 +304,10 @@ export function FinanceModals({
             <Link
               href={buildFinanceHref({ tab: "debts", period, anchor: anchorIso }) as Route}
               className={[
-                "rounded-md px-3 py-1.5 text-sm font-semibold",
-                tab === "debts" ? "bg-[#0b1f3b] text-white" : "text-[#23406d]"
+                "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
+                tab === "debts"
+                  ? "bg-[var(--app-btn-primary-bg)] text-[var(--app-btn-primary-fg)] shadow-sm"
+                  : "text-[var(--app-btn-secondary-fg)] hover:bg-[var(--app-btn-secondary-bg)]"
               ].join(" ")}
             >
               Debts
