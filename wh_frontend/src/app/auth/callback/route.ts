@@ -42,12 +42,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(errorRedirect);
   }
 
-  const { data: accountId, error: ensureError } = await supabase.rpc("ensure_my_account");
-  if (ensureError || !accountId) {
-    return NextResponse.redirect(new URL("/login?error=missing-account", requestUrl.origin));
-  }
-
-  await supabase.rpc("update_my_last_signed_in");
-
   return response;
 }
