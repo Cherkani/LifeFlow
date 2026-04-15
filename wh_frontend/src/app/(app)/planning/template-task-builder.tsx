@@ -142,7 +142,7 @@ function TaskRow({
             id={`${fieldBaseId}-start-time`}
             name={`${fieldBaseId}-start-time`}
             type="time"
-            step={300}
+            step={1800}
             value={task.startTime}
             onChange={handleStartTimeChange}
             aria-label={`Start time for ${task.id}`}

@@ -57,6 +57,10 @@ const debtPaymentSchema = z.object({
   notes: z.string().max(1000).optional()
 });
 
+const deleteDebtSchema = z.object({
+  debtId: z.string().uuid()
+});
+
 function getSafeReturnPath(raw: FormDataEntryValue | null) {
   const value = typeof raw === "string" ? raw.trim() : "";
   return value.startsWith("/finance") ? value : "/finance";
@@ -323,6 +327,34 @@ export async function deleteExpenseFormAction(
   return deleteExpenseAction(formData);
 }
 
+export async function deleteDebtAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = deleteDebtSchema.safeParse({
+    debtId: formData.get("debtId")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+
+  await supabase
+    .from("debt_payments")
+    .delete()
+    .eq("account_id", account.accountId)
+    .eq("debt_id", payload.data.debtId);
+
+  await supabase
+    .from("debts")
+    .delete()
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.debtId);
+
+  revalidatePath(returnPath.split("?")[0] || "/finance");
+  return { redirectTo: returnPath };
+}
+
 export async function createDebtFormAction(
   _prevState: RedirectResult | null,
   formData: FormData
@@ -335,6 +367,13 @@ export async function createDebtPaymentFormAction(
   formData: FormData
 ): Promise<RedirectResult | null> {
   return createDebtPaymentAction(formData);
+}
+
+export async function deleteDebtFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return deleteDebtAction(formData);
 }
 
 export async function updateExpenseCategoryFormAction(

@@ -12,6 +12,7 @@ import {
   createDebtPaymentFormAction,
   createExpenseCategoryFormAction,
   createExpenseFormAction,
+  deleteDebtFormAction,
   deleteExpenseFormAction,
   updateExpenseCategoryFormAction,
   updateExpenseFormAction
@@ -624,9 +625,25 @@ export function FinanceModals({
                             {debt.due_date ? ` · due ${debt.due_date}` : ""}
                           </p>
                         </div>
-                        <Badge variant={debt.status === "open" ? "warning" : "secondary"}>
-                          {formatMoneyDhs(Number(debt.remaining_balance ?? debt.principal ?? 0))}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={debt.status === "open" ? "warning" : "secondary"}>
+                            {formatMoneyDhs(Number(debt.remaining_balance ?? debt.principal ?? 0))}
+                          </Badge>
+                          {debt.status === "closed" && (
+                            <ActionForm action={deleteDebtFormAction} className="inline">
+                              <input type="hidden" name="returnPath" value={baseHref} />
+                              <input type="hidden" name="debtId" value={debt.id} />
+                              <button
+                                type="submit"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#fecaca] bg-[#fef2f2] text-[#b91c1c] transition hover:bg-[#fee2e2]"
+                                aria-label="Remove resolved debt"
+                                title="Remove resolved debt"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </ActionForm>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
