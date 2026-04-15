@@ -12,8 +12,8 @@ import { SubmitButton } from "@/components/forms/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ModalShell } from "@/components/ui/modal-shell";
-import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { EventsTypeField } from "./events-type-field";
 
 type CalendarEvent = {
   id: string;
@@ -21,14 +21,16 @@ type CalendarEvent = {
   details: string | null;
   event_date: string | null;
   event_time: string | null;
-  event_type: "meeting" | "important" | "general";
+  event_type: string;
 };
 
 type EventsListProps = {
   events: CalendarEvent[];
   monthKey: string;
   selectedIso: string;
+  view?: "scheduled" | "backlog";
   emptyMessage?: string;
+  eventTypes?: string[];
 };
 
 function formatTime(time: string) {
@@ -39,17 +41,25 @@ function formatTime(time: string) {
   return `${hour12}:${m} ${ampm}`;
 }
 
-function buildEventsHref(month: string, date: string) {
+function buildEventsHref(month: string, date: string, view: "scheduled" | "backlog" = "scheduled") {
   const query = new URLSearchParams();
   query.set("month", month);
   query.set("date", date);
+  query.set("view", view);
   return `/events?${query.toString()}`;
 }
 
-export function EventsList({ events, monthKey, selectedIso, emptyMessage }: EventsListProps) {
+export function EventsList({
+  events,
+  monthKey,
+  selectedIso,
+  view = "scheduled",
+  emptyMessage,
+  eventTypes = []
+}: EventsListProps) {
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [deletingEvent, setDeletingEvent] = useState<CalendarEvent | null>(null);
-  const returnPath = buildEventsHref(monthKey, selectedIso);
+  const returnPath = buildEventsHref(monthKey, selectedIso, view);
   const fallbackEmptyMessage = emptyMessage ?? "No events scheduled for this day.";
 
   return (
@@ -146,13 +156,8 @@ export function EventsList({ events, monthKey, selectedIso, emptyMessage }: Even
                   defaultValue={editingEvent.event_time ?? ""}
                 />
               </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="editEventType">Type</Label>
-                <Select id="editEventType" name="eventType" defaultValue={editingEvent.event_type}>
-                  <option value="important">Important</option>
-                  <option value="meeting">Meeting</option>
-                  <option value="general">General</option>
-                </Select>
+              <div className="sm:col-span-2">
+                <EventsTypeField fieldId="editEventType" name="eventType" savedTypes={eventTypes} defaultValue={editingEvent.event_type} />
               </div>
             </div>
             <div className="space-y-2">

@@ -9,6 +9,15 @@ export type CalendarEventRow = {
   event_type: string;
 };
 
+export type CalendarEventTypeRow = {
+  id: string;
+  name: string;
+};
+
+export type CalendarEventTypeUsageRow = {
+  event_type: string;
+};
+
 export async function getCalendarEvents(
   supabase: Supabase,
   accountId: string,
@@ -36,4 +45,27 @@ export async function getCalendarUndatedEvents(
     .is("event_date", null)
     .order("created_at", { ascending: true });
   return (data ?? []) as CalendarEventRow[];
+}
+
+export async function getCalendarEventTypes(
+  supabase: Supabase,
+  accountId: string
+): Promise<CalendarEventTypeRow[]> {
+  const { data } = await supabase
+    .from("calendar_event_types")
+    .select("id, name")
+    .eq("account_id", accountId)
+    .order("name", { ascending: true });
+  return (data ?? []) as CalendarEventTypeRow[];
+}
+
+export async function getCalendarEventTypeUsage(
+  supabase: Supabase,
+  accountId: string
+): Promise<CalendarEventTypeUsageRow[]> {
+  const { data } = await supabase
+    .from("calendar_events")
+    .select("event_type")
+    .eq("account_id", accountId);
+  return (data ?? []) as CalendarEventTypeUsageRow[];
 }

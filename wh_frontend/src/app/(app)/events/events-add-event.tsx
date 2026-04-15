@@ -8,13 +8,14 @@ import { ActionForm } from "@/components/forms/action-form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ModalShell } from "@/components/ui/modal-shell";
-import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { SubmitButton } from "@/components/forms/submit-button";
+import { EventsTypeField } from "./events-type-field";
 
 type EventsAddEventProps = {
   monthKey: string;
   selectedIso: string;
+  eventTypes: string[];
 };
 
 function buildEventsHref(month: string, date: string, modal?: string) {
@@ -25,7 +26,7 @@ function buildEventsHref(month: string, date: string, modal?: string) {
   return `/events?${query.toString()}`;
 }
 
-export function EventsAddEvent({ monthKey, selectedIso }: EventsAddEventProps) {
+export function EventsAddEvent({ monthKey, selectedIso, eventTypes }: EventsAddEventProps) {
   const [isOpen, setIsOpen] = useState(false);
   const closeModalHref = buildEventsHref(monthKey, selectedIso);
 
@@ -41,7 +42,7 @@ export function EventsAddEvent({ monthKey, selectedIso }: EventsAddEventProps) {
       </button>
 
       {isOpen ? (
-        <ModalShell title="Add Calendar Event" description="Meeting or important note." onClose={() => setIsOpen(false)}>
+        <ModalShell title="Add Calendar Event" description="Add any dated event with your own custom type." onClose={() => setIsOpen(false)}>
           <ActionForm
             action={createCalendarEventFormAction}
             className="space-y-4"
@@ -67,13 +68,8 @@ export function EventsAddEvent({ monthKey, selectedIso }: EventsAddEventProps) {
                 <Label htmlFor="eventTime">Time (optional)</Label>
                 <Input id="eventTime" name="eventTime" type="time" />
               </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="eventType">Type</Label>
-                <Select id="eventType" name="eventType" defaultValue="important">
-                  <option value="important">Important</option>
-                  <option value="meeting">Meeting</option>
-                  <option value="general">General</option>
-                </Select>
+              <div className="sm:col-span-2">
+                <EventsTypeField fieldId="eventType" name="eventType" savedTypes={eventTypes} defaultValue={eventTypes[0] ?? "General"} />
               </div>
             </div>
             <div className="space-y-2">

@@ -8,6 +8,7 @@ import {
   getAnalyticsSessions
 } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
+import { formatMoneyDhs } from "@/lib/utils";
 import { endOfIsoWeek, startOfIsoWeek } from "@/lib/utils";
 
 type AnalyticsSearchParams = Promise<{
@@ -27,14 +28,6 @@ type HabitSession = {
 function percent(value: number, total: number) {
   if (total <= 0) return 0;
   return Math.round((value / total) * 100);
-}
-
-function money(amount: number, currencyCode: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currencyCode,
-    maximumFractionDigits: 2
-  }).format(amount);
 }
 
 function toIsoDate(date: Date) {
@@ -299,7 +292,7 @@ export default async function AnalyticsPage({
             <CardTitle className="text-sm uppercase tracking-wide text-[#4a5f83]">Month spent</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold text-rose-700">{money(monthSpent, account.currencyCode)}</p>
+            <p className="text-2xl font-semibold text-rose-700">{formatMoneyDhs(monthSpent)}</p>
             <p className="text-xs text-[#4a5f83]">{categories.length} expense categories</p>
           </CardContent>
         </Card>

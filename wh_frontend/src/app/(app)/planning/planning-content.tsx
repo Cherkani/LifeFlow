@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ModalShell } from "@/components/ui/modal-shell";
 import { SectionHeader } from "@/components/ui/section-header";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   createTemplateWithDailyTasksFormAction,
@@ -91,6 +92,7 @@ export function PlanningContent({
   >(null);
   const [editingObjectiveId, setEditingObjectiveId] = useState<string | null>(null);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(templates[0]?.id ?? "");
 
   const editingObjective =
     editingObjectiveId ? objectives.find((o) => o.id === editingObjectiveId) ?? null : null;
@@ -112,6 +114,10 @@ export function PlanningContent({
             };
           })
       : [];
+  const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) ?? templates[0] ?? null;
+  const selectedTemplateEntries = selectedTemplate
+    ? entries.filter((entry) => entry.template_id === selectedTemplate.id)
+    : [];
 
   const closeModal = () => {
     setActiveModal(null);
@@ -274,23 +280,34 @@ export function PlanningContent({
           </CardHeader>
           <CardContent className="space-y-3">
             {templates.length > 0 ? (
-              templates.map((template) => {
-                const templateEntries = entries.filter((entry) => entry.template_id === template.id);
-                return (
-                  <div
-                    key={template.id}
-                    className="group relative overflow-hidden rounded-xl border border-[#d7e0f1] bg-white shadow-[0_2px_8px_rgba(11,31,59,0.06)] transition-all duration-200 hover:border-[#b8cae8] hover:shadow-[0_8px_24px_rgba(11,31,59,0.1)]"
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="templateStackSelect">Choose template</Label>
+                  <Select
+                    id="templateStackSelect"
+                    value={selectedTemplate?.id ?? ""}
+                    onChange={(event) => setSelectedTemplateId(event.target.value)}
                   >
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                {selectedTemplate ? (
+                  <div className="group relative overflow-hidden rounded-xl border border-[#d7e0f1] bg-white shadow-[0_2px_8px_rgba(11,31,59,0.06)] transition-all duration-200 hover:border-[#b8cae8] hover:shadow-[0_8px_24px_rgba(11,31,59,0.1)]">
                     <div className="relative flex items-start justify-between gap-3 border-b border-[#ecebf6] bg-[#fafbff] px-4 py-3 pr-12">
                       <p className="min-w-0 flex-1 truncate text-sm font-semibold text-[#0c1d3c]">
-                        {template.name}
+                        {selectedTemplate.name}
                       </p>
                       <Badge variant="secondary" className="shrink-0">
-                        {templateEntries.length} task{templateEntries.length !== 1 ? "s" : ""}
+                        {selectedTemplateEntries.length} task{selectedTemplateEntries.length !== 1 ? "s" : ""}
                       </Badge>
                       <button
                         type="button"
-                        onClick={() => openEditTemplate(template.id)}
+                        onClick={() => openEditTemplate(selectedTemplate.id)}
                         aria-label="Edit template"
                         className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm text-[#23406d] transition hover:bg-[#edf3ff] hover:shadow-md"
                       >
@@ -298,24 +315,19 @@ export function PlanningContent({
                       </button>
                     </div>
                     <div className="p-4">
-                      {templateEntries.length > 0 ? (
+                      {selectedTemplateEntries.length > 0 ? (
                         <div className="space-y-0">
                           {[1, 2, 3, 4, 5, 6, 7].map((dayOfWeek) => {
-                            const dayEntries = templateEntries.filter(
-                              (entry) => entry.day_of_week === dayOfWeek
-                            );
+                            const dayEntries = selectedTemplateEntries.filter((entry) => entry.day_of_week === dayOfWeek);
                             if (dayEntries.length === 0) return null;
                             return (
                               <div key={dayOfWeek}>
-                                {dayOfWeek > 1 ? (
-                                  <div className="my-4 border-t-2 border-violet-200" />
-                                ) : null}
+                                {dayOfWeek > 1 ? <div className="my-4 border-t-2 border-violet-200" /> : null}
                                 <div className="space-y-2">
                                   {dayEntries.map((entry) => {
                                     const task = taskById[entry.habit_id];
                                     const startTime = getStartTime(task?.metadata);
-                                    const taskObjective =
-                                      objectiveById[task?.objective_id ?? ""]?.title ?? "Objective";
+                                    const taskObjective = objectiveById[task?.objective_id ?? ""]?.title ?? "Objective";
                                     return (
                                       <div
                                         key={entry.id}
@@ -325,8 +337,7 @@ export function PlanningContent({
                                           {dayName[dayOfWeek - 1]} · {task?.title ?? "Task"}
                                         </p>
                                         <p className="mt-0.5 text-[11px] leading-relaxed text-[#4a5f83]">
-                                          {entry.planned_minutes} min planned · Min {entry.minimum_minutes}{" "}
-                                          min
+                                          {entry.planned_minutes} min planned · Min {entry.minimum_minutes} min
                                           {startTime ? ` · ${startTime}` : ""}
                                           {taskObjective ? ` · ${taskObjective}` : ""}
                                           {entry.is_required ? " · Required" : ""}
@@ -344,8 +355,8 @@ export function PlanningContent({
                       )}
                     </div>
                   </div>
-                );
-              })
+                ) : null}
+              </>
             ) : (
               <div className="space-y-2">
                 <p className="text-sm text-[#4a5f83]">No templates yet.</p>

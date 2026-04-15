@@ -1,10 +1,11 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Copy, Plus, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 
 type ObjectiveOption = {
@@ -77,45 +78,88 @@ function TaskRow({
     [dayOfWeek, task.id, onUpdateObjective]
   );
 
+  const fieldBaseId = `template-day-${dayOfWeek}-task-${task.id}`;
+
   return (
-    <div className="grid gap-2 md:grid-cols-[130px_2.1fr_110px_120px_auto]">
-      <Select value={task.objectiveId} onChange={handleObjectiveChange}>
-        <option value="">Choose objective</option>
-        {objectives.map((objective) => (
-          <option key={objective.id} value={objective.id}>
-            {objective.title}
-          </option>
-        ))}
-      </Select>
-      <Input
-        value={task.title}
-        onChange={handleTitleChange}
-        placeholder="Task title"
-        aria-label={`Task title for ${task.id}`}
-      />
-      <Input
-        type="number"
-        min={0}
-        value={task.plannedMinutes}
-        onChange={handleMinutesChange}
-        placeholder="Avg min"
-        aria-label={`Planned minutes for ${task.id}`}
-      />
-      <Input
-        type="time"
-        value={task.startTime}
-        onChange={handleStartTimeChange}
-        aria-label={`Start time for ${task.id}`}
-      />
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={() => onRemoveTask(dayOfWeek, task.id)}
-        aria-label="Remove task"
-      >
-        <Trash2 size={14} />
-      </Button>
+    <div className="rounded-xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-3">
+      <div className="grid gap-3 md:grid-cols-[1.2fr_1.8fr_110px_140px_auto] md:items-end">
+        <div className="space-y-1.5">
+          <Label htmlFor={`${fieldBaseId}-objective`} className="text-xs uppercase tracking-wide text-[var(--app-text-muted)]">
+            Objective
+          </Label>
+          <Select
+            id={`${fieldBaseId}-objective`}
+            name={`${fieldBaseId}-objective`}
+            value={task.objectiveId}
+            onChange={handleObjectiveChange}
+            autoComplete="off"
+          >
+            <option value="">Choose objective</option>
+            {objectives.map((objective) => (
+              <option key={objective.id} value={objective.id}>
+                {objective.title}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`${fieldBaseId}-title`} className="text-xs uppercase tracking-wide text-[var(--app-text-muted)]">
+            Task title
+          </Label>
+          <Input
+            id={`${fieldBaseId}-title`}
+            name={`${fieldBaseId}-title`}
+            value={task.title}
+            onChange={handleTitleChange}
+            placeholder="Task title"
+            aria-label={`Task title for ${task.id}`}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`${fieldBaseId}-minutes`} className="text-xs uppercase tracking-wide text-[var(--app-text-muted)]">
+            Avg min
+          </Label>
+          <Input
+            id={`${fieldBaseId}-minutes`}
+            name={`${fieldBaseId}-minutes`}
+            type="number"
+            min={0}
+            inputMode="numeric"
+            value={task.plannedMinutes}
+            onChange={handleMinutesChange}
+            placeholder="Avg min"
+            aria-label={`Planned minutes for ${task.id}`}
+            autoComplete="off"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`${fieldBaseId}-start-time`} className="text-xs uppercase tracking-wide text-[var(--app-text-muted)]">
+            Start time
+          </Label>
+          <Input
+            id={`${fieldBaseId}-start-time`}
+            name={`${fieldBaseId}-start-time`}
+            type="time"
+            step={300}
+            value={task.startTime}
+            onChange={handleStartTimeChange}
+            aria-label={`Start time for ${task.id}`}
+            autoComplete="off"
+          />
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="self-end"
+          onClick={() => onRemoveTask(dayOfWeek, task.id)}
+          aria-label="Remove task"
+        >
+          <Trash2 size={14} />
+        </Button>
+      </div>
     </div>
   );
 }
@@ -139,6 +183,15 @@ function createDraft(id: string, overrides?: Partial<TaskDraft>): TaskDraft {
     plannedMinutes: overrides?.plannedMinutes ?? "",
     startTime: overrides?.startTime ?? ""
   };
+}
+
+function isBlankDraft(task: TaskDraft) {
+  return (
+    task.title.trim().length === 0 &&
+    task.objectiveId.trim().length === 0 &&
+    task.plannedMinutes.trim().length === 0 &&
+    task.startTime.trim().length === 0
+  );
 }
 
 function createInitialState(initialTasks?: TemplateTask[]) {
@@ -200,6 +253,11 @@ export function TemplateTaskBuilder({ objectives, initialTasks }: TemplateTaskBu
     [tasksByDay]
   );
 
+  const dayHasCopySource = useCallback(
+    (sourceDayOfWeek: number) => (tasksByDay[sourceDayOfWeek] ?? []).some((task) => !isBlankDraft(task)),
+    [tasksByDay]
+  );
+
   const addTask = useCallback((dayOfWeek: number) => {
     idCounterRef.current += 1;
     const id = `${dayOfWeek}-${idCounterRef.current}`;
@@ -208,6 +266,36 @@ export function TemplateTaskBuilder({ objectives, initialTasks }: TemplateTaskBu
       ...previous,
       [dayOfWeek]: [...(previous[dayOfWeek] ?? []), createDraft(id)]
     }));
+  }, []);
+
+  const copyTasksFromDay = useCallback((sourceDayOfWeek: number, targetDayOfWeek: number) => {
+    setTasksByDay((previous) => {
+      const sourceTasks = previous[sourceDayOfWeek] ?? [];
+      if (sourceTasks.length === 0) {
+        return previous;
+      }
+
+      const copiedTasks = sourceTasks.map((task) => {
+        idCounterRef.current += 1;
+        return createDraft(`${targetDayOfWeek}-${idCounterRef.current}`, {
+          title: task.title,
+          objectiveId: task.objectiveId,
+          plannedMinutes: task.plannedMinutes,
+          startTime: task.startTime
+        });
+      });
+
+      const currentTargetTasks = previous[targetDayOfWeek] ?? [];
+      const nextTargetTasks =
+        currentTargetTasks.length > 0 && currentTargetTasks.every(isBlankDraft)
+          ? copiedTasks
+          : [...currentTargetTasks, ...copiedTasks];
+
+      return {
+        ...previous,
+        [targetDayOfWeek]: nextTargetTasks
+      };
+    });
   }, []);
 
   const removeTask = useCallback((dayOfWeek: number, taskId: string) => {
@@ -258,13 +346,37 @@ export function TemplateTaskBuilder({ objectives, initialTasks }: TemplateTaskBu
       <input type="hidden" name="tasksPayload" value={serializedTasks} />
 
       {dayConfig.map((day) => (
-        <div key={day.dayOfWeek} className="space-y-2 rounded-lg border border-[#c7d3e8] p-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-[#23406d]">{day.label}</p>
-            <Button type="button" variant="outline" size="sm" className="gap-1" onClick={() => addTask(day.dayOfWeek)}>
-              <Plus size={14} />
-              Add task
-            </Button>
+        <div
+          key={day.dayOfWeek}
+          className="space-y-3 rounded-xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg)] p-4 shadow-[0_2px_8px_rgba(11,31,59,0.04)]"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-[var(--app-text-strong)]">{day.label}</p>
+              <p className="text-xs text-[var(--app-text-muted)]">
+                {(tasksByDay[day.dayOfWeek] ?? []).filter((task) => !isBlankDraft(task)).length} configured task
+                {(tasksByDay[day.dayOfWeek] ?? []).filter((task) => !isBlankDraft(task)).length !== 1 ? "s" : ""}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {day.dayOfWeek > 1 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => copyTasksFromDay(day.dayOfWeek - 1, day.dayOfWeek)}
+                  disabled={!dayHasCopySource(day.dayOfWeek - 1)}
+                >
+                  <Copy size={14} />
+                  Copy {dayConfig[day.dayOfWeek - 2]?.label ?? "above"}
+                </Button>
+              ) : null}
+              <Button type="button" variant="outline" size="sm" className="gap-1" onClick={() => addTask(day.dayOfWeek)}>
+                <Plus size={14} />
+                Add task
+              </Button>
+            </div>
           </div>
 
           {(tasksByDay[day.dayOfWeek] ?? []).length > 0 ? (
@@ -282,12 +394,14 @@ export function TemplateTaskBuilder({ objectives, initialTasks }: TemplateTaskBu
               ))}
             </div>
           ) : (
-            <p className="text-xs text-[#4a5f83]">No tasks for this day.</p>
+            <p className="text-xs text-[var(--app-text-muted)]">No tasks for this day.</p>
           )}
         </div>
       ))}
 
-      <p className="text-xs text-[#4a5f83]">Each task should include title, objective, and average minutes. Start time is optional.</p>
+      <p className="text-xs text-[var(--app-text-muted)]">
+        Each task should include title, objective, and average minutes. Start time is optional.
+      </p>
     </div>
   );
 }

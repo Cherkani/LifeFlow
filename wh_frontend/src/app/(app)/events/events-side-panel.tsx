@@ -12,7 +12,7 @@ type CalendarEvent = {
   details: string | null;
   event_date: string | null;
   event_time: string | null;
-  event_type: "meeting" | "important" | "general";
+  event_type: string;
 };
 
 type EventsSidePanelProps = {

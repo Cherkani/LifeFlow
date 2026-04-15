@@ -9,24 +9,27 @@ import { SubmitButton } from "@/components/forms/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ModalShell } from "@/components/ui/modal-shell";
-import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { EventsTypeField } from "./events-type-field";
 
-function buildEventsHref(month: string, date: string) {
+function buildEventsHref(month: string, date: string, view: "scheduled" | "backlog" = "scheduled") {
   const query = new URLSearchParams();
   query.set("month", month);
   query.set("date", date);
+  query.set("view", view);
   return `/events?${query.toString()}`;
 }
 
 type EventsAddBacklogProps = {
   monthKey: string;
   selectedIso: string;
+  view?: "scheduled" | "backlog";
+  eventTypes?: string[];
 };
 
-export function EventsAddBacklog({ monthKey, selectedIso }: EventsAddBacklogProps) {
+export function EventsAddBacklog({ monthKey, selectedIso, view = "backlog", eventTypes = [] }: EventsAddBacklogProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const returnPath = buildEventsHref(monthKey, selectedIso);
+  const returnPath = buildEventsHref(monthKey, selectedIso, view);
 
   return (
     <>
@@ -62,14 +65,7 @@ export function EventsAddBacklog({ monthKey, selectedIso }: EventsAddBacklogProp
                 placeholder="e.g. Plan offsite agenda"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="backlogType">Type</Label>
-              <Select id="backlogType" name="eventType" defaultValue="general">
-                <option value="important">Important</option>
-                <option value="meeting">Meeting</option>
-                <option value="general">General</option>
-              </Select>
-            </div>
+            <EventsTypeField fieldId="backlogType" name="eventType" savedTypes={eventTypes} defaultValue={eventTypes[0] ?? "General"} />
             <div className="space-y-2">
               <Label htmlFor="backlogDetails">Details (optional)</Label>
               <Textarea

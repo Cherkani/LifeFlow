@@ -108,6 +108,31 @@
   --chart-tooltip-bg: #0d1a2f;
   --chart-tooltip-border: #3e5b83;
   --chart-tooltip-text: #e8f1ff;
+  color-scheme: dark;
+}
+
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea,
+[data-theme="dark"] button {
+  color-scheme: dark;
+}
+
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  color: var(--ui-input-text);
+  caret-color: var(--ui-input-text);
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: var(--ui-input-placeholder);
+}
+
+[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator,
+[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.9);
 }
 
 [data-theme="dark"] [class*="#0c1d3c"],
@@ -261,6 +286,38 @@
 [data-theme="dark"] .app-modal [class*="text-slate-600"],
 [data-theme="dark"] .app-modal [class*="text-slate-400"] {
   color: var(--app-text-strong) !important;
+}
+
+[data-theme="dark"] .app-modal input,
+[data-theme="dark"] .app-modal select,
+[data-theme="dark"] .app-modal textarea {
+  background-color: var(--ui-input-bg) !important;
+  border-color: var(--ui-input-border) !important;
+  color: var(--ui-input-text) !important;
+}
+
+[data-theme="dark"] .app-modal input::placeholder,
+[data-theme="dark"] .app-modal textarea::placeholder {
+  color: var(--ui-input-placeholder) !important;
+}
+
+[data-theme="dark"] .app-modal select option {
+  background-color: var(--app-panel-bg);
+  color: var(--app-text-strong);
+}
+
+[data-theme="dark"] .app-modal input:-webkit-autofill,
+[data-theme="dark"] .app-modal input:-webkit-autofill:hover,
+[data-theme="dark"] .app-modal input:-webkit-autofill:focus,
+[data-theme="dark"] .app-modal textarea:-webkit-autofill,
+[data-theme="dark"] .app-modal textarea:-webkit-autofill:hover,
+[data-theme="dark"] .app-modal textarea:-webkit-autofill:focus,
+[data-theme="dark"] .app-modal select:-webkit-autofill,
+[data-theme="dark"] .app-modal select:-webkit-autofill:hover,
+[data-theme="dark"] .app-modal select:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ui-input-text);
+  box-shadow: 0 0 0 1000px var(--ui-input-bg) inset;
+  transition: background-color 9999s ease-in-out 0s;
 }
 
 * {

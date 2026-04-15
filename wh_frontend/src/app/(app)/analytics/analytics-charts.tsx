@@ -18,6 +18,8 @@ import {
   YAxis
 } from "recharts";
 
+import { formatMoneyDhs } from "@/lib/utils";
+
 type WeeklyPoint = {
   day: string;
   plannedHours: number;
@@ -45,14 +47,6 @@ type AnalyticsChartsProps = {
 };
 
 const pieColors = ["#4f8cff", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#14b8a6", "#f97316", "#eab308"];
-
-function money(amount: number, currencyCode: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currencyCode,
-    maximumFractionDigits: 2
-  }).format(amount);
-}
 
 export function AnalyticsCharts({ weekly, monthly, expenseCategories, currencyCode }: AnalyticsChartsProps) {
   return (
@@ -104,7 +98,7 @@ export function AnalyticsCharts({ weekly, monthly, expenseCategories, currencyCo
                 <Tooltip
                   formatter={(value, name) => {
                     if (String(name) === "Expense") {
-                      return [money(Number(value ?? 0), currencyCode), "Expense"];
+                      return [formatMoneyDhs(Number(value ?? 0)), "Expense"];
                     }
                     return [Number(value ?? 0).toFixed(1), String(name)];
                   }}
@@ -123,7 +117,7 @@ export function AnalyticsCharts({ weekly, monthly, expenseCategories, currencyCo
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Tooltip formatter={(value) => [money(Number(value ?? 0), currencyCode), "Spent"]} />
+                <Tooltip formatter={(value) => [formatMoneyDhs(Number(value ?? 0)), "Spent"]} />
                 <Legend
                   wrapperStyle={{ color: "var(--app-text-strong)" }}
                   formatter={(value) => <span style={{ color: "var(--app-text-strong)" }}>{value}</span>}

@@ -32,3 +32,15 @@ export function endOfMonth(date: Date) {
 export function toDateInputValue(date: Date) {
   return date.toISOString().slice(0, 10);
 }
+
+export function formatMoneyDhs(amount: number) {
+  const formatted = new Intl.NumberFormat("fr-MA", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }).format(amount);
+  return `${formatted} Dhs`;
+}
+
+export function displayCurrencyLabel(_currencyCode?: string) {
+  return "Dhs";
+}

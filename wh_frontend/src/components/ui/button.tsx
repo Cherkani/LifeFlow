@@ -11,10 +11,11 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variantClasses: Record<ButtonVariant, string> = {
-  default: "bg-[#6f6aa8] text-white hover:bg-[#625d98]",
-  secondary: "bg-[#8c88bc] text-white hover:bg-[#7d78ae]",
-  outline: "border border-[#8c88bc] bg-[#f5f4fb] text-[#5e5a87] hover:bg-[#eceaf7]",
-  ghost: "bg-transparent text-[#5e5a87] hover:bg-[#eeecf8]",
+  default: "bg-[var(--app-btn-primary-bg)] text-[var(--app-btn-primary-fg)] hover:bg-[var(--app-btn-primary-hover)]",
+  secondary: "bg-[var(--app-chip-bg)] text-[var(--app-chip-fg)] hover:brightness-95",
+  outline:
+    "border border-[var(--app-panel-border-strong)] bg-[var(--app-btn-secondary-bg)] text-[var(--app-btn-secondary-fg)] hover:bg-[var(--app-btn-secondary-hover)]",
+  ghost: "bg-transparent text-[var(--app-btn-secondary-fg)] hover:bg-[var(--app-btn-secondary-bg)]",
   destructive: "bg-rose-600 text-white hover:bg-rose-500"
 };
 

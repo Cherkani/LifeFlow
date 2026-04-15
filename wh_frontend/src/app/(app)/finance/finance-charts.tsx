@@ -13,6 +13,8 @@ import {
   YAxis
 } from "recharts";
 
+import { formatMoneyDhs } from "@/lib/utils";
+
 type DailyExpensePoint = {
   day: string;
   amount: number;
@@ -30,14 +32,6 @@ type FinanceChartsProps = {
   currencyCode: string;
 };
 
-function money(amount: number, currencyCode: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currencyCode,
-    maximumFractionDigits: 0
-  }).format(amount);
-}
-
 export function FinanceCharts({ dailyExpenses, categories, currencyCode }: FinanceChartsProps) {
   return (
     <div className="grid gap-4 xl:grid-cols-2">
@@ -48,13 +42,13 @@ export function FinanceCharts({ dailyExpenses, categories, currencyCode }: Finan
             <BarChart data={dailyExpenses}>
               <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--chart-grid)" />
               <XAxis dataKey="day" tick={{ fill: "var(--chart-axis)", fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis
-                tick={{ fill: "var(--chart-axis-muted)", fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(value) => money(Number(value ?? 0), currencyCode)}
-              />
-              <Tooltip formatter={(value) => [money(Number(value ?? 0), currencyCode), "Spent"]} />
+                <YAxis
+                  tick={{ fill: "var(--chart-axis-muted)", fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(value) => formatMoneyDhs(Number(value ?? 0))}
+                />
+              <Tooltip formatter={(value) => [formatMoneyDhs(Number(value ?? 0)), "Spent"]} />
               <Legend />
               <Bar dataKey="amount" name="Spent" fill="#8d3d3d" radius={[6, 6, 0, 0]} />
             </BarChart>
@@ -69,15 +63,15 @@ export function FinanceCharts({ dailyExpenses, categories, currencyCode }: Finan
             <ComposedChart data={categories}>
               <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--chart-grid)" />
               <XAxis dataKey="name" tick={{ fill: "var(--chart-axis)", fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis
-                tick={{ fill: "var(--chart-axis-muted)", fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(value) => money(Number(value ?? 0), currencyCode)}
-              />
+                <YAxis
+                  tick={{ fill: "var(--chart-axis-muted)", fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(value) => formatMoneyDhs(Number(value ?? 0))}
+                />
               <Tooltip
                 formatter={(value, name) => [
-                  money(Number(value ?? 0), currencyCode),
+                  formatMoneyDhs(Number(value ?? 0)),
                   String(name) === "spent" ? "Spent" : "Limit"
                 ]}
               />

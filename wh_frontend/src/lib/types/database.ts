@@ -351,7 +351,7 @@ export type Database = {
           details: string | null;
           event_date: string | null;
           event_time: string | null;
-          event_type: "meeting" | "important" | "general";
+          event_type: string;
           created_at: string;
           updated_at: string;
         };
@@ -362,7 +362,7 @@ export type Database = {
           details?: string | null;
           event_date?: string | null;
           event_time?: string | null;
-          event_type?: "meeting" | "important" | "general";
+          event_type?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -373,7 +373,30 @@ export type Database = {
           details?: string | null;
           event_date?: string | null;
           event_time?: string | null;
-          event_type?: "meeting" | "important" | "general";
+          event_type?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      calendar_event_types: {
+        Row: {
+          id: string;
+          account_id: string;
+          name: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_id: string;
+          name: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          account_id?: string;
+          name?: string;
           created_at?: string;
           updated_at?: string;
         };

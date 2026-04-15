@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label";
 import { ModalShell } from "@/components/ui/modal-shell";
 import { SectionHeader } from "@/components/ui/section-header";
 import { Select } from "@/components/ui/select";
+import { formatMoneyDhs } from "@/lib/utils";
 
 type DebtRow = {
   id: string;
@@ -67,14 +68,6 @@ type PeriodExpenseRow = {
   amount: number;
   occurred_on: string;
 };
-
-function money(amount: number, currencyCode: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currencyCode,
-    maximumFractionDigits: 2
-  }).format(amount);
-}
 
 function toDateInputValue(date: Date) {
   const y = date.getFullYear();
@@ -379,7 +372,7 @@ export function FinanceModals({
                 <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Period spent</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-semibold text-rose-700">{money(totalSpent, currencyCode)}</p>
+                <p className="text-2xl font-semibold text-rose-700">{formatMoneyDhs(totalSpent)}</p>
               </CardContent>
             </Card>
             <Card>
@@ -387,7 +380,7 @@ export function FinanceModals({
                 <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Average / day</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-semibold text-[#0c1d3c]">{money(averageDaySpend, currencyCode)}</p>
+                <p className="text-2xl font-semibold text-[#0c1d3c]">{formatMoneyDhs(averageDaySpend)}</p>
               </CardContent>
             </Card>
             <Card>
@@ -396,7 +389,7 @@ export function FinanceModals({
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-semibold text-[#0c1d3c]">
-                  {topDay ? `${topDay[0]} · ${money(topDay[1], currencyCode)}` : "No data"}
+                  {topDay ? `${topDay[0]} · ${formatMoneyDhs(topDay[1])}` : "No data"}
                 </p>
               </CardContent>
             </Card>
@@ -487,7 +480,7 @@ export function FinanceModals({
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="danger">-{money(Number(entry.amount), currencyCode)}</Badge>
+                        <Badge variant="danger">-{formatMoneyDhs(Number(entry.amount))}</Badge>
                         <button
                           type="button"
                           onClick={() => {
@@ -547,7 +540,7 @@ export function FinanceModals({
                           <div>
                             <p className="text-sm font-semibold text-[#0c1d3c]">{category.name}</p>
                             <p className="text-[11px] text-[#4a5f83]">
-                              {category.limit > 0 ? `${money(category.limit, currencyCode)} limit` : "No limit set"}
+                              {category.limit > 0 ? `${formatMoneyDhs(category.limit)} limit` : "No limit set"}
                             </p>
                           </div>
                           <button
@@ -572,7 +565,7 @@ export function FinanceModals({
                           </button>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge variant={category.over ? "danger" : "secondary"}>{money(category.spent, currencyCode)} spent</Badge>
+                          <Badge variant={category.over ? "danger" : "secondary"}>{formatMoneyDhs(category.spent)} spent</Badge>
                           <Badge variant="secondary">{category.limit > 0 ? "Tracked" : "Untracked"}</Badge>
                         </div>
                       </div>
@@ -593,7 +586,7 @@ export function FinanceModals({
                 <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Open debt</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-semibold text-amber-700">{money(openDebtTotal, currencyCode)}</p>
+                <p className="text-2xl font-semibold text-amber-700">{formatMoneyDhs(openDebtTotal)}</p>
               </CardContent>
             </Card>
             <Card>
@@ -609,7 +602,7 @@ export function FinanceModals({
                 <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Payments in period</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-semibold text-emerald-700">{money(periodPaymentsTotal, currencyCode)}</p>
+                <p className="text-2xl font-semibold text-emerald-700">{formatMoneyDhs(periodPaymentsTotal)}</p>
               </CardContent>
             </Card>
           </div>
@@ -632,7 +625,7 @@ export function FinanceModals({
                           </p>
                         </div>
                         <Badge variant={debt.status === "open" ? "warning" : "secondary"}>
-                          {money(Number(debt.remaining_balance ?? debt.principal ?? 0), currencyCode)}
+                          {formatMoneyDhs(Number(debt.remaining_balance ?? debt.principal ?? 0))}
                         </Badge>
                       </div>
                     </div>
@@ -660,7 +653,7 @@ export function FinanceModals({
                           {payment.method ? ` · ${payment.method}` : ""}
                         </p>
                       </div>
-                      <Badge variant="secondary">{money(Number(payment.amount), currencyCode)}</Badge>
+                      <Badge variant="secondary">{formatMoneyDhs(Number(payment.amount))}</Badge>
                     </div>
                   ))}
                 </div>

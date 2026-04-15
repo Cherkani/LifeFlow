@@ -12,6 +12,7 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { Select } from "@/components/ui/select";
 import { getProfileFull } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
+import { displayCurrencyLabel } from "@/lib/utils";
 
 export default async function SettingsPage({
   searchParams
@@ -104,7 +105,7 @@ export default async function SettingsPage({
             <dl className="grid gap-3 text-sm sm:grid-cols-[180px_1fr]">
               <dt className="font-medium text-slate-500">Account</dt><dd>{account.accountName}</dd>
               <dt className="font-medium text-slate-500">Role</dt><dd>{account.role}</dd>
-              <dt className="font-medium text-slate-500">Currency</dt><dd>{account.currencyCode}</dd>
+              <dt className="font-medium text-slate-500">Currency</dt><dd>{displayCurrencyLabel(account.currencyCode)}</dd>
               <dt className="font-medium text-slate-500">Email</dt><dd>{profile?.email ?? user.email}</dd>
               <dt className="font-medium text-slate-500">Active</dt><dd>{profile?.is_active ? "Yes" : "No"}</dd>
               <dt className="font-medium text-slate-500">Joined</dt><dd>{profile?.created_at?.slice(0, 10) ?? "Unknown"}</dd>
