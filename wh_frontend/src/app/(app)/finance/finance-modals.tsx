@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, Pencil, Plus, Trash2 } from "lucide-react";
+import { useMemo, useState, useActionState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowDownRight, ArrowUpRight, Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
 
 import { FinanceCharts } from "@/app/(app)/finance/finance-charts";
 import {
+  closeDebtAction,
   createDebtFormAction,
   createDebtPaymentFormAction,
   createExpenseCategoryFormAction,
@@ -140,6 +142,164 @@ type FinanceModalsProps = {
   currencyCode: string;
 };
 
+function DebtPayRow({
+  debt,
+  baseHref,
+  todayIso
+}: {
+  debt: DebtRow;
+  baseHref: string;
+  todayIso: string;
+}) {
+  const balance = Number(debt.remaining_balance ?? debt.principal ?? 0);
+  const principal = Number(debt.principal ?? balance);
+  const alreadyZero = debt.status === "open" && balance <= 0;
+  const isClosed = debt.status === "closed";
+  const isOwed = debt.type === "owed"; // money owed TO me
+  const progress = principal > 0 ? Math.max(0, Math.min(100, ((principal - balance) / principal) * 100)) : 100;
+
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState(balance.toFixed(2));
+  const [state, formAction] = useActionState(createDebtPaymentFormAction, null);
+  const [closeState, closeFormAction] = useActionState(closeDebtAction, null);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (state?.redirectTo || closeState?.redirectTo) {
+      setOpen(false);
+      router.refresh();
+    }
+  }, [state, closeState, router]);
+
+  return (
+    <div className={[
+      "rounded-xl border p-4 transition-all",
+      isClosed
+        ? "border-[#e2e8f0] bg-[#f8fafc] opacity-60"
+        : "border-[#c7d3e8] bg-white shadow-sm"
+    ].join(" ")}>
+
+      {/* Main row */}
+      <div className="flex items-start justify-between gap-3">
+        {/* Direction indicator + info */}
+        <div className="flex items-start gap-3 min-w-0">
+          <div className={[
+            "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+            isOwed
+              ? "bg-emerald-100 text-emerald-700"
+              : "bg-rose-100 text-rose-700"
+          ].join(" ")}>
+            {isOwed ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}
+          </div>
+          <div className="min-w-0">
+            <p className={["font-semibold truncate", isClosed ? "text-slate-400 line-through" : "text-[#0c1d3c]"].join(" ")}>
+              {debt.name}
+            </p>
+            <p className="text-xs text-[#4a5f83] mt-0.5">
+              {isOwed ? "Owes you" : "You owe"}
+              {debt.due_date ? ` · due ${debt.due_date}` : ""}
+            </p>
+          </div>
+        </div>
+
+        {/* Amount + actions */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="text-right">
+            <p className={[
+              "font-semibold tabular-nums",
+              isClosed ? "text-slate-400" : isOwed ? "text-emerald-700" : "text-rose-600"
+            ].join(" ")}>
+              {formatMoneyDhs(alreadyZero ? principal : balance)}
+            </p>
+          </div>
+
+          {/* Action buttons */}
+          {!isClosed && !alreadyZero && !open && (
+            <button
+              type="button"
+              onClick={() => { setAmount(balance.toFixed(2)); setOpen(true); }}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 transition hover:bg-emerald-100"
+              title="Record payment"
+            >
+              <Check size={15} />
+            </button>
+          )}
+          {alreadyZero && (
+            <form action={closeFormAction}>
+              <input type="hidden" name="returnPath" value={baseHref} />
+              <input type="hidden" name="debtId" value={debt.id} />
+              <button
+                type="submit"
+                className="inline-flex h-8 items-center gap-1 rounded-lg bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+              >
+                <Check size={13} /> Close
+              </button>
+            </form>
+          )}
+          {isClosed && (
+            <ActionForm action={deleteDebtFormAction} className="inline" refreshOnly>
+              <input type="hidden" name="returnPath" value={baseHref} />
+              <input type="hidden" name="debtId" value={debt.id} />
+              <button
+                type="submit"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-rose-50 text-rose-500 transition hover:bg-rose-100"
+                title="Remove"
+              >
+                <Trash2 size={14} />
+              </button>
+            </ActionForm>
+          )}
+        </div>
+      </div>
+
+      {/* Progress bar (open debts with partial payment only) */}
+      {!isClosed && principal > 0 && progress > 0 && (
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: "var(--app-panel-border)" }}>
+          <div
+            className="h-full rounded-full bg-emerald-500 transition-all"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
+
+      {/* Payment form */}
+      {open && (
+        <form action={formAction} className="mt-3 flex items-center gap-2 border-t pt-3" style={{ borderColor: "var(--app-panel-border)" }}>
+          <input type="hidden" name="returnPath" value={baseHref} />
+          <input type="hidden" name="debtId" value={debt.id} />
+          <input type="hidden" name="paidAt" value={todayIso} />
+          <div className="relative flex-1">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--app-text-muted)" }}>Dhs</span>
+            <input
+              name="amount"
+              type="number"
+              min="0.01"
+              step="0.01"
+              required
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="h-9 w-full rounded-lg border border-[#c7d3e8] bg-white pl-10 pr-3 text-sm font-semibold text-[#0c1d3c] focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            />
+          </div>
+          <button
+            type="submit"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-xs font-semibold text-white transition hover:bg-emerald-700"
+          >
+            <Check size={13} /> Confirm
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#e2e8f0] text-[#94a3b8] transition hover:bg-[#f1f5f9]"
+          >
+            <X size={14} />
+          </button>
+        </form>
+      )}
+    </div>
+  );
+}
+
 export function FinanceModals({
   tab,
   period,
@@ -172,8 +332,7 @@ export function FinanceModals({
     "expense" | "edit-expense" | "debt-entry" | "expense-category" | "edit-category" | null
   >(null);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
-  const [debtEntryMode, setDebtEntryMode] = useState<"debt" | "payment">("debt");
-  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [recentSearch, setRecentSearch] = useState("");
@@ -260,10 +419,7 @@ export function FinanceModals({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setDebtEntryMode("debt");
-                setActiveModal("debt-entry");
-              }}
+              onClick={() => setActiveModal("debt-entry")}
               className="inline-flex items-center gap-2 rounded-lg bg-[#1e3a6d] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#274881]"
             >
               <Plus size={16} />
@@ -581,104 +737,61 @@ export function FinanceModals({
         </>
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Open debt</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold text-amber-700">{formatMoneyDhs(openDebtTotal)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Open debt lines</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold text-[#0c1d3c]">{openDebts.length}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Payments in period</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold text-emerald-700">{formatMoneyDhs(periodPaymentsTotal)}</p>
-              </CardContent>
-            </Card>
+          {/* Summary strip */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-xl border border-[#e8eef8] bg-white p-4 shadow-sm">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Open debt</p>
+              <p className="mt-1 text-xl font-bold text-rose-600">{formatMoneyDhs(openDebtTotal)}</p>
+            </div>
+            <div className="rounded-xl border border-[#e8eef8] bg-white p-4 shadow-sm">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Lines</p>
+              <p className="mt-1 text-xl font-bold text-[#0c1d3c]">{openDebts.length}</p>
+            </div>
+            <div className="rounded-xl border border-[#e8eef8] bg-white p-4 shadow-sm">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Paid</p>
+              <p className="mt-1 text-xl font-bold text-emerald-600">{formatMoneyDhs(periodPaymentsTotal)}</p>
+            </div>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Debt lines</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {debts.length > 0 ? (
-                <div className="space-y-3">
-                  {debts.map((debt) => (
-                    <div key={debt.id} className="rounded-lg border border-[#c7d3e8] bg-[#f8fbff] p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-[#0c1d3c]">{debt.name}</p>
-                          <p className="text-xs text-[#4a5f83]">
-                            {debt.type} · {debt.status}
-                            {debt.due_date ? ` · due ${debt.due_date}` : ""}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={debt.status === "open" ? "warning" : "secondary"}>
-                            {formatMoneyDhs(Number(debt.remaining_balance ?? debt.principal ?? 0))}
-                          </Badge>
-                          {debt.status === "closed" && (
-                            <ActionForm action={deleteDebtFormAction} className="inline">
-                              <input type="hidden" name="returnPath" value={baseHref} />
-                              <input type="hidden" name="debtId" value={debt.id} />
-                              <button
-                                type="submit"
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#fecaca] bg-[#fef2f2] text-[#b91c1c] transition hover:bg-[#fee2e2]"
-                                aria-label="Remove resolved debt"
-                                title="Remove resolved debt"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </ActionForm>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-[#4a5f83]">No debts yet.</p>
-              )}
-            </CardContent>
-          </Card>
+          {/* Debt list */}
+          {debts.length > 0 ? (
+            <div className="space-y-2">
+              {debts.map((debt) => (
+                <DebtPayRow key={debt.id} debt={debt} baseHref={baseHref} todayIso={todayIso} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-[#c7d3e8] py-10 text-center">
+              <p className="text-sm text-[#94a3b8]">No debts yet. Add one with the button above.</p>
+            </div>
+          )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent debt payments</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {payments.length > 0 ? (
-                <div className="space-y-3">
-                  {payments.map((payment) => (
-                    <div key={payment.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#c7d3e8] bg-[#f8fbff] p-3">
-                      <div>
-                        <p className="text-sm font-semibold text-[#0c1d3c]">{debtNameById[payment.debt_id] ?? "Debt payment"}</p>
-                        <p className="text-xs text-[#4a5f83]">
-                          {payment.paid_at}
-                          {payment.method ? ` · ${payment.method}` : ""}
+          {/* Recent payments */}
+          {payments.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Recent payments</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {payments.map((payment) => (
+                  <div key={payment.id} className="flex items-center justify-between gap-3 rounded-lg bg-[#f8fafc] px-3 py-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                        <Check size={13} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-[#0c1d3c]">{debtNameById[payment.debt_id] ?? "Payment"}</p>
+                        <p className="text-xs text-slate-400">
+                          {payment.paid_at}{payment.method ? ` · ${payment.method}` : ""}
                         </p>
                       </div>
-                      <Badge variant="secondary">{formatMoneyDhs(Number(payment.amount))}</Badge>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-[#4a5f83]">No debt payments yet.</p>
-              )}
-            </CardContent>
-          </Card>
+                    <p className="shrink-0 text-sm font-semibold text-emerald-700">{formatMoneyDhs(Number(payment.amount))}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
 
@@ -820,101 +933,34 @@ export function FinanceModals({
 
       {/* Debt entry modal */}
       {activeModal === "debt-entry" ? (
-        <ModalShell title="Debt Entry" description="Create debt or record a payment in one place." onClose={closeModal}>
-          <div className="mb-4 inline-flex rounded-lg border border-[#c7d3e8] bg-white p-1">
-            <button
-              type="button"
-              onClick={() => setDebtEntryMode("debt")}
-              className={["rounded-md px-3 py-1.5 text-sm font-semibold", debtEntryMode === "debt" ? "bg-[#0b1f3b] text-white" : "text-[#23406d]"].join(" ")}
-            >
-              New debt
-            </button>
-            <button
-              type="button"
-              onClick={() => setDebtEntryMode("payment")}
-              className={["rounded-md px-3 py-1.5 text-sm font-semibold", debtEntryMode === "payment" ? "bg-[#0b1f3b] text-white" : "text-[#23406d]"].join(" ")}
-            >
-              Payment
-            </button>
-          </div>
-
-          {debtEntryMode === "debt" ? (
-            <ActionForm action={createDebtFormAction} className="space-y-4" onSuccess={closeModal}>
-              <input type="hidden" name="returnPath" value={baseHref} />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="debtType">Type</Label>
-                  <Select id="debtType" name="type" defaultValue="owing">
-                    <option value="owing">I owe</option>
-                    <option value="owed">Owed to me</option>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="debtName">Name</Label>
-                  <Input id="debtName" name="name" required placeholder="Debt name" />
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="principal">Principal</Label>
-                  <Input id="principal" name="principal" type="number" min={0} step="0.01" required placeholder="0.00" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="remainingBalance">Remaining</Label>
-                  <Input id="remainingBalance" name="remainingBalance" type="number" min={0} step="0.01" placeholder="0.00" />
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="apr">APR % (optional)</Label>
-                  <Input id="apr" name="apr" type="number" min={0} step="0.001" placeholder="0" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="dueDate">Due date (optional)</Label>
-                  <Input id="dueDate" name="dueDate" type="date" />
-                </div>
-              </div>
-              <SubmitButton label="Save debt" pendingLabel="Saving..." className="w-full sm:w-auto" />
-            </ActionForm>
-          ) : openDebts.length === 0 ? (
-            <p className="text-sm text-[#4a5f83]">No open debts available.</p>
-          ) : (
-            <ActionForm action={createDebtPaymentFormAction} className="space-y-4" onSuccess={closeModal}>
-              <input type="hidden" name="returnPath" value={baseHref} />
+        <ModalShell title="New Debt" description="Add a debt you owe or that is owed to you." onClose={closeModal}>
+          <ActionForm action={createDebtFormAction} className="space-y-4" onSuccess={closeModal}>
+            <input type="hidden" name="returnPath" value={baseHref} />
+            <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="debtId">Debt</Label>
-                <Select id="debtId" name="debtId" required>
-                  <option value="">Choose debt</option>
-                  {openDebts.map((debt) => (
-                    <option key={debt.id} value={debt.id}>
-                      {debt.name}
-                    </option>
-                  ))}
+                <Label htmlFor="debtType">Type</Label>
+                <Select id="debtType" name="type" defaultValue="owed">
+                  <option value="owed">Owed to me</option>
+                  <option value="owing">I owe</option>
                 </Select>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="paymentAmount">Amount</Label>
-                  <Input id="paymentAmount" name="amount" type="number" min={0} step="0.01" required placeholder="0.00" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="paidAt">Date</Label>
-                  <Input id="paidAt" name="paidAt" type="date" required defaultValue={toDateInputValue(new Date())} />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="debtName">Name</Label>
+                <Input id="debtName" name="name" required placeholder="Debt name" />
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="method">Method (optional)</Label>
-                  <Input id="method" name="method" placeholder="Optional" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="paymentNotes">Notes (optional)</Label>
-                  <Input id="paymentNotes" name="notes" placeholder="Optional" />
-                </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="principal">Amount</Label>
+                <Input id="principal" name="principal" type="number" min={0} step="0.01" required placeholder="0.00" />
               </div>
-              <SubmitButton label="Record payment" pendingLabel="Saving..." className="w-full sm:w-auto" />
-            </ActionForm>
-          )}
+              <div className="space-y-2">
+                <Label htmlFor="dueDate">Due date (optional)</Label>
+                <Input id="dueDate" name="dueDate" type="date" />
+              </div>
+            </div>
+            <SubmitButton label="Save debt" pendingLabel="Saving..." className="w-full sm:w-auto" />
+          </ActionForm>
         </ModalShell>
       ) : null}
 

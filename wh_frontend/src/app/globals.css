@@ -214,8 +214,74 @@
 [data-theme="dark"] [class*="bg-[#edf3ff]"],
 [data-theme="dark"] [class*="bg-[#f2f6fe]"],
 [data-theme="dark"] [class*="bg-[#dde6f7]"],
-[data-theme="dark"] [class*="bg-[#f0f4fc]"] {
+[data-theme="dark"] [class*="bg-[#f0f4fc]"],
+[data-theme="dark"] [class*="bg-[#f8fafc]"],
+[data-theme="dark"] [class*="bg-[#f8fbff]"] {
   background-color: var(--app-panel-bg) !important;
+}
+
+[data-theme="dark"] [class*="bg-emerald-50"],
+[data-theme="dark"] [class*="bg-emerald-100"] {
+  background-color: #0f3d29 !important;
+}
+
+[data-theme="dark"] [class*="hover:bg-emerald-100"] {
+  background-color: #144d34 !important;
+}
+
+[data-theme="dark"] [class*="bg-rose-50"],
+[data-theme="dark"] [class*="bg-rose-100"] {
+  background-color: #4a1b24 !important;
+}
+
+[data-theme="dark"] [class*="hover:bg-rose-100"] {
+  background-color: #5c2330 !important;
+}
+
+[data-theme="dark"] [class*="text-emerald-700"] {
+  color: #6ee7b7 !important;
+}
+
+[data-theme="dark"] [class*="text-emerald-600"] {
+  color: #6ee7b7 !important;
+}
+
+[data-theme="dark"] [class*="text-rose-600"] {
+  color: #fca5a5 !important;
+}
+
+[data-theme="dark"] [class*="bg-emerald-500"],
+[data-theme="dark"] [class*="bg-emerald-600"] {
+  background-color: #15803d !important;
+}
+
+[data-theme="dark"] [class*="hover:bg-emerald-700"] {
+  background-color: #166534 !important;
+}
+
+[data-theme="dark"] [class*="bg-[#e8eef8]"],
+[data-theme="dark"] [class*="bg-\\[#e8eef8\\]"] {
+  background-color: #1e3050 !important;
+}
+
+[data-theme="dark"] [class*="border-[#e8eef8]"],
+[data-theme="dark"] [class*="border-\\[#e8eef8\\]"],
+[data-theme="dark"] [class*="border-[#e2e8f0]"],
+[data-theme="dark"] [class*="border-slate-200"] {
+  border-color: var(--app-panel-border) !important;
+}
+
+[data-theme="dark"] [class*="text-slate-400"],
+[data-theme="dark"] [class*="text-\\[#94a3b8\\]"] {
+  color: var(--app-text-muted) !important;
+}
+
+[data-theme="dark"] [class*="border-dashed"] {
+  border-color: var(--app-panel-border) !important;
+}
+
+[data-theme="dark"] [class*="hover:bg-[#f1f5f9]"] {
+  background-color: var(--app-btn-secondary-hover) !important;
 }
 
 [data-theme="dark"] [class*="bg-[#fff1d6]"] {

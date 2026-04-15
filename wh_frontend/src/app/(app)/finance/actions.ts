@@ -53,8 +53,8 @@ const debtPaymentSchema = z.object({
   debtId: z.string().uuid(),
   amount: z.coerce.number().positive().max(100000000),
   paidAt: dateInputSchema,
-  method: z.string().max(120).optional(),
-  notes: z.string().max(1000).optional()
+  method: z.preprocess((v) => (v === null || v === "" ? undefined : v), z.string().max(120).optional()),
+  notes: z.preprocess((v) => (v === null || v === "" ? undefined : v), z.string().max(1000).optional())
 });
 
 const deleteDebtSchema = z.object({
@@ -92,7 +92,7 @@ export async function createExpenseCategoryAction(formData: FormData) {
     image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null
   });
 
-  revalidatePath(returnPath.split("?")[0] || "/finance");
+  revalidatePath("/finance", "layout");
   return { redirectTo: returnPath };
 }
 
@@ -121,7 +121,7 @@ export async function createExpenseAction(formData: FormData) {
     created_by: user.id
   });
 
-  revalidatePath(returnPath.split("?")[0] || "/finance");
+  revalidatePath("/finance", "layout");
   return { redirectTo: returnPath };
 }
 
@@ -152,7 +152,7 @@ export async function updateExpenseAction(formData: FormData) {
     .eq("id", payload.data.expenseId)
     .eq("entry_type", "expense");
 
-  revalidatePath(returnPath.split("?")[0] || "/finance");
+  revalidatePath("/finance", "layout");
   return { redirectTo: returnPath };
 }
 
@@ -174,7 +174,7 @@ export async function deleteExpenseAction(formData: FormData) {
     .eq("id", payload.data.expenseId)
     .eq("entry_type", "expense");
 
-  revalidatePath(returnPath.split("?")[0] || "/finance");
+  revalidatePath("/finance", "layout");
   return { redirectTo: returnPath };
 }
 
@@ -210,7 +210,7 @@ export async function createDebtAction(formData: FormData) {
     created_by: user.id
   });
 
-  revalidatePath(returnPath.split("?")[0] || "/finance");
+  revalidatePath("/finance", "layout");
   return { redirectTo: returnPath };
 }
 
@@ -254,12 +254,12 @@ export async function createDebtPaymentAction(formData: FormData) {
       .from("debts")
       .update({
         remaining_balance: nextBalance.toFixed(2),
-        status: nextBalance === 0 ? "closed" : "open"
+        status: nextBalance <= 0 ? "closed" : "open"
       })
       .eq("id", payload.data.debtId);
   }
 
-  revalidatePath(returnPath.split("?")[0] || "/finance");
+  revalidatePath("/finance", "layout");
   return { redirectTo: returnPath };
 }
 
@@ -295,7 +295,7 @@ export async function updateExpenseCategoryAction(formData: FormData) {
     .eq("account_id", account.accountId)
     .eq("id", payload.data.categoryId);
 
-  revalidatePath(returnPath.split("?")[0] || "/finance");
+  revalidatePath("/finance", "layout");
   return { redirectTo: returnPath };
 }
 
@@ -351,7 +351,30 @@ export async function deleteDebtAction(formData: FormData) {
     .eq("account_id", account.accountId)
     .eq("id", payload.data.debtId);
 
-  revalidatePath(returnPath.split("?")[0] || "/finance");
+  revalidatePath("/finance", "layout");
+  return { redirectTo: returnPath };
+}
+
+export async function closeDebtAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = deleteDebtSchema.safeParse({ debtId: formData.get("debtId") });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+
+  await supabase
+    .from("debts")
+    .update({ status: "closed", remaining_balance: "0.00" })
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.debtId);
+
+  revalidatePath("/finance", "layout");
   return { redirectTo: returnPath };
 }
 
