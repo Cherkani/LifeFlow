@@ -60,45 +60,57 @@ export default async function SettingsPage({
         </Alert>
       ) : null}
 
-      <Card className="overflow-hidden border-[#d7e0f1] bg-[linear-gradient(135deg,#f8fbff_0%,#edf3ff_55%,#ffffff_100%)]">
+      <Card className="overflow-hidden border-[var(--app-panel-border-strong)] bg-[linear-gradient(135deg,var(--app-panel-bg-soft)_0%,var(--app-btn-secondary-bg)_55%,var(--app-panel-bg)_100%)]">
         <CardContent className="grid gap-5 px-5 py-5 lg:grid-cols-[1.4fr_0.9fr] lg:px-6">
           <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#d7e0f1] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#4a5f83]">
+            <div
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--app-panel-border-strong)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-text-muted)]"
+              style={{ backgroundColor: "color-mix(in srgb, var(--app-panel-bg) 84%, transparent)" }}
+            >
               <ShieldCheck size={14} />
               Workspace controls
             </div>
             <div>
-              <h2 className="text-2xl font-semibold text-[#0c1d3c]">Keep profile settings simple and sensitive knowledge gated.</h2>
-              <p className="mt-2 max-w-2xl text-sm text-[#4a5f83]">
+              <h2 className="text-2xl font-semibold text-[var(--app-text-strong)]">Keep profile settings simple and sensitive knowledge gated.</h2>
+              <p className="mt-2 max-w-2xl text-sm text-[var(--app-text-muted)]">
                 Profile preferences, workspace details, exports, and the unlock code for hidden topic items all live here.
               </p>
             </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-            <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm">
-              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#4a5f83]">
+            <div
+              className="rounded-2xl border border-[var(--app-panel-border)] p-4 shadow-sm"
+              style={{ backgroundColor: "color-mix(in srgb, var(--app-panel-bg) 88%, transparent)" }}
+            >
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-text-muted)]">
                 <UserRound size={14} />
                 Account
               </p>
-              <p className="mt-2 text-lg font-semibold text-[#0c1d3c]">{account.accountName}</p>
-              <p className="text-sm text-[#4a5f83]">{account.role}</p>
+              <p className="mt-2 text-lg font-semibold text-[var(--app-text-strong)]">{account.accountName}</p>
+              <p className="text-sm text-[var(--app-text-muted)]">{account.role}</p>
             </div>
-            <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm">
-              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#4a5f83]">
+            <div
+              className="rounded-2xl border border-[var(--app-panel-border)] p-4 shadow-sm"
+              style={{ backgroundColor: "color-mix(in srgb, var(--app-panel-bg) 88%, transparent)" }}
+            >
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-text-muted)]">
                 <Wallet size={14} />
                 Currency
               </p>
-              <p className="mt-2 text-lg font-semibold text-[#0c1d3c]">{displayCurrencyLabel(account.currencyCode)}</p>
-              <p className="text-sm text-[#4a5f83]">Default workspace currency</p>
+              <p className="mt-2 text-lg font-semibold text-[var(--app-text-strong)]">{displayCurrencyLabel(account.currencyCode)}</p>
+              <p className="text-sm text-[var(--app-text-muted)]">Default workspace currency</p>
             </div>
-            <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm">
-              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#4a5f83]">
+            <div
+              className="rounded-2xl border border-[var(--app-panel-border)] p-4 shadow-sm"
+              style={{ backgroundColor: "color-mix(in srgb, var(--app-panel-bg) 88%, transparent)" }}
+            >
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-text-muted)]">
                 <KeyRound size={14} />
                 Hidden info
               </p>
-              <p className="mt-2 text-lg font-semibold text-[#0c1d3c]">{hasKnowledgeCode ? "Protected" : "Not set"}</p>
-              <p className="text-sm text-[#4a5f83]">{knowledgeCodeUpdatedAt ? `Updated ${knowledgeCodeUpdatedAt}` : "Create an unlock code below."}</p>
+              <p className="mt-2 text-lg font-semibold text-[var(--app-text-strong)]">{hasKnowledgeCode ? "Protected" : "Not set"}</p>
+              <p className="text-sm text-[var(--app-text-muted)]">{knowledgeCodeUpdatedAt ? `Updated ${knowledgeCodeUpdatedAt}` : "Create an unlock code below."}</p>
             </div>
           </div>
         </CardContent>
@@ -172,9 +184,9 @@ export default async function SettingsPage({
               <CardTitle>Private Knowledge</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-xl border border-[#d7e0f1] bg-[#f8fbff] p-4">
-                <p className="text-sm font-medium text-[#0c1d3c]">Workspace unlock code</p>
-                <p className="mt-1 text-sm text-[#4a5f83]">
+              <div className="rounded-xl border border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg-soft)] p-4">
+                <p className="text-sm font-medium text-[var(--app-text-strong)]">Workspace unlock code</p>
+                <p className="mt-1 text-sm text-[var(--app-text-muted)]">
                   Hidden topic items stay blurred until someone clicks the eye icon and enters this code.
                 </p>
               </div>
@@ -267,7 +279,7 @@ export default async function SettingsPage({
               <div className="grid gap-3">
                 <a
                   href="mailto:cherkaniaymen1@gmail.com"
-                  className="rounded-2xl border border-slate-200 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_100%)] p-4 transition hover:border-slate-300 hover:shadow-sm"
+                  className="rounded-2xl border border-slate-200 bg-[linear-gradient(135deg,var(--app-panel-bg)_0%,var(--app-panel-bg-soft)_100%)] p-4 transition hover:border-slate-300 hover:shadow-sm"
                 >
                   <p className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     <Mail size={14} />
@@ -280,7 +292,7 @@ export default async function SettingsPage({
                   href="https://www.linkedin.com/in/aymen-cherkani-a68b1224a/"
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-2xl border border-slate-200 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_100%)] p-4 transition hover:border-slate-300 hover:shadow-sm"
+                  className="rounded-2xl border border-slate-200 bg-[linear-gradient(135deg,var(--app-panel-bg)_0%,var(--app-panel-bg-soft)_100%)] p-4 transition hover:border-slate-300 hover:shadow-sm"
                 >
                   <p className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     <Linkedin size={14} />
