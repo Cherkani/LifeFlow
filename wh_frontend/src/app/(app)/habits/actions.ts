@@ -21,6 +21,10 @@ const updateObjectiveSchema = z.object({
   imageUrl: z.string().trim().optional()
 });
 
+const deleteObjectiveSchema = z.object({
+  objectiveId: z.string().uuid()
+});
+
 const createHabitSchema = z.object({
   objectiveId: z.string().uuid(),
   title: z.string().trim().min(2, "Habit title is required").max(140),
@@ -156,6 +160,44 @@ export async function updateObjectiveFormAction(
   formData: FormData
 ): Promise<RedirectResult | null> {
   return updateObjectiveAction(formData);
+}
+
+export async function deleteObjectiveAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = deleteObjectiveSchema.safeParse({
+    objectiveId: formData.get("objectiveId")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  const { count } = await supabase
+    .from("habits")
+    .select("id", { count: "exact", head: true })
+    .eq("account_id", account.accountId)
+    .eq("objective_id", payload.data.objectiveId);
+
+  if ((count ?? 0) > 0) {
+    return { redirectTo: returnPath };
+  }
+
+  await supabase
+    .from("habit_objectives")
+    .delete()
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.objectiveId);
+
+  revalidatePath(returnPath.split("?")[0] || "/habits");
+  return { redirectTo: returnPath };
+}
+
+export async function deleteObjectiveFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return deleteObjectiveAction(formData);
 }
 
 export async function createHabitAction(formData: FormData) {

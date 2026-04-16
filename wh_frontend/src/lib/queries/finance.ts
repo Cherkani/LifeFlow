@@ -2,6 +2,7 @@ import type { Supabase } from "./types";
 
 export type FinancePageData = {
   categories: Array<{ id: string; name: string; monthly_limit: string | null; image_url: string | null }>;
+  categoryUsage: Array<{ category_id: string | null }>;
   periodExpenses: Array<{ id: string; amount: string; category_id: string | null; occurred_on: string }>;
   recentExpenses: Array<{ id: string; amount: string; category_id: string | null; occurred_on: string; notes: string | null }>;
   subscriptions: Array<{
@@ -25,13 +26,19 @@ export async function getFinancePageData(
   rangeEnd: string,
   period: "day" | "week" | "month"
 ): Promise<FinancePageData> {
-  const [categoriesRes, monthExpensesRes, recentExpensesRes, subscriptionsRes, debtsRes, paymentsRes] = await Promise.all([
+  const [categoriesRes, categoryUsageRes, monthExpensesRes, recentExpensesRes, subscriptionsRes, debtsRes, paymentsRes] = await Promise.all([
     supabase
       .from("finance_categories")
       .select("id, name, monthly_limit, image_url")
       .eq("account_id", accountId)
       .eq("kind", "expense")
       .order("name"),
+    supabase
+      .from("ledger_entries")
+      .select("category_id")
+      .eq("account_id", accountId)
+      .eq("entry_type", "expense")
+      .not("category_id", "is", null),
     supabase
       .from("ledger_entries")
       .select("id, amount, category_id, occurred_on")
@@ -69,6 +76,7 @@ export async function getFinancePageData(
   ]);
   return {
     categories: (categoriesRes.data ?? []) as FinancePageData["categories"],
+    categoryUsage: (categoryUsageRes.data ?? []) as FinancePageData["categoryUsage"],
     periodExpenses: (monthExpensesRes.data ?? []) as FinancePageData["periodExpenses"],
     recentExpenses: (recentExpensesRes.data ?? []) as FinancePageData["recentExpenses"],
     subscriptions: (subscriptionsRes.data ?? []) as FinancePageData["subscriptions"],

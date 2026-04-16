@@ -17,6 +17,10 @@ const updateSpaceSchema = z.object({
   imageUrl: z.string().trim().optional()
 });
 
+const deleteSpaceSchema = z.object({
+  spaceId: z.string().uuid()
+});
+
 const createItemSchema = z.object({
   spaceId: z.string().uuid(),
   kind: z.enum(["link", "note", "bullets"]),
@@ -197,6 +201,41 @@ export async function updateKnowledgeSpaceAction(formData: FormData) {
   return { redirectTo: `/knowledge/${space?.id ?? payload.data.spaceId}?success=${encodeURIComponent("Topic updated.")}` };
 }
 
+export async function deleteKnowledgeSpaceAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"), "/knowledge");
+  const payload = deleteSpaceSchema.safeParse({
+    spaceId: formData.get("spaceId")
+  });
+
+  if (!payload.success) {
+    return redirectTarget(returnPath, "error", "Invalid topic.");
+  }
+
+  const { supabase, account } = await requireAppContext();
+
+  const { count } = await supabase
+    .from("knowledge_items")
+    .select("id", { count: "exact", head: true })
+    .eq("space_id", payload.data.spaceId);
+
+  if ((count ?? 0) > 0) {
+    return redirectTarget(returnPath, "error", "Delete all topic items first.");
+  }
+
+  const { error } = await supabase
+    .from("knowledge_spaces")
+    .delete()
+    .eq("id", payload.data.spaceId)
+    .eq("account_id", account.accountId);
+
+  if (error) {
+    return redirectTarget(returnPath, "error", mapDbErrorMessage(error.message));
+  }
+
+  revalidateKnowledgeRoutes(payload.data.spaceId);
+  return redirectTarget("/knowledge", "success", "Topic deleted.");
+}
+
 export async function createKnowledgeItemAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"), "/knowledge");
   const payload = createItemSchema.safeParse({
@@ -362,6 +401,13 @@ export async function updateKnowledgeSpaceFormAction(
   formData: FormData
 ): Promise<RedirectResult | null> {
   return updateKnowledgeSpaceAction(formData);
+}
+
+export async function deleteKnowledgeSpaceFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return deleteKnowledgeSpaceAction(formData);
 }
 
 export async function createKnowledgeItemFormAction(

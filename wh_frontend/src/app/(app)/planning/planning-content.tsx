@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Plus } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import Image from "next/image";
 
-import { createObjectiveFormAction, updateObjectiveFormAction } from "@/app/(app)/habits/actions";
+import { createObjectiveFormAction, deleteObjectiveFormAction, updateObjectiveFormAction } from "@/app/(app)/habits/actions";
 import { ActionForm } from "@/components/forms/action-form";
 import { PexelsImagePicker } from "@/components/forms/pexels-image-picker";
 import { SubmitButton } from "@/components/forms/submit-button";
@@ -18,6 +18,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   createTemplateWithDailyTasksFormAction,
+  deleteTemplateFormAction,
   updateTemplateWithDailyTasksFormAction
 } from "@/app/(app)/planning/actions";
 
@@ -70,6 +71,8 @@ type PlanningContentProps = {
   taskById: Record<string, Task>;
   objectiveById: Record<string, Objective>;
   templateIdsByObjective: Record<string, string[]>;
+  taskCountByObjective: Record<string, number>;
+  weekCountByTemplate: Record<string, number>;
   stats: {
     objectivesCount: number;
     templatesCount: number;
@@ -85,6 +88,8 @@ export function PlanningContent({
   taskById,
   objectiveById,
   templateIdsByObjective,
+  taskCountByObjective,
+  weekCountByTemplate,
   stats
 }: PlanningContentProps) {
   const [activeModal, setActiveModal] = useState<
@@ -450,6 +455,26 @@ export function PlanningContent({
             />
             <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#ecebf6] pt-4">
+            <div className="text-xs text-[#4a5f83]">
+              {(taskCountByObjective[editingObjective.id] ?? 0) === 0
+                ? "This objective is empty and can be deleted."
+                : `Delete unavailable: ${taskCountByObjective[editingObjective.id] ?? 0} habit${(taskCountByObjective[editingObjective.id] ?? 0) !== 1 ? "s" : ""} linked.`}
+            </div>
+            {(taskCountByObjective[editingObjective.id] ?? 0) === 0 ? (
+              <ActionForm action={deleteObjectiveFormAction} onSuccess={closeModal}>
+                <input type="hidden" name="returnPath" value="/planning" />
+                <input type="hidden" name="objectiveId" value={editingObjective.id} />
+                <button
+                  type="submit"
+                  className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#fecaca] bg-[#fef2f2] px-4 py-2 text-sm font-medium text-[#b91c1c] transition hover:bg-[#fee2e2]"
+                >
+                  <Trash2 size={14} />
+                  Delete objective
+                </button>
+              </ActionForm>
+            ) : null}
+          </div>
         </ModalShell>
       ) : null}
 
@@ -501,32 +526,54 @@ export function PlanningContent({
             {objectives.length === 0 ? (
               <p className="text-sm text-[#4a5f83]">Create an objective first.</p>
             ) : (
-              <ActionForm
-                action={updateTemplateWithDailyTasksFormAction}
-                className="space-y-4"
-                onSuccess={closeModal}
-              >
-                <input type="hidden" name="returnPath" value="/planning" />
-                <input type="hidden" name="templateId" value={editingTemplate.id} />
-                <div className="space-y-2">
-                  <Label htmlFor="editTemplateName">Template name</Label>
-                  <Input
-                    id="editTemplateName"
-                    name="name"
-                    required
-                    defaultValue={editingTemplate.name}
+              <>
+                <ActionForm
+                  action={updateTemplateWithDailyTasksFormAction}
+                  className="space-y-4"
+                  onSuccess={closeModal}
+                >
+                  <input type="hidden" name="returnPath" value="/planning" />
+                  <input type="hidden" name="templateId" value={editingTemplate.id} />
+                  <div className="space-y-2">
+                    <Label htmlFor="editTemplateName">Template name</Label>
+                    <Input
+                      id="editTemplateName"
+                      name="name"
+                      required
+                      defaultValue={editingTemplate.name}
+                    />
+                  </div>
+                  <TemplateTaskBuilder
+                    objectives={objectives.map((o) => ({ id: o.id, title: o.title }))}
+                    initialTasks={editingTemplateInitialTasks}
                   />
+                  <SubmitButton
+                    label="Save template changes"
+                    pendingLabel="Saving..."
+                    className="w-full sm:w-auto"
+                  />
+                </ActionForm>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#ecebf6] pt-4">
+                  <div className="text-xs text-[#4a5f83]">
+                    {editingTemplateInitialTasks.length === 0 && (weekCountByTemplate[editingTemplate.id] ?? 0) === 0
+                      ? "This template is empty and can be deleted."
+                      : `Delete unavailable: ${editingTemplateInitialTasks.length} task${editingTemplateInitialTasks.length !== 1 ? "s" : ""} and ${weekCountByTemplate[editingTemplate.id] ?? 0} generated week${(weekCountByTemplate[editingTemplate.id] ?? 0) !== 1 ? "s" : ""}.`}
+                  </div>
+                  {editingTemplateInitialTasks.length === 0 && (weekCountByTemplate[editingTemplate.id] ?? 0) === 0 ? (
+                    <ActionForm action={deleteTemplateFormAction} onSuccess={closeModal}>
+                      <input type="hidden" name="returnPath" value="/planning" />
+                      <input type="hidden" name="templateId" value={editingTemplate.id} />
+                      <button
+                        type="submit"
+                        className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#fecaca] bg-[#fef2f2] px-4 py-2 text-sm font-medium text-[#b91c1c] transition hover:bg-[#fee2e2]"
+                      >
+                        <Trash2 size={14} />
+                        Delete template
+                      </button>
+                    </ActionForm>
+                  ) : null}
                 </div>
-                <TemplateTaskBuilder
-                  objectives={objectives.map((o) => ({ id: o.id, title: o.title }))}
-                  initialTasks={editingTemplateInitialTasks}
-                />
-                <SubmitButton
-                  label="Save template changes"
-                  pendingLabel="Saving..."
-                  className="w-full sm:w-auto"
-                />
-              </ActionForm>
+              </>
             )}
           </ModalShell>
         ) : (

@@ -84,8 +84,15 @@ export default async function PlanningPage() {
   const totalTemplateEntries = entries.length;
 
   const templateIdsByObjective: Record<string, string[]> = {};
+  const taskCountByObjective: Record<string, number> = {};
   for (const objective of objectives) {
     templateIdsByObjective[objective.id] = [];
+    taskCountByObjective[objective.id] = 0;
+  }
+  for (const task of tasks) {
+    if (task.objective_id && taskCountByObjective[task.objective_id] !== undefined) {
+      taskCountByObjective[task.objective_id] += 1;
+    }
   }
   for (const entry of entries) {
     const habit = taskById.get(entry.habit_id);
@@ -99,8 +106,10 @@ export default async function PlanningPage() {
   }
 
   const assignedWeeksMap = new Map<string, { id: string; template_id: string }>();
+  const weekCountByTemplate: Record<string, number> = {};
   for (const w of weeks) {
     assignedWeeksMap.set(w.week_start_date, { id: w.id, template_id: w.template_id });
+    weekCountByTemplate[w.template_id] = (weekCountByTemplate[w.template_id] ?? 0) + 1;
   }
 
   const totalTasksCountByWeek = new Map<string, number>();
@@ -135,6 +144,8 @@ export default async function PlanningPage() {
         taskById={taskByIdRecord}
         objectiveById={objectiveByIdRecord}
         templateIdsByObjective={templateIdsByObjective}
+        taskCountByObjective={taskCountByObjective}
+        weekCountByTemplate={weekCountByTemplate}
         stats={{
           objectivesCount: objectives.length,
           templatesCount: templates.length,

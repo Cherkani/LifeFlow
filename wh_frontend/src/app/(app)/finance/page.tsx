@@ -35,7 +35,7 @@ function getMonthlyEquivalent(amount: number, recurrence: "monthly" | "yearly") 
   return recurrence === "yearly" ? amount / 12 : amount;
 }
 
-function isSubscriptionVisibleInRange(subscription: SubscriptionRow, rangeStart: string, rangeEnd: string) {
+function isSubscriptionVisibleInRange(subscription: SubscriptionRow, rangeStart: string) {
   if (!subscription.is_active) return false;
   if (subscription.end_date && subscription.end_date < rangeStart) return false;
   return true;
@@ -107,6 +107,11 @@ export default async function FinancePage({
     period
   );
   const categories = financeData.categories;
+  const categoryUsageCounts = new Map<string, number>();
+  for (const row of financeData.categoryUsage) {
+    if (!row.category_id) continue;
+    categoryUsageCounts.set(row.category_id, (categoryUsageCounts.get(row.category_id) ?? 0) + 1);
+  }
   const periodExpenses = financeData.periodExpenses;
   const recentExpenses = financeData.recentExpenses;
   const subscriptions = financeData.subscriptions.map((subscription) => ({
@@ -187,7 +192,7 @@ export default async function FinancePage({
 
   const activeSubscriptions = subscriptions.filter((subscription) => subscription.is_active);
   const visibleSubscriptions = subscriptions.filter((subscription) =>
-    isSubscriptionVisibleInRange(subscription, rangeStart, rangeEnd)
+    isSubscriptionVisibleInRange(subscription, rangeStart)
   );
   const dueSubscriptions = activeSubscriptions.filter((subscription) => {
     return Boolean(
@@ -232,7 +237,8 @@ export default async function FinancePage({
     id: c.id,
     name: c.name,
     monthly_limit: c.monthly_limit ? Number(c.monthly_limit) : null,
-    image_url: c.image_url
+    image_url: c.image_url,
+    entry_count: categoryUsageCounts.get(c.id) ?? 0
   }));
 
   const recentExpensesForClient = recentExpenses.map((e) => ({
@@ -291,7 +297,6 @@ export default async function FinancePage({
         rangeEndIso={rangeEnd}
         previousAnchorIso={toIsoDate(previousAnchorDate)}
         nextAnchorIso={toIsoDate(nextAnchorDate)}
-        currencyCode={account.currencyCode}
       />
     </div>
   );

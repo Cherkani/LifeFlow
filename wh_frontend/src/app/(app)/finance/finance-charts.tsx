@@ -30,7 +30,6 @@ type FinanceChartsProps = {
   dailyExpenses?: DailyExpensePoint[];
   categories?: CategoryPoint[];
   subscriptions?: DailyExpensePoint[];
-  currencyCode: string;
   mode?: "all" | "subscriptions";
 };
 
@@ -38,7 +37,6 @@ export function FinanceCharts({
   dailyExpenses = [],
   categories = [],
   subscriptions = [],
-  currencyCode: _currencyCode,
   mode = "all"
 }: FinanceChartsProps) {
   return (

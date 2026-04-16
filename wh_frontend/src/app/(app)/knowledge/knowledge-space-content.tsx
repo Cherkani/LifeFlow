@@ -22,6 +22,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   createKnowledgeItemFormAction,
+  deleteKnowledgeSpaceFormAction,
   deleteKnowledgeItemFormAction,
   toggleKnowledgeItemCheckedFormAction,
   updateKnowledgeItemFormAction,
@@ -484,6 +485,24 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
             <PexelsImagePicker inputName="imageUrl" label="Topic image (optional)" defaultValue={space.image_url ?? ""} />
             <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#d7e0f1] pt-4">
+            <div className="text-xs text-[#4a5f83]">
+              {items.length === 0
+                ? "This topic is empty and can be deleted."
+                : `Delete unavailable: ${items.length} linked item${items.length !== 1 ? "s" : ""}.`}
+            </div>
+            {items.length === 0 ? (
+              <ActionForm action={deleteKnowledgeSpaceFormAction} onSuccess={closeModal}>
+                <input type="hidden" name="returnPath" value="/knowledge" />
+                <input type="hidden" name="spaceId" value={space.id} />
+                <SubmitButton
+                  label="Delete topic"
+                  pendingLabel="Deleting..."
+                  className="h-10 rounded-lg border border-[#fecaca] bg-[#fef2f2] px-4 py-2 text-sm font-medium text-[#b91c1c] hover:bg-[#fee2e2]"
+                />
+              </ActionForm>
+            ) : null}
+          </div>
         </ModalShell>
       ) : null}
 

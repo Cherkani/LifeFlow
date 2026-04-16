@@ -21,6 +21,10 @@ const updateCategorySchema = z.object({
   imageUrl: z.string().trim().optional()
 });
 
+const deleteCategorySchema = z.object({
+  categoryId: z.string().uuid()
+});
+
 const createExpenseSchema = z.object({
   categoryId: z.string().uuid(),
   amount: z.coerce.number().positive().max(100000000),
@@ -437,6 +441,39 @@ export async function updateExpenseCategoryAction(formData: FormData) {
   return { redirectTo: returnPath };
 }
 
+export async function deleteExpenseCategoryAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = deleteCategorySchema.safeParse({
+    categoryId: formData.get("categoryId")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  const { count } = await supabase
+    .from("ledger_entries")
+    .select("id", { count: "exact", head: true })
+    .eq("account_id", account.accountId)
+    .eq("entry_type", "expense")
+    .eq("category_id", payload.data.categoryId);
+
+  if ((count ?? 0) > 0) {
+    return { redirectTo: returnPath };
+  }
+
+  await supabase
+    .from("finance_categories")
+    .delete()
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.categoryId)
+    .eq("kind", "expense");
+
+  revalidatePath("/finance", "layout");
+  return { redirectTo: returnPath };
+}
+
 export async function createExpenseCategoryFormAction(
   _prevState: RedirectResult | null,
   formData: FormData
@@ -570,4 +607,11 @@ export async function updateExpenseCategoryFormAction(
   formData: FormData
 ): Promise<RedirectResult | null> {
   return updateExpenseCategoryAction(formData);
+}
+
+export async function deleteExpenseCategoryFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return deleteExpenseCategoryAction(formData);
 }

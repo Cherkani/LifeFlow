@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Plus, Search } from "lucide-react";
+import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
@@ -19,6 +19,7 @@ import { ModalShell } from "@/components/ui/modal-shell";
 import { SectionHeader } from "@/components/ui/section-header";
 import {
   createKnowledgeSpaceFormAction,
+  deleteKnowledgeSpaceFormAction,
   updateKnowledgeSpaceFormAction
 } from "@/app/(app)/knowledge/actions";
 
@@ -172,6 +173,26 @@ export function KnowledgeModals({
             />
             <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#d7e0f1] pt-4">
+            <div className="text-xs text-[#4a5f83]">
+              {(countsBySpace[editingSpace.id]?.total ?? 0) === 0
+                ? "This topic is empty and can be deleted."
+                : `Delete unavailable: ${countsBySpace[editingSpace.id]?.total ?? 0} linked item${(countsBySpace[editingSpace.id]?.total ?? 0) !== 1 ? "s" : ""}.`}
+            </div>
+            {(countsBySpace[editingSpace.id]?.total ?? 0) === 0 ? (
+              <ActionForm action={deleteKnowledgeSpaceFormAction} onSuccess={closeModal}>
+                <input type="hidden" name="returnPath" value="/knowledge" />
+                <input type="hidden" name="spaceId" value={editingSpace.id} />
+                <button
+                  type="submit"
+                  className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#fecaca] bg-[#fef2f2] px-4 py-2 text-sm font-medium text-[#b91c1c] transition hover:bg-[#fee2e2]"
+                >
+                  <Trash2 size={14} />
+                  Delete topic
+                </button>
+              </ActionForm>
+            ) : null}
+          </div>
         </ModalShell>
       ) : null}
     </>

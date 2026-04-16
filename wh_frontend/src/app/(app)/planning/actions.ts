@@ -17,6 +17,10 @@ const updateTemplateSchema = z.object({
   name: z.string().trim().min(2, "Template name is required").max(140)
 });
 
+const deleteTemplateSchema = z.object({
+  templateId: z.string().uuid()
+});
+
 const generateWeekSchema = z.object({
   templateId: z.string().uuid(),
   weekStartDate: dateInputSchema
@@ -386,6 +390,50 @@ export async function updateTemplateWithDailyTasksFormAction(
   formData: FormData
 ): Promise<RedirectResult | null> {
   return updateTemplateWithDailyTasksAction(formData);
+}
+
+export async function deleteTemplateAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = deleteTemplateSchema.safeParse({
+    templateId: formData.get("templateId")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  const [{ count: entryCount }, { count: weekCount }] = await Promise.all([
+    supabase
+      .from("template_entries")
+      .select("id", { count: "exact", head: true })
+      .eq("template_id", payload.data.templateId),
+    supabase
+      .from("weeks")
+      .select("id", { count: "exact", head: true })
+      .eq("account_id", account.accountId)
+      .eq("template_id", payload.data.templateId)
+  ]);
+
+  if ((entryCount ?? 0) > 0 || (weekCount ?? 0) > 0) {
+    return { redirectTo: returnPath };
+  }
+
+  await supabase
+    .from("templates")
+    .delete()
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.templateId);
+
+  revalidatePath(returnPath.split("?")[0] || "/planning");
+  return { redirectTo: returnPath };
+}
+
+export async function deleteTemplateFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return deleteTemplateAction(formData);
 }
 
 export async function generateWeekAction(formData: FormData) {

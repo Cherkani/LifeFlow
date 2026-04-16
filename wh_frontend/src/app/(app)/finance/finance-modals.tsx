@@ -15,6 +15,7 @@ import {
   createExpenseCategoryFormAction,
   createExpenseFormAction,
   createSubscriptionFormAction,
+  deleteExpenseCategoryFormAction,
   deleteDebtFormAction,
   deleteExpenseFormAction,
   deleteSubscriptionFormAction,
@@ -59,6 +60,7 @@ type CategoryRow = {
   name: string;
   monthly_limit: number | null;
   image_url: string | null;
+  entry_count: number;
 };
 
 type ExpenseRow = {
@@ -171,7 +173,6 @@ type FinanceModalsProps = {
   rangeEndIso: string;
   previousAnchorIso: string;
   nextAnchorIso: string;
-  currencyCode: string;
 };
 
 function DebtPayRow({
@@ -362,8 +363,7 @@ export function FinanceModals({
   rangeStartIso,
   rangeEndIso,
   previousAnchorIso,
-  nextAnchorIso,
-  currencyCode
+  nextAnchorIso
 }: FinanceModalsProps) {
   const todayIso = toDateInputValue(new Date());
   const [activeModal, setActiveModal] = useState<
@@ -670,7 +670,6 @@ export function FinanceModals({
             dailyExpenses={filteredDailyChartData}
             categories={filteredCategoryChartData}
             subscriptions={subscriptionDueChartData}
-            currencyCode={currencyCode}
           />
 
           <Card>
@@ -849,7 +848,6 @@ export function FinanceModals({
             <CardContent>
               <FinanceCharts
                 subscriptions={subscriptionDueChartData}
-                currencyCode={currencyCode}
                 mode="subscriptions"
               />
             </CardContent>
@@ -1182,6 +1180,24 @@ export function FinanceModals({
             </div>
             <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#d7e0f1] pt-4">
+            <div className="text-xs text-[#4a5f83]">
+              {editingCategory.entry_count === 0
+                ? "This category is empty and can be deleted."
+                : `Delete unavailable: ${editingCategory.entry_count} expense record${editingCategory.entry_count !== 1 ? "s" : ""} linked.`}
+            </div>
+            {editingCategory.entry_count === 0 ? (
+              <ActionForm action={deleteExpenseCategoryFormAction} onSuccess={closeModal} refreshOnly>
+                <input type="hidden" name="returnPath" value={baseHref} />
+                <input type="hidden" name="categoryId" value={editingCategory.id} />
+                <SubmitButton
+                  label="Delete category"
+                  pendingLabel="Deleting..."
+                  className="h-10 rounded-lg border border-[#fecaca] bg-[#fef2f2] px-4 py-2 text-sm font-medium text-[#b91c1c] hover:bg-[#fee2e2]"
+                />
+              </ActionForm>
+            ) : null}
+          </div>
         </ModalShell>
       ) : null}
 
