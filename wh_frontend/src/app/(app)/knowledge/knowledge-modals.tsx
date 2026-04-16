@@ -122,17 +122,43 @@ export function KnowledgeModals({
                         </div>
                       </div>
                     </Link>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingSpaceId(space.id);
-                        setActiveModal("edit-topic");
-                      }}
-                      aria-label="Edit topic"
-                      className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#c7d3e8] bg-white text-[#0c1d3c] transition hover:bg-[#f1f5ff]"
-                    >
-                      <Pencil size={16} />
-                    </button>
+                    <div className="absolute right-3 top-3 flex items-center gap-2">
+                      {(counts.total ?? 0) === 0 ? (
+                        <ActionForm action={deleteKnowledgeSpaceFormAction} onSuccess={closeModal}>
+                          <input type="hidden" name="returnPath" value="/knowledge" />
+                          <input type="hidden" name="spaceId" value={space.id} />
+                          <button
+                            type="submit"
+                            aria-label="Delete topic"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#fecaca] bg-[#fef2f2] text-[#b91c1c] transition hover:bg-[#fee2e2]"
+                            title="Delete empty topic"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </ActionForm>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          aria-label="Delete unavailable"
+                          className="inline-flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-md border border-[#e2e8f0] bg-[#f8fafc] text-[#94a3b8]"
+                          title={`Delete unavailable: ${counts.total} linked item${counts.total !== 1 ? "s" : ""}`}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingSpaceId(space.id);
+                          setActiveModal("edit-topic");
+                        }}
+                        aria-label="Edit topic"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#c7d3e8] bg-white text-[#0c1d3c] transition hover:bg-[#f1f5ff]"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}

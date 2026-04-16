@@ -762,26 +762,52 @@ export function FinanceModals({
                               {category.limit > 0 ? `${formatMoneyDhs(category.limit)} limit` : "No limit set"}
                             </p>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingCategoryId(category.id);
-                              setActiveModal("edit-category");
-                            }}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#c7d3e8] bg-white text-[#0c1d3c] transition hover:bg-[#f8fbff]"
-                            aria-label="Edit category"
-                          >
-                            <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path
-                                d="m3 11 9-9 3 3-9 9H3v-3Z"
-                                stroke="currentColor"
-                                strokeWidth="1.2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                              <path d="M12 3l1 1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          </button>
+                          <div className="flex items-center gap-2">
+                            {categoryMeta?.entry_count === 0 ? (
+                              <ActionForm action={deleteExpenseCategoryFormAction} refreshOnly>
+                                <input type="hidden" name="returnPath" value={baseHref} />
+                                <input type="hidden" name="categoryId" value={category.id} />
+                                <button
+                                  type="submit"
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#fecaca] bg-[#fef2f2] text-[#b91c1c] transition hover:bg-[#fee2e2]"
+                                  aria-label="Delete category"
+                                  title="Delete empty category"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </ActionForm>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled
+                                className="inline-flex h-7 w-7 cursor-not-allowed items-center justify-center rounded-md border border-[#e2e8f0] bg-[#f8fafc] text-[#94a3b8]"
+                                aria-label="Delete unavailable"
+                                title={`Delete unavailable: ${categoryMeta?.entry_count ?? 0} linked expense record${(categoryMeta?.entry_count ?? 0) !== 1 ? "s" : ""}`}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingCategoryId(category.id);
+                                setActiveModal("edit-category");
+                              }}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#c7d3e8] bg-white text-[#0c1d3c] transition hover:bg-[#f8fbff]"
+                              aria-label="Edit category"
+                            >
+                              <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                  d="m3 11 9-9 3 3-9 9H3v-3Z"
+                                  stroke="currentColor"
+                                  strokeWidth="1.2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                                <path d="M12 3l1 1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </button>
+                          </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge variant={category.over ? "danger" : "secondary"}>{formatMoneyDhs(category.spent)} spent</Badge>
