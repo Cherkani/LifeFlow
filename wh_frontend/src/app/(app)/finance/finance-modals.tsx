@@ -14,10 +14,14 @@ import {
   createDebtPaymentFormAction,
   createExpenseCategoryFormAction,
   createExpenseFormAction,
+  createSubscriptionFormAction,
   deleteDebtFormAction,
   deleteExpenseFormAction,
+  deleteSubscriptionFormAction,
+  toggleSubscriptionActiveFormAction,
   updateExpenseCategoryFormAction,
-  updateExpenseFormAction
+  updateExpenseFormAction,
+  updateSubscriptionFormAction
 } from "@/app/(app)/finance/actions";
 import { ActionForm } from "@/components/forms/action-form";
 import { PexelsImagePicker } from "@/components/forms/pexels-image-picker";
@@ -72,6 +76,17 @@ type PeriodExpenseRow = {
   occurred_on: string;
 };
 
+type SubscriptionRow = {
+  id: string;
+  name: string;
+  amount: number;
+  recurrence: "monthly" | "yearly";
+  next_due_date: string | null;
+  end_date: string | null;
+  notes: string | null;
+  is_active: boolean;
+};
+
 function toDateInputValue(date: Date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -115,7 +130,7 @@ function buildFinanceHref(options?: {
 }
 
 type FinanceModalsProps = {
-  tab: "expenses" | "debts";
+  tab: "expenses" | "subscriptions" | "debts";
   period: "day" | "week" | "month";
   anchorIso: string;
   categories: CategoryRow[];
@@ -125,14 +140,31 @@ type FinanceModalsProps = {
   debtNameById: Record<string, string>;
   recentExpenses: ExpenseRow[];
   periodExpenses: PeriodExpenseRow[];
+  subscriptions: SubscriptionRow[];
   payments: PaymentRow[];
   debts: DebtRow[];
   dailyChartData: Array<{ day: string; amount: number }>;
   categoryChartData: Array<{ name: string; spent: number; limit: number }>;
+  subscriptionDueChartData: Array<{ day: string; amount: number }>;
   totalSpent: number;
   averageDaySpend: number;
   topDay: [string, number] | undefined;
   overLimitCount: number;
+  activeSubscriptionCount: number;
+  recurringMonthlyCost: number;
+  dueSubscriptionsTotal: number;
+  nextSubscription:
+    | {
+        id: string;
+        name: string;
+        amount: number;
+        recurrence: "monthly" | "yearly";
+        next_due_date: string | null;
+        end_date: string | null;
+        notes: string | null;
+        is_active: boolean;
+      }
+    | undefined;
   openDebtTotal: number;
   periodPaymentsTotal: number;
   rangeStartIso: string;
@@ -311,14 +343,20 @@ export function FinanceModals({
   debtNameById,
   recentExpenses,
   periodExpenses,
+  subscriptions,
   payments,
   debts,
   dailyChartData,
   categoryChartData,
+  subscriptionDueChartData,
   totalSpent,
   averageDaySpend,
   topDay,
   overLimitCount,
+  activeSubscriptionCount,
+  recurringMonthlyCost,
+  dueSubscriptionsTotal,
+  nextSubscription,
   openDebtTotal,
   periodPaymentsTotal,
   rangeStartIso,
@@ -329,10 +367,11 @@ export function FinanceModals({
 }: FinanceModalsProps) {
   const todayIso = toDateInputValue(new Date());
   const [activeModal, setActiveModal] = useState<
-    "expense" | "edit-expense" | "debt-entry" | "expense-category" | "edit-category" | null
+    "expense" | "edit-expense" | "debt-entry" | "expense-category" | "edit-category" | "subscription" | "edit-subscription" | null
   >(null);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
-const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingSubscriptionId, setEditingSubscriptionId] = useState<string | null>(null);
   const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [recentSearch, setRecentSearch] = useState("");
@@ -341,6 +380,9 @@ const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
 
   const baseHref = buildFinanceHref({ tab, period, anchor: anchorIso });
   const editingCategory = editingCategoryId ? categories.find((c) => c.id === editingCategoryId) : null;
+  const editingSubscription = editingSubscriptionId
+    ? subscriptions.find((subscription) => subscription.id === editingSubscriptionId) ?? null
+    : null;
   const activeCategoryName = activeCategoryId ? categoryNameById[activeCategoryId] ?? null : null;
 
   const timelineDates = useMemo(() => enumerateIsoDates(rangeStartIso, rangeEndIso), [rangeStartIso, rangeEndIso]);
@@ -399,6 +441,7 @@ const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
     setActiveModal(null);
     setEditingCategoryId(null);
     setEditingExpenseId(null);
+    setEditingSubscriptionId(null);
     setActiveCategoryId(null);
   };
 
@@ -427,6 +470,14 @@ const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
             </button>
             <button
               type="button"
+              onClick={() => setActiveModal("subscription")}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#1d4ed8]"
+            >
+              <Plus size={16} />
+              Subscription
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveModal("expense-category")}
               className="inline-flex items-center gap-2 rounded-lg border border-[#c7d3e8] bg-[#edf3ff] px-3 py-2 text-sm font-semibold text-[#23406d] transition hover:bg-[#e3ebf9]"
             >
@@ -450,6 +501,17 @@ const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
               ].join(" ")}
             >
               Expenses
+            </Link>
+            <Link
+              href={buildFinanceHref({ tab: "subscriptions", period, anchor: anchorIso }) as Route}
+              className={[
+                "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
+                tab === "subscriptions"
+                  ? "bg-[var(--app-btn-primary-bg)] text-[var(--app-btn-primary-fg)] shadow-sm"
+                  : "text-[var(--app-btn-secondary-fg)] hover:bg-[var(--app-btn-secondary-bg)]"
+              ].join(" ")}
+            >
+              Subscriptions
             </Link>
             <Link
               href={buildFinanceHref({ tab: "debts", period, anchor: anchorIso }) as Route}
@@ -607,6 +669,7 @@ const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
           <FinanceCharts
             dailyExpenses={filteredDailyChartData}
             categories={filteredCategoryChartData}
+            subscriptions={subscriptionDueChartData}
             currencyCode={currencyCode}
           />
 
@@ -731,6 +794,133 @@ const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
                 </div>
               ) : (
                 <p className="text-sm text-[#4a5f83]">No expense categories yet.</p>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      ) : tab === "subscriptions" ? (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Recurring / month</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-semibold text-[#2563eb]">{formatMoneyDhs(recurringMonthlyCost)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Due in period</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-semibold text-[#0c1d3c]">{formatMoneyDhs(dueSubscriptionsTotal)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Visible subscriptions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-semibold text-[#0c1d3c]">{activeSubscriptionCount}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Next due</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-semibold text-[#0c1d3c]">
+                  {nextSubscription?.next_due_date
+                    ? `${nextSubscription.name} · ${nextSubscription.next_due_date}`
+                    : "No due date"}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Subscription due dates</CardTitle>
+              <p className="text-sm text-[#4a5f83]">
+                Expired subscriptions stop contributing after their end date.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <FinanceCharts
+                subscriptions={subscriptionDueChartData}
+                currencyCode={currencyCode}
+                mode="subscriptions"
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Subscriptions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {subscriptions.length > 0 ? (
+                <div className="space-y-3">
+                  {subscriptions.map((subscription) => (
+                    <div
+                      key={subscription.id}
+                      className={[
+                        "flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3",
+                        subscription.is_active ? "border-[#c7d3e8] bg-[#f8fbff]" : "border-[#e2e8f0] bg-[#f8fafc] opacity-70"
+                      ].join(" ")}
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-[#0c1d3c]">{subscription.name}</p>
+                        <p className="text-xs text-[#4a5f83]">
+                          {formatMoneyDhs(subscription.amount)} / {subscription.recurrence}
+                          {subscription.next_due_date ? ` · next ${subscription.next_due_date}` : ""}
+                          {subscription.end_date ? ` · expires ${subscription.end_date}` : ""}
+                          {subscription.notes ? ` · ${subscription.notes}` : ""}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={subscription.is_active ? "secondary" : "default"}>
+                          {subscription.is_active ? "Active" : "Inactive"}
+                        </Badge>
+                        <ActionForm action={toggleSubscriptionActiveFormAction} className="inline" refreshOnly>
+                          <input type="hidden" name="returnPath" value={baseHref} />
+                          <input type="hidden" name="subscriptionId" value={subscription.id} />
+                          <button
+                            type="submit"
+                            className="inline-flex h-8 items-center justify-center rounded-md border border-[#c7d3e8] bg-white px-3 text-xs font-semibold text-[#23406d] transition hover:bg-[#edf3ff]"
+                          >
+                            {subscription.is_active ? "Pause" : "Activate"}
+                          </button>
+                        </ActionForm>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingSubscriptionId(subscription.id);
+                            setActiveModal("edit-subscription");
+                          }}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#c7d3e8] bg-white text-[#23406d] transition hover:bg-[#edf3ff]"
+                          aria-label="Edit subscription"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <ActionForm action={deleteSubscriptionFormAction} className="inline" refreshOnly>
+                          <input type="hidden" name="returnPath" value={baseHref} />
+                          <input type="hidden" name="subscriptionId" value={subscription.id} />
+                          <button
+                            type="submit"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#fecaca] bg-[#fef2f2] text-[#b91c1c] transition hover:bg-[#fee2e2]"
+                            aria-label="Delete subscription"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </ActionForm>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-[#4a5f83]">No subscriptions yet.</p>
               )}
             </CardContent>
           </Card>
@@ -989,6 +1179,107 @@ const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
             <div className="space-y-2">
               <Label htmlFor="editCategoryImage">Image URL</Label>
               <PexelsImagePicker inputName="imageUrl" label="Category image" defaultValue={editingCategory.image_url ?? ""} />
+            </div>
+            <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
+          </ActionForm>
+        </ModalShell>
+      ) : null}
+
+      {activeModal === "subscription" ? (
+        <ModalShell title="Add subscription" description="Track recurring monthly or yearly bills." onClose={closeModal}>
+          <ActionForm action={createSubscriptionFormAction} className="space-y-4" onSuccess={closeModal}>
+            <input type="hidden" name="returnPath" value={baseHref} />
+            <input type="hidden" name="isActive" value="true" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="subscriptionName">Name</Label>
+                <Input id="subscriptionName" name="name" required placeholder="Netflix, SaaS, Gym..." />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="subscriptionAmount">Amount</Label>
+                <Input id="subscriptionAmount" name="amount" type="number" min={0.01} step="0.01" required placeholder="0.00" />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="subscriptionRecurrence">Recurrence</Label>
+                <Select id="subscriptionRecurrence" name="recurrence" defaultValue="monthly">
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="subscriptionNextDueDate">Next due date</Label>
+                <Input id="subscriptionNextDueDate" name="nextDueDate" type="date" defaultValue={anchorIso} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="subscriptionEndDate">Expiration date</Label>
+                <Input id="subscriptionEndDate" name="endDate" type="date" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="subscriptionNotes">Notes</Label>
+              <Input id="subscriptionNotes" name="notes" placeholder="Optional note" />
+            </div>
+            <SubmitButton label="Save subscription" pendingLabel="Saving..." className="w-full sm:w-auto" />
+          </ActionForm>
+        </ModalShell>
+      ) : null}
+
+      {activeModal === "edit-subscription" && editingSubscription ? (
+        <ModalShell title="Edit subscription" description="Update recurring bill details and expiration." onClose={closeModal}>
+          <ActionForm action={updateSubscriptionFormAction} className="space-y-4" onSuccess={closeModal}>
+            <input type="hidden" name="returnPath" value={baseHref} />
+            <input type="hidden" name="subscriptionId" value={editingSubscription.id} />
+            <input type="hidden" name="isActive" value={editingSubscription.is_active ? "true" : "false"} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="editSubscriptionName">Name</Label>
+                <Input id="editSubscriptionName" name="name" defaultValue={editingSubscription.name} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editSubscriptionAmount">Amount</Label>
+                <Input
+                  id="editSubscriptionAmount"
+                  name="amount"
+                  type="number"
+                  min={0.01}
+                  step="0.01"
+                  required
+                  defaultValue={editingSubscription.amount}
+                />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="editSubscriptionRecurrence">Recurrence</Label>
+                <Select id="editSubscriptionRecurrence" name="recurrence" defaultValue={editingSubscription.recurrence}>
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editSubscriptionNextDueDate">Next due date</Label>
+                <Input
+                  id="editSubscriptionNextDueDate"
+                  name="nextDueDate"
+                  type="date"
+                  defaultValue={editingSubscription.next_due_date ?? ""}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editSubscriptionEndDate">Expiration date</Label>
+                <Input
+                  id="editSubscriptionEndDate"
+                  name="endDate"
+                  type="date"
+                  defaultValue={editingSubscription.end_date ?? ""}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editSubscriptionNotes">Notes</Label>
+              <Input id="editSubscriptionNotes" name="notes" defaultValue={editingSubscription.notes ?? ""} />
             </div>
             <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>

@@ -640,6 +640,7 @@ export type Database = {
           currency_code: string;
           recurrence: "monthly" | "yearly";
           next_due_date: string | null;
+          end_date: string | null;
           notes: string | null;
           is_active: boolean;
           created_at: string;
@@ -653,6 +654,7 @@ export type Database = {
           currency_code?: string;
           recurrence: "monthly" | "yearly";
           next_due_date?: string | null;
+          end_date?: string | null;
           notes?: string | null;
           is_active?: boolean;
           created_at?: string;
@@ -666,6 +668,7 @@ export type Database = {
           currency_code?: string;
           recurrence?: "monthly" | "yearly";
           next_due_date?: string | null;
+          end_date?: string | null;
           notes?: string | null;
           is_active?: boolean;
           created_at?: string;

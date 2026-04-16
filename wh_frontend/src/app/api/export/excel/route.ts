@@ -66,7 +66,7 @@ export async function GET() {
     supabase.from("ledger_entries").select("id, category_id, entry_type, amount, occurred_on, notes, created_at").eq("account_id", accountId).order("occurred_on", { ascending: false }).limit(500),
     supabase.from("debts").select("id, name, type, principal, remaining_balance, status, due_date, created_at").eq("account_id", accountId).order("created_at", { ascending: false }),
     supabase.from("debt_payments").select("id, debt_id, amount, paid_at, method, notes").eq("account_id", accountId).order("paid_at", { ascending: false }).limit(200),
-    supabase.from("subscriptions").select("id, name, amount, recurrence, next_due_date, is_active, created_at").eq("account_id", accountId).order("name"),
+    supabase.from("subscriptions").select("id, name, amount, recurrence, next_due_date, end_date, is_active, created_at").eq("account_id", accountId).order("name"),
     supabase.from("calendar_events").select("id, title, details, event_date, event_time, event_type, created_at").eq("account_id", accountId).order("event_date", { ascending: false }).limit(500)
   ]);
 
@@ -206,6 +206,7 @@ export async function GET() {
     Amount: s.amount,
     Recurrence: s.recurrence,
     "Next due": s.next_due_date,
+    "End date": s.end_date,
     Active: s.is_active
   }));
   addRowsSheet(wb, "Subscriptions", subsRows);

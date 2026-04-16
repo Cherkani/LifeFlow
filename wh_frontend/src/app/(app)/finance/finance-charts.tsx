@@ -27,58 +27,91 @@ type CategoryPoint = {
 };
 
 type FinanceChartsProps = {
-  dailyExpenses: DailyExpensePoint[];
-  categories: CategoryPoint[];
+  dailyExpenses?: DailyExpensePoint[];
+  categories?: CategoryPoint[];
+  subscriptions?: DailyExpensePoint[];
   currencyCode: string;
+  mode?: "all" | "subscriptions";
 };
 
-export function FinanceCharts({ dailyExpenses, categories, currencyCode }: FinanceChartsProps) {
+export function FinanceCharts({
+  dailyExpenses = [],
+  categories = [],
+  subscriptions = [],
+  currencyCode: _currencyCode,
+  mode = "all"
+}: FinanceChartsProps) {
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
-      <div className="rounded-xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-4">
-        <p className="mb-3 text-sm font-semibold text-[var(--app-text-strong)]">Daily expenses histogram</p>
-        <div className="h-72 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={dailyExpenses}>
-              <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--chart-grid)" />
-              <XAxis dataKey="day" tick={{ fill: "var(--chart-axis)", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis
-                  tick={{ fill: "var(--chart-axis-muted)", fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(value) => formatMoneyDhs(Number(value ?? 0))}
-                />
-              <Tooltip formatter={(value) => [formatMoneyDhs(Number(value ?? 0)), "Spent"]} />
-              <Legend />
-              <Bar dataKey="amount" name="Spent" fill="#8d3d3d" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+    <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+      {mode === "all" ? (
+        <>
+          <div className="rounded-xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-4">
+            <p className="mb-3 text-sm font-semibold text-[var(--app-text-strong)]">Daily expenses histogram</p>
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dailyExpenses}>
+                  <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--chart-grid)" />
+                  <XAxis dataKey="day" tick={{ fill: "var(--chart-axis)", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tick={{ fill: "var(--chart-axis-muted)", fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(value) => formatMoneyDhs(Number(value ?? 0))}
+                  />
+                  <Tooltip formatter={(value) => [formatMoneyDhs(Number(value ?? 0)), "Spent"]} />
+                  <Legend />
+                  <Bar dataKey="amount" name="Spent" fill="#8d3d3d" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-4">
+            <p className="mb-3 text-sm font-semibold text-[var(--app-text-strong)]">Category spend vs limit</p>
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={categories}>
+                  <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--chart-grid)" />
+                  <XAxis dataKey="name" tick={{ fill: "var(--chart-axis)", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tick={{ fill: "var(--chart-axis-muted)", fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(value) => formatMoneyDhs(Number(value ?? 0))}
+                  />
+                  <Tooltip
+                    formatter={(value, name) => [
+                      formatMoneyDhs(Number(value ?? 0)),
+                      String(name) === "spent" ? "Spent" : "Limit"
+                    ]}
+                  />
+                  <Legend />
+                  <Bar dataKey="spent" name="Spent" fill="#0b1f3b" radius={[6, 6, 0, 0]} />
+                  <Line type="monotone" dataKey="limit" name="Limit" stroke="#d39a6a" strokeWidth={3} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </>
+      ) : null}
 
       <div className="rounded-xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-4">
-        <p className="mb-3 text-sm font-semibold text-[var(--app-text-strong)]">Category spend vs limit</p>
+        <p className="mb-3 text-sm font-semibold text-[var(--app-text-strong)]">Subscription due dates</p>
         <div className="h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={categories}>
+            <BarChart data={subscriptions}>
               <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--chart-grid)" />
-              <XAxis dataKey="name" tick={{ fill: "var(--chart-axis)", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis
-                  tick={{ fill: "var(--chart-axis-muted)", fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(value) => formatMoneyDhs(Number(value ?? 0))}
-                />
-              <Tooltip
-                formatter={(value, name) => [
-                  formatMoneyDhs(Number(value ?? 0)),
-                  String(name) === "spent" ? "Spent" : "Limit"
-                ]}
+              <XAxis dataKey="day" tick={{ fill: "var(--chart-axis)", fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis
+                tick={{ fill: "var(--chart-axis-muted)", fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(value) => formatMoneyDhs(Number(value ?? 0))}
               />
+              <Tooltip formatter={(value) => [formatMoneyDhs(Number(value ?? 0)), "Due"]} />
               <Legend />
-              <Bar dataKey="spent" name="Spent" fill="#0b1f3b" radius={[6, 6, 0, 0]} />
-              <Line type="monotone" dataKey="limit" name="Limit" stroke="#d39a6a" strokeWidth={3} dot={false} />
-            </ComposedChart>
+              <Bar dataKey="amount" name="Due" fill="#2563eb" radius={[6, 6, 0, 0]} />
+            </BarChart>
           </ResponsiveContainer>
         </div>
       </div>

@@ -28,6 +28,24 @@ const createExpenseSchema = z.object({
   notes: z.string().max(1000).optional()
 });
 
+const subscriptionSchema = z.object({
+  name: z.string().trim().min(2).max(140),
+  amount: z.coerce.number().positive().max(100000000),
+  recurrence: z.enum(["monthly", "yearly"]),
+  nextDueDate: z.union([z.literal(""), dateInputSchema]).optional(),
+  endDate: z.union([z.literal(""), dateInputSchema]).optional(),
+  notes: z.preprocess((v) => (v === null || v === "" ? undefined : v), z.string().max(1000).optional()),
+  isActive: z.union([z.literal("true"), z.literal("false")]).optional()
+});
+
+const updateSubscriptionSchema = subscriptionSchema.extend({
+  subscriptionId: z.string().uuid()
+});
+
+const subscriptionIdSchema = z.object({
+  subscriptionId: z.string().uuid()
+});
+
 const updateExpenseSchema = z.object({
   expenseId: z.string().uuid(),
   categoryId: z.string().uuid(),
@@ -151,6 +169,126 @@ export async function updateExpenseAction(formData: FormData) {
     .eq("account_id", account.accountId)
     .eq("id", payload.data.expenseId)
     .eq("entry_type", "expense");
+
+  revalidatePath("/finance", "layout");
+  return { redirectTo: returnPath };
+}
+
+export async function createSubscriptionAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = subscriptionSchema.safeParse({
+    name: formData.get("name"),
+    amount: formData.get("amount"),
+    recurrence: formData.get("recurrence"),
+    nextDueDate: formData.get("nextDueDate"),
+    endDate: formData.get("endDate"),
+    notes: formData.get("notes"),
+    isActive: formData.get("isActive")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  await supabase.from("subscriptions").insert({
+    account_id: account.accountId,
+    name: payload.data.name,
+    amount: payload.data.amount.toFixed(2),
+    currency_code: account.currencyCode,
+    recurrence: payload.data.recurrence,
+    next_due_date: payload.data.nextDueDate === "" ? null : payload.data.nextDueDate,
+    end_date: payload.data.endDate === "" ? null : payload.data.endDate,
+    notes: payload.data.notes?.trim() || null,
+    is_active: payload.data.isActive !== "false"
+  });
+
+  revalidatePath("/finance", "layout");
+  return { redirectTo: returnPath };
+}
+
+export async function updateSubscriptionAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = updateSubscriptionSchema.safeParse({
+    subscriptionId: formData.get("subscriptionId"),
+    name: formData.get("name"),
+    amount: formData.get("amount"),
+    recurrence: formData.get("recurrence"),
+    nextDueDate: formData.get("nextDueDate"),
+    endDate: formData.get("endDate"),
+    notes: formData.get("notes"),
+    isActive: formData.get("isActive")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  await supabase
+    .from("subscriptions")
+    .update({
+      name: payload.data.name,
+      amount: payload.data.amount.toFixed(2),
+      recurrence: payload.data.recurrence,
+      next_due_date: payload.data.nextDueDate === "" ? null : payload.data.nextDueDate,
+      end_date: payload.data.endDate === "" ? null : payload.data.endDate,
+      notes: payload.data.notes?.trim() || null,
+      is_active: payload.data.isActive !== "false"
+    })
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.subscriptionId);
+
+  revalidatePath("/finance", "layout");
+  return { redirectTo: returnPath };
+}
+
+export async function deleteSubscriptionAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = subscriptionIdSchema.safeParse({
+    subscriptionId: formData.get("subscriptionId")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  await supabase
+    .from("subscriptions")
+    .delete()
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.subscriptionId);
+
+  revalidatePath("/finance", "layout");
+  return { redirectTo: returnPath };
+}
+
+export async function toggleSubscriptionActiveAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = subscriptionIdSchema.safeParse({
+    subscriptionId: formData.get("subscriptionId")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  const { data: subscription } = await supabase
+    .from("subscriptions")
+    .select("is_active")
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.subscriptionId)
+    .maybeSingle();
+
+  if (subscription) {
+    await supabase
+      .from("subscriptions")
+      .update({ is_active: !subscription.is_active })
+      .eq("account_id", account.accountId)
+      .eq("id", payload.data.subscriptionId);
+  }
 
   revalidatePath("/finance", "layout");
   return { redirectTo: returnPath };
@@ -313,6 +451,13 @@ export async function createExpenseFormAction(
   return createExpenseAction(formData);
 }
 
+export async function createSubscriptionFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return createSubscriptionAction(formData);
+}
+
 export async function updateExpenseFormAction(
   _prevState: RedirectResult | null,
   formData: FormData
@@ -320,11 +465,32 @@ export async function updateExpenseFormAction(
   return updateExpenseAction(formData);
 }
 
+export async function updateSubscriptionFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return updateSubscriptionAction(formData);
+}
+
 export async function deleteExpenseFormAction(
   _prevState: RedirectResult | null,
   formData: FormData
 ): Promise<RedirectResult | null> {
   return deleteExpenseAction(formData);
+}
+
+export async function deleteSubscriptionFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return deleteSubscriptionAction(formData);
+}
+
+export async function toggleSubscriptionActiveFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return toggleSubscriptionActiveAction(formData);
 }
 
 export async function deleteDebtAction(formData: FormData) {

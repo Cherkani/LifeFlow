@@ -20,6 +20,27 @@ type DebtRow = {
   due_date: string | null;
 };
 
+type SubscriptionRow = {
+  id: string;
+  name: string;
+  amount: number;
+  recurrence: "monthly" | "yearly";
+  next_due_date: string | null;
+  end_date: string | null;
+  notes: string | null;
+  is_active: boolean;
+};
+
+function getMonthlyEquivalent(amount: number, recurrence: "monthly" | "yearly") {
+  return recurrence === "yearly" ? amount / 12 : amount;
+}
+
+function isSubscriptionVisibleInRange(subscription: SubscriptionRow, rangeStart: string, rangeEnd: string) {
+  if (!subscription.is_active) return false;
+  if (subscription.end_date && subscription.end_date < rangeStart) return false;
+  return true;
+}
+
 function toIsoDate(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -42,13 +63,19 @@ function parsePeriod(raw: string | undefined): "day" | "week" | "month" {
   return "day";
 }
 
+function parseTab(raw: string | undefined): "expenses" | "subscriptions" | "debts" {
+  if (raw === "subscriptions") return "subscriptions";
+  if (raw === "debts") return "debts";
+  return "expenses";
+}
+
 export default async function FinancePage({
   searchParams
 }: {
   searchParams: FinanceSearchParams;
 }) {
   const params = await searchParams;
-  const tab = params.tab === "debts" ? "debts" : "expenses";
+  const tab = parseTab(params.tab);
   const period = parsePeriod(params.period);
   const anchorDate = parseAnchorDate(params.anchor);
   const anchorIso = toIsoDate(anchorDate);
@@ -82,6 +109,16 @@ export default async function FinancePage({
   const categories = financeData.categories;
   const periodExpenses = financeData.periodExpenses;
   const recentExpenses = financeData.recentExpenses;
+  const subscriptions = financeData.subscriptions.map((subscription) => ({
+    id: subscription.id,
+    name: subscription.name,
+    amount: Number(subscription.amount),
+    recurrence: subscription.recurrence,
+    next_due_date: subscription.next_due_date,
+    end_date: subscription.end_date,
+    notes: subscription.notes,
+    is_active: subscription.is_active
+  })) as SubscriptionRow[];
   const debts = financeData.debts as unknown as DebtRow[];
   const payments = financeData.payments;
 
@@ -148,6 +185,40 @@ export default async function FinancePage({
       limit: Number(row.limit.toFixed(2))
     }));
 
+  const activeSubscriptions = subscriptions.filter((subscription) => subscription.is_active);
+  const visibleSubscriptions = subscriptions.filter((subscription) =>
+    isSubscriptionVisibleInRange(subscription, rangeStart, rangeEnd)
+  );
+  const dueSubscriptions = activeSubscriptions.filter((subscription) => {
+    return Boolean(
+      subscription.next_due_date &&
+        subscription.next_due_date >= rangeStart &&
+        subscription.next_due_date <= rangeEnd &&
+        (!subscription.end_date || subscription.end_date >= subscription.next_due_date)
+    );
+  });
+  const recurringMonthlyCost = visibleSubscriptions.reduce(
+    (sum, subscription) => sum + getMonthlyEquivalent(subscription.amount, subscription.recurrence),
+    0
+  );
+  const dueSubscriptionsTotal = dueSubscriptions.reduce((sum, subscription) => sum + subscription.amount, 0);
+  const nextSubscription = [...activeSubscriptions]
+    .filter((subscription) => Boolean(subscription.next_due_date))
+    .sort((a, b) => (a.next_due_date ?? "").localeCompare(b.next_due_date ?? ""))[0];
+  const subscriptionDueChartData = timelineDates.map((date) => {
+    const key = toIsoDate(date);
+    const dueAmount = dueSubscriptions
+      .filter((subscription) => subscription.next_due_date === key)
+      .reduce((sum, subscription) => sum + subscription.amount, 0);
+    return {
+      day:
+        period === "week"
+          ? date.toLocaleDateString("en-US", { weekday: "short" })
+          : date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      amount: Number(dueAmount.toFixed(2))
+    };
+  });
+
   const openDebts = debts.filter((d) => d.status === "open");
   const openDebtTotal = openDebts.reduce(
     (sum, debt) => sum + Number(debt.remaining_balance ?? debt.principal ?? 0),
@@ -204,10 +275,16 @@ export default async function FinancePage({
         debts={debts}
         dailyChartData={dailyChartData}
         categoryChartData={categoryChartData}
+        subscriptions={subscriptions}
+        subscriptionDueChartData={subscriptionDueChartData}
         totalSpent={totalSpent}
         averageDaySpend={averageDaySpend}
         topDay={topDay}
         overLimitCount={overLimitCount}
+        activeSubscriptionCount={visibleSubscriptions.length}
+        recurringMonthlyCost={recurringMonthlyCost}
+        dueSubscriptionsTotal={dueSubscriptionsTotal}
+        nextSubscription={nextSubscription}
         openDebtTotal={openDebtTotal}
         periodPaymentsTotal={periodPaymentsTotal}
         rangeStartIso={rangeStart}
