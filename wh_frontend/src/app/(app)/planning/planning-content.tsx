@@ -224,6 +224,7 @@ export function PlanningContent({
               <div className="grid gap-3 lg:grid-cols-3">
                 {objectives.map((objective) => {
                   const templateCount = templateIdsByObjective[objective.id]?.length ?? 0;
+                  const taskCount = taskCountByObjective[objective.id] ?? 0;
                   return (
                     <div
                       key={objective.id}
@@ -248,16 +249,42 @@ export function PlanningContent({
                         </div>
                       ) : (
                         <div className="relative h-20 w-full bg-gradient-to-br from-[#e8eefb] to-[#f0f4fc]">
-                          <button
-                            type="button"
-                            onClick={() => openEditObjective(objective.id)}
-                            className="absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium text-[#23406d] shadow-md backdrop-blur-sm transition hover:bg-white hover:shadow-lg"
-                          >
-                            <Pencil size={14} />
-                            Edit
-                          </button>
                         </div>
                       )}
+                      <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
+                        {taskCount === 0 ? (
+                          <ActionForm action={deleteObjectiveFormAction} onSuccess={closeModal}>
+                            <input type="hidden" name="returnPath" value="/planning" />
+                            <input type="hidden" name="objectiveId" value={objective.id} />
+                            <button
+                              type="submit"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#fecaca] bg-[#fef2f2] text-[#b91c1c] shadow-sm transition hover:bg-[#fee2e2]"
+                              aria-label="Delete objective"
+                              title="Delete empty objective"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </ActionForm>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            className="inline-flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-[#94a3b8] shadow-sm"
+                            aria-label="Delete unavailable"
+                            title={`Delete unavailable: ${taskCount} linked habit${taskCount !== 1 ? "s" : ""}`}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => openEditObjective(objective.id)}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium text-[#23406d] shadow-md backdrop-blur-sm transition hover:bg-white hover:shadow-lg"
+                        >
+                          <Pencil size={14} />
+                          Edit
+                        </button>
+                      </div>
                       <div className="p-4">
                         <p className="truncate text-base font-semibold text-[#0c1d3c]">{objective.title}</p>
                         {objective.description ? (
@@ -265,9 +292,16 @@ export function PlanningContent({
                             {objective.description}
                           </p>
                         ) : null}
-                        <p className="mt-2 text-xs font-medium text-[#6b7da1]">
-                          {templateCount} template{templateCount !== 1 ? "s" : ""}
-                        </p>
+                        <div className="mt-2 space-y-1">
+                          <p className="text-xs font-medium text-[#6b7da1]">
+                            {templateCount} template{templateCount !== 1 ? "s" : ""}
+                          </p>
+                          <p className="text-[11px] text-[#8aa0c7]">
+                            {taskCount === 0
+                              ? "Empty objective · can be deleted"
+                              : `${taskCount} linked habit${taskCount !== 1 ? "s" : ""} · delete locked`}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   );
@@ -310,16 +344,47 @@ export function PlanningContent({
                       <Badge variant="secondary" className="shrink-0">
                         {selectedTemplateEntries.length} task{selectedTemplateEntries.length !== 1 ? "s" : ""}
                       </Badge>
-                      <button
-                        type="button"
-                        onClick={() => openEditTemplate(selectedTemplate.id)}
-                        aria-label="Edit template"
-                        className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm text-[#23406d] transition hover:bg-[#edf3ff] hover:shadow-md"
-                      >
-                        <Pencil size={14} />
-                      </button>
+                      <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
+                        {selectedTemplateEntries.length === 0 && (weekCountByTemplate[selectedTemplate.id] ?? 0) === 0 ? (
+                          <ActionForm action={deleteTemplateFormAction} onSuccess={closeModal}>
+                            <input type="hidden" name="returnPath" value="/planning" />
+                            <input type="hidden" name="templateId" value={selectedTemplate.id} />
+                            <button
+                              type="submit"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#fecaca] bg-[#fef2f2] text-[#b91c1c] shadow-sm transition hover:bg-[#fee2e2]"
+                              aria-label="Delete template"
+                              title="Delete empty template"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </ActionForm>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            className="inline-flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-[#94a3b8] shadow-sm"
+                            aria-label="Delete unavailable"
+                            title={`Delete unavailable: ${selectedTemplateEntries.length} task${selectedTemplateEntries.length !== 1 ? "s" : ""} and ${weekCountByTemplate[selectedTemplate.id] ?? 0} generated week${(weekCountByTemplate[selectedTemplate.id] ?? 0) !== 1 ? "s" : ""}`}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => openEditTemplate(selectedTemplate.id)}
+                          aria-label="Edit template"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm text-[#23406d] transition hover:bg-[#edf3ff] hover:shadow-md"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      </div>
                     </div>
                     <div className="p-4">
+                      <p className="mb-3 text-[11px] text-[#8aa0c7]">
+                        {selectedTemplateEntries.length === 0 && (weekCountByTemplate[selectedTemplate.id] ?? 0) === 0
+                          ? "Empty template · can be deleted"
+                          : `${selectedTemplateEntries.length} task${selectedTemplateEntries.length !== 1 ? "s" : ""} and ${weekCountByTemplate[selectedTemplate.id] ?? 0} generated week${(weekCountByTemplate[selectedTemplate.id] ?? 0) !== 1 ? "s" : ""} · delete locked`}
+                      </p>
                       {selectedTemplateEntries.length > 0 ? (
                         <div className="space-y-0">
                           {[1, 2, 3, 4, 5, 6, 7].map((dayOfWeek) => {
