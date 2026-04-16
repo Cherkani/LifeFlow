@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { ChevronRight, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
@@ -120,6 +120,10 @@ export function KnowledgeModals({
                           <Badge variant="secondary">{counts.links} links</Badge>
                           <Badge variant="secondary">{counts.notes} notes</Badge>
                         </div>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-[#d7e0f1] bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#4a5f83]">
+                        <span>Click me</span>
+                        <ChevronRight size={14} />
                       </div>
                     </Link>
                     <div className="absolute right-3 top-3 flex items-center gap-2">

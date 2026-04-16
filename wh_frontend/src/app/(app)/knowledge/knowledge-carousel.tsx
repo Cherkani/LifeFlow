@@ -12,6 +12,7 @@ type KnowledgeItem = {
   content: string | null;
   created_at: string;
   checked?: boolean;
+  is_hidden?: boolean;
 };
 
 function parseBullets(content: string): string[] {

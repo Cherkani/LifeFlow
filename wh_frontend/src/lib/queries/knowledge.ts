@@ -21,6 +21,7 @@ export type KnowledgeItemRow = {
   id: string;
   space_id: string;
   kind: "link" | "note" | "bullets";
+  is_hidden: boolean;
 };
 
 export async function getKnowledgeItems(supabase: Supabase, spaceIds: string[]): Promise<KnowledgeItemRow[]> {
@@ -29,7 +30,7 @@ export async function getKnowledgeItems(supabase: Supabase, spaceIds: string[]):
   }
   const { data } = await supabase
     .from("knowledge_items")
-    .select("id, space_id, kind")
+    .select("id, space_id, kind, is_hidden")
     .in("space_id", spaceIds);
   return (data ?? []) as KnowledgeItemRow[];
 }
@@ -62,9 +63,12 @@ export async function getKnowledgeSpaceItems(
 ): Promise<KnowledgeItemFullRow[]> {
   const { data } = await supabase
     .from("knowledge_items")
-    .select("id, space_id, kind, title, url, content, created_at, checked")
+    .select("id, space_id, kind, title, url, content, created_at, checked, is_hidden")
     .eq("space_id", spaceId)
     .order("checked", { ascending: true })
     .order("created_at", { ascending: false });
-  return (data ?? []) as KnowledgeItemFullRow[];
+  return ((data ?? []) as KnowledgeItemFullRow[]).map((item) => ({
+    ...item,
+    content: item.is_hidden ? null : item.content
+  }));
 }

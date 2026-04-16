@@ -14,6 +14,7 @@ type KnowledgeItem = {
   content: string | null;
   created_at: string;
   checked: boolean;
+  is_hidden: boolean;
 };
 
 export default async function KnowledgeSpacePage({

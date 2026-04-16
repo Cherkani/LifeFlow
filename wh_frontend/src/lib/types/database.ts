@@ -123,32 +123,38 @@ export type Database = {
         Row: {
           id: string;
           space_id: string;
-          kind: "link" | "note";
+          kind: "link" | "note" | "bullets";
           title: string | null;
           url: string | null;
           content: string | null;
           created_at: string;
           updated_at: string;
+          checked: boolean;
+          is_hidden: boolean;
         };
         Insert: {
           id?: string;
           space_id: string;
-          kind: "link" | "note";
+          kind: "link" | "note" | "bullets";
           title?: string | null;
           url?: string | null;
           content?: string | null;
           created_at?: string;
           updated_at?: string;
+          checked?: boolean;
+          is_hidden?: boolean;
         };
         Update: {
           id?: string;
           space_id?: string;
-          kind?: "link" | "note";
+          kind?: "link" | "note" | "bullets";
           title?: string | null;
           url?: string | null;
           content?: string | null;
           created_at?: string;
           updated_at?: string;
+          checked?: boolean;
+          is_hidden?: boolean;
         };
       };
       habit_objectives: {

@@ -1,8 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowLeft, BookOpen, Check, ExternalLink, FileText, Link2, List, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  BookOpen,
+  Check,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  FileText,
+  Link2,
+  List,
+  Lock,
+  Pencil,
+  Plus,
+  ShieldAlert,
+  Trash2
+} from "lucide-react";
 
 import { KnowledgeCarousel } from "./knowledge-carousel";
 import { KnowledgeRevisionCards } from "./knowledge-revision-cards";
@@ -26,7 +41,8 @@ import {
   deleteKnowledgeItemFormAction,
   toggleKnowledgeItemCheckedFormAction,
   updateKnowledgeItemFormAction,
-  updateKnowledgeSpaceFormAction
+  updateKnowledgeSpaceFormAction,
+  verifyKnowledgeItemCodeAction
 } from "@/app/(app)/knowledge/actions";
 
 type KnowledgeItem = {
@@ -38,6 +54,7 @@ type KnowledgeItem = {
   content: string | null;
   created_at: string;
   checked: boolean;
+  is_hidden: boolean;
 };
 
 type KnowledgeSpace = {
@@ -46,12 +63,17 @@ type KnowledgeSpace = {
   image_url: string | null;
 };
 
+type ProtectedModalState = {
+  itemId: string;
+  mode: "view" | "edit";
+};
+
 function parseBullets(content: string): string[] {
   return content
     .split(/\n/)
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
-    .map((line) => (line.replace(/^[-*•]\s*/, "")));
+    .map((line) => line.replace(/^[-*•]\s*/, ""));
 }
 
 type AddItemFormProps = {
@@ -140,6 +162,16 @@ function AddItemForm({ spaceId, returnPath, action, onSuccess }: AddItemFormProp
         </>
       )}
 
+      <label className="flex items-start gap-3 rounded-xl border border-[#d7e0f1] bg-[#f8fbff] p-3">
+        <input type="checkbox" name="isHidden" className="mt-1 size-4 rounded border-slate-300" />
+        <div className="space-y-1">
+          <span className="text-sm font-medium text-[#0c1d3c]">Hidden info</span>
+          <p className="text-xs text-[#4a5f83]">
+            Protect this entry behind the workspace unlock code. Users will reveal it from the eye icon.
+          </p>
+        </div>
+      </label>
+
       <SubmitButton label="Add item" pendingLabel="Saving..." className="w-full sm:w-auto" />
     </ActionForm>
   );
@@ -165,24 +197,103 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const [revisionMode, setRevisionMode] = useState(false);
+  const [revealedItems, setRevealedItems] = useState<Record<string, KnowledgeItem>>({});
+  const [protectedModal, setProtectedModal] = useState<ProtectedModalState | null>(null);
+  const [unlockCode, setUnlockCode] = useState("");
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [isUnlocking, startUnlockTransition] = useTransition();
 
-  const editingItem = editingItemId ? items.find((i) => i.id === editingItemId) ?? null : null;
   const returnPath = `/knowledge/${space.id}`;
-
   const linksCount = items.filter((i) => i.kind === "link").length;
   const notesCount = items.filter((i) => i.kind === "note").length;
   const bulletsCount = items.filter((i) => i.kind === "bullets").length;
+  const hiddenCount = items.filter((i) => i.is_hidden).length;
+  const reviewItems = items.filter((item) => !item.is_hidden);
+
+  const getResolvedItem = (item: KnowledgeItem): KnowledgeItem => revealedItems[item.id] ?? item;
+
+  const editingItem = editingItemId
+    ? (() => {
+        const item = items.find((entry) => entry.id === editingItemId) ?? null;
+        return item ? getResolvedItem(item) : null;
+      })()
+    : null;
 
   const closeModal = () => {
     setActiveModal(null);
     setEditingItemId(null);
   };
 
+  const closeProtectedModal = () => {
+    setProtectedModal(null);
+    setUnlockCode("");
+    setUnlockError(null);
+  };
+
+  const requestEdit = (item: KnowledgeItem) => {
+    if (item.is_hidden && !revealedItems[item.id]) {
+      setProtectedModal({ itemId: item.id, mode: "edit" });
+      return;
+    }
+    setEditingItemId(item.id);
+    setActiveModal("edit-item");
+  };
+
+  const requestReveal = (item: KnowledgeItem, mode: "view" | "edit" = "view") => {
+    if (!item.is_hidden) {
+      if (mode === "edit") {
+        requestEdit(item);
+      }
+      return;
+    }
+    setProtectedModal({ itemId: item.id, mode });
+  };
+
+  const hideProtectedItem = (itemId: string) => {
+    setRevealedItems((current) => {
+      const next = { ...current };
+      delete next[itemId];
+      return next;
+    });
+    if (editingItemId === itemId) {
+      closeModal();
+    }
+  };
+
+  const handleUnlockSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!protectedModal) return;
+
+    const code = unlockCode.trim();
+    if (!code) {
+      setUnlockError("Enter the unlock code.");
+      return;
+    }
+
+    setUnlockError(null);
+    startUnlockTransition(async () => {
+      const result = await verifyKnowledgeItemCodeAction({ itemId: protectedModal.itemId, code });
+      if (!result.ok) {
+        setUnlockError(result.error);
+        return;
+      }
+
+      setRevealedItems((current) => ({ ...current, [result.item.id]: result.item }));
+      const nextMode = protectedModal.mode;
+      closeProtectedModal();
+
+      if (nextMode === "edit") {
+        setEditingItemId(result.item.id);
+        setActiveModal("edit-item");
+      }
+    });
+  };
+
   return (
     <>
       <SectionHeader
         title={space.title}
-        description="Simple topic workspace: add links with optional notes, standalone notes, or bullet lists."
+        description="Simple topic workspace: add links with optional notes, standalone notes, bullet lists, or protected hidden info."
         action={
           <div className="flex items-center gap-2">
             <button
@@ -207,7 +318,7 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
             <button
               type="button"
               onClick={() => setRevisionMode(true)}
-              disabled={items.length === 0}
+              disabled={reviewItems.length === 0}
               className="inline-flex items-center gap-2 rounded-lg border border-[#c7d3e8] bg-[#edf3ff] px-3 py-2 text-sm font-medium text-[#23406d] transition hover:bg-[#e3ebf9] disabled:opacity-50 disabled:hover:bg-[#edf3ff]"
             >
               <BookOpen size={16} />
@@ -235,16 +346,22 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
             <Badge variant="secondary">{linksCount} links</Badge>
             <Badge variant="secondary">{notesCount} notes</Badge>
             <Badge variant="secondary">{bulletsCount} bullets</Badge>
+            <Badge variant="secondary">{hiddenCount} hidden</Badge>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <p className="text-sm text-slate-600">
-            Add and edit entries from modal dialogs. Links show as a Check button; notes show content only.
+            Add and edit entries from modal dialogs. Protected items stay locked until someone enters the workspace unlock code.
           </p>
+          {hiddenCount > 0 ? (
+            <div className="rounded-xl border border-[#d7e0f1] bg-[#f8fbff] px-4 py-3 text-xs text-[#4a5f83]">
+              Cards view and revision mode skip hidden items so protected content is only opened from the topic list.
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
-      {items.length > 0 ? (
+      {reviewItems.length > 0 ? (
         <Card>
           <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>Cards view</CardTitle>
@@ -258,7 +375,21 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
             </button>
           </CardHeader>
           <CardContent>
-            <KnowledgeCarousel items={items} onEdit={(id) => { setEditingItemId(id); setActiveModal("edit-item"); }} />
+            <KnowledgeCarousel items={reviewItems} onEdit={(id) => {
+              const item = items.find((entry) => entry.id === id);
+              if (item) {
+                requestEdit(item);
+              }
+            }} />
+          </CardContent>
+        </Card>
+      ) : items.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Cards view</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-slate-500">Only protected items are in this topic right now. Reveal them from Topic Items.</p>
           </CardContent>
         </Card>
       ) : null}
@@ -271,9 +402,11 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
           {items.length > 0 ? (
             <div className="space-y-3">
               {items.map((item) => {
-                const hasLink = item.url && item.url.length > 0;
-                const isLink = item.kind === "link";
-                const isBullets = item.kind === "bullets";
+                const resolvedItem = getResolvedItem(item);
+                const hasLink = Boolean(resolvedItem.url && resolvedItem.url.length > 0);
+                const isLink = resolvedItem.kind === "link";
+                const isBullets = resolvedItem.kind === "bullets";
+                const isUnlocked = !item.is_hidden || Boolean(revealedItems[item.id]);
 
                 return (
                   <article
@@ -309,12 +442,39 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
                           <FileText size={14} className="text-slate-500" />
                         )}
                         <Badge variant={item.kind === "link" ? "default" : "secondary"}>{item.kind}</Badge>
+                        {item.is_hidden ? (
+                          <Badge variant="secondary" className="gap-1">
+                            <Lock size={11} />
+                            Hidden
+                          </Badge>
+                        ) : null}
                         <span className="text-xs text-slate-500">{formatDate(item.created_at)}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        {hasLink ? (
+                        {item.is_hidden ? (
+                          isUnlocked ? (
+                            <button
+                              type="button"
+                              onClick={() => hideProtectedItem(item.id)}
+                              className="inline-flex items-center gap-1 rounded-md border border-[#d7e0f1] bg-white px-2.5 py-1.5 text-xs font-medium text-[#23406d] transition hover:bg-[#f8fbff]"
+                            >
+                              <EyeOff size={12} />
+                              Hide
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => requestReveal(item)}
+                              className="inline-flex items-center gap-1 rounded-md border border-[#c7d3e8] bg-[#edf3ff] px-2.5 py-1.5 text-xs font-medium text-[#23406d] transition hover:bg-[#e3ebf9]"
+                            >
+                              <Eye size={12} />
+                              Reveal
+                            </button>
+                          )
+                        ) : null}
+                        {hasLink && isUnlocked ? (
                           <a
-                            href={item.url!}
+                            href={resolvedItem.url!}
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex items-center gap-1 rounded-md border border-[#c7d3e8] bg-[#edf3ff] px-2.5 py-1.5 text-xs font-medium text-[#23406d] transition hover:bg-[#e3ebf9]"
@@ -325,10 +485,7 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
                         ) : null}
                         <button
                           type="button"
-                          onClick={() => {
-                            setEditingItemId(item.id);
-                            setActiveModal("edit-item");
-                          }}
+                          onClick={() => requestEdit(item)}
                           className="inline-flex items-center gap-1 rounded-md border border-[#c7d3e8] bg-[#edf3ff] px-2.5 py-1.5 text-xs font-medium text-[#23406d] hover:bg-[#e3ebf9]"
                         >
                           <Pencil size={12} />
@@ -350,53 +507,68 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
                       </div>
                     </div>
 
-                    {item.title ? (
-                      <h4 className={`text-sm font-semibold text-slate-900 ${item.checked ? "line-through text-slate-500" : ""}`}>
-                        {item.title}
-                      </h4>
-                    ) : null}
-
-                    {isLink ? (
-                      <>
-                        {item.content ? (
-                          <p className={`text-sm text-slate-600 ${item.checked ? "line-through text-slate-500" : ""}`}>
-                            {item.content}
-                          </p>
-                        ) : null}
-                        {!item.content && item.url ? (
-                          <p className={`text-sm text-slate-500 ${item.checked ? "line-through text-slate-500" : ""}`}>
-                            {item.url}
-                          </p>
-                        ) : null}
-                      </>
-                    ) : isBullets ? (
-                      <ul
-                        className={`list-inside list-disc space-y-1 text-sm text-slate-600 ${
-                          item.checked ? "line-through text-slate-500" : ""
-                        }`}
-                      >
-                        {parseBullets(item.content ?? "").map((bullet, i) => (
-                          <li key={i}>{bullet}</li>
-                        ))}
-                      </ul>
+                    {item.is_hidden && !isUnlocked ? (
+                      <div className="rounded-xl border border-dashed border-[#d7e0f1] bg-[#f8fbff] px-4 py-4">
+                        <div className="flex items-start gap-3">
+                          <ShieldAlert className="mt-0.5 text-[#23406d]" size={18} />
+                          <div className="space-y-1">
+                            <p className="text-sm font-semibold text-[#0c1d3c]">Protected hidden info</p>
+                            <p className="text-sm text-[#4a5f83]">
+                              This entry stays masked until you click the eye and enter the workspace unlock code.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     ) : (
-                      <p className={`text-sm text-slate-600 ${item.checked ? "line-through text-slate-500" : ""}`}>
-                        {item.content}
-                      </p>
+                      <>
+                        {resolvedItem.title ? (
+                          <h4 className={`text-sm font-semibold text-slate-900 ${item.checked ? "line-through text-slate-500" : ""}`}>
+                            {resolvedItem.title}
+                          </h4>
+                        ) : null}
+
+                        {isLink ? (
+                          <>
+                            {resolvedItem.content ? (
+                              <p className={`text-sm text-slate-600 ${item.checked ? "line-through text-slate-500" : ""}`}>
+                                {resolvedItem.content}
+                              </p>
+                            ) : null}
+                            {!resolvedItem.content && resolvedItem.url ? (
+                              <p className={`text-sm text-slate-500 ${item.checked ? "line-through text-slate-500" : ""}`}>
+                                {resolvedItem.url}
+                              </p>
+                            ) : null}
+                          </>
+                        ) : isBullets ? (
+                          <ul
+                            className={`list-inside list-disc space-y-1 text-sm text-slate-600 ${
+                              item.checked ? "line-through text-slate-500" : ""
+                            }`}
+                          >
+                            {parseBullets(resolvedItem.content ?? "").map((bullet, i) => (
+                              <li key={i}>{bullet}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className={`text-sm text-slate-600 ${item.checked ? "line-through text-slate-500" : ""}`}>
+                            {resolvedItem.content}
+                          </p>
+                        )}
+                      </>
                     )}
                   </article>
                 );
               })}
             </div>
           ) : (
-            <p className="text-sm text-slate-500">No items yet. Add your first link, note, or bullets above.</p>
+            <p className="text-sm text-slate-500">No items yet. Add your first link, note, bullets, or hidden record above.</p>
           )}
         </CardContent>
       </Card>
 
-      {/* New item modal */}
       {activeModal === "new-item" ? (
-        <ModalShell title="Add Item" description="Add a link to save, a note to remember, or a bullet list to track." onClose={closeModal}>
+        <ModalShell title="Add Item" description="Add a link to save, a note to remember, a bullet list to track, or a protected hidden record." onClose={closeModal}>
           <AddItemForm
             spaceId={space.id}
             returnPath={returnPath}
@@ -406,7 +578,6 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
         </ModalShell>
       ) : null}
 
-      {/* Edit item modal */}
       {activeModal === "edit-item" && editingItem ? (
         <ModalShell title="Edit Item" description="Update this entry and save changes." onClose={closeModal}>
           <div className="space-y-4">
@@ -445,6 +616,21 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
                 />
               </div>
 
+              <label className="flex items-start gap-3 rounded-xl border border-[#d7e0f1] bg-[#f8fbff] p-3">
+                <input
+                  type="checkbox"
+                  name="isHidden"
+                  defaultChecked={editingItem.is_hidden}
+                  className="mt-1 size-4 rounded border-slate-300"
+                />
+                <div className="space-y-1">
+                  <span className="text-sm font-medium text-[#0c1d3c]">Hidden info</span>
+                  <p className="text-xs text-[#4a5f83]">
+                    Require the workspace unlock code before this entry can be read from the topic list.
+                  </p>
+                </div>
+              </label>
+
               <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
             </ActionForm>
 
@@ -466,7 +652,6 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
         </ModalShell>
       ) : null}
 
-      {/* Edit space modal */}
       {activeModal === "edit-space" ? (
         <ModalShell title="Edit Topic" description="Update the topic title or cover image." onClose={closeModal}>
           <ActionForm action={updateKnowledgeSpaceFormAction} className="space-y-4" onSuccess={closeModal} refreshOnly>
@@ -506,6 +691,45 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
         </ModalShell>
       ) : null}
 
+      {protectedModal ? (
+        <ModalShell
+          title="Unlock Hidden Item"
+          description="Enter the workspace code from Settings to reveal this protected entry."
+          onClose={closeProtectedModal}
+        >
+          <form className="space-y-4" onSubmit={handleUnlockSubmit}>
+            <div className="space-y-2">
+              <Label htmlFor="knowledgeUnlockCode">Unlock code</Label>
+              <Input
+                id="knowledgeUnlockCode"
+                type="password"
+                value={unlockCode}
+                onChange={(event) => setUnlockCode(event.target.value)}
+                placeholder="Enter workspace code"
+                autoFocus
+              />
+            </div>
+            {unlockError ? <Alert variant="error">{unlockError}</Alert> : null}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeProtectedModal}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-btn-secondary-bg)] px-4 py-2 text-sm font-medium text-[var(--app-btn-secondary-fg)] transition hover:bg-[var(--app-btn-secondary-hover)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isUnlocking}
+                className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0b1f3b] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#102a52] disabled:opacity-60"
+              >
+                {isUnlocking ? "Checking..." : "Reveal"}
+              </button>
+            </div>
+          </form>
+        </ModalShell>
+      ) : null}
+
       {deletingItemId ? (
         <ModalShell title="Delete this item?" description="This action cannot be undone." onClose={() => setDeletingItemId(null)}>
           <ActionForm
@@ -538,7 +762,7 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
       {revisionMode ? (
         <KnowledgeRevisionCards
           spaceTitle={space.title}
-          items={items}
+          items={reviewItems}
           onClose={() => setRevisionMode(false)}
         />
       ) : null}

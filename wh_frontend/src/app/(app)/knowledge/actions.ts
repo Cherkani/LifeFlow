@@ -1,5 +1,7 @@
 "use server";
 
+import { createHash } from "node:crypto";
+
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -26,7 +28,11 @@ const createItemSchema = z.object({
   kind: z.enum(["link", "note", "bullets"]),
   title: z.string().trim().max(180).optional(),
   url: z.string().trim().optional(),
-  content: z.string().trim().optional()
+  content: z.string().trim().optional(),
+  isHidden: z
+    .union([z.literal("on"), z.literal("true"), z.null(), z.undefined()])
+    .optional()
+    .transform((v) => v === "on" || v === "true")
 });
 
 const updateItemSchema = z.object({
@@ -34,7 +40,11 @@ const updateItemSchema = z.object({
   kind: z.enum(["link", "note", "bullets"]),
   title: z.string().trim().max(180).optional(),
   url: z.string().trim().optional(),
-  content: z.string().trim().optional()
+  content: z.string().trim().optional(),
+  isHidden: z
+    .union([z.literal("on"), z.literal("true"), z.null(), z.undefined()])
+    .optional()
+    .transform((v) => v === "on" || v === "true")
 });
 
 const deleteItemSchema = z.object({
@@ -43,6 +53,11 @@ const deleteItemSchema = z.object({
 
 const toggleCheckedSchema = z.object({
   itemId: z.string().uuid()
+});
+
+const revealItemSchema = z.object({
+  itemId: z.string().uuid(),
+  code: z.string().trim().min(1, "Unlock code is required").max(32)
 });
 
 function normalizeOptional(value?: string) {
@@ -89,6 +104,13 @@ function mapDbErrorMessage(errorMessage: string | null | undefined) {
   }
 
   return errorMessage;
+}
+
+function readAccountSettings(settings: unknown) {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
+    return {} as Record<string, unknown>;
+  }
+  return settings as Record<string, unknown>;
 }
 
 function validateItem(kind: "link" | "note" | "bullets", url?: string, content?: string) {
@@ -243,7 +265,8 @@ export async function createKnowledgeItemAction(formData: FormData) {
     kind: formData.get("kind"),
     title: formData.get("title"),
     url: formData.get("url"),
-    content: formData.get("content")
+    content: formData.get("content"),
+    isHidden: formData.get("isHidden")
   });
 
   if (!payload.success) {
@@ -264,7 +287,8 @@ export async function createKnowledgeItemAction(formData: FormData) {
       kind: payload.data.kind,
       title: normalizeOptional(payload.data.title),
       url: validated.url,
-      content: validated.content
+      content: validated.content,
+      is_hidden: payload.data.isHidden
     })
     .select("id")
     .single();
@@ -288,7 +312,8 @@ export async function updateKnowledgeItemAction(formData: FormData) {
     kind: formData.get("kind"),
     title: formData.get("title"),
     url: formData.get("url"),
-    content: formData.get("content")
+    content: formData.get("content"),
+    isHidden: formData.get("isHidden")
   });
 
   if (!payload.success) {
@@ -309,7 +334,8 @@ export async function updateKnowledgeItemAction(formData: FormData) {
       kind: payload.data.kind,
       title: normalizeOptional(payload.data.title),
       url: validated.url,
-      content: validated.content
+      content: validated.content,
+      is_hidden: payload.data.isHidden
     })
     .eq("id", payload.data.itemId)
     .select("id")
@@ -387,6 +413,66 @@ export async function toggleKnowledgeItemCheckedAction(formData: FormData) {
 
   revalidateKnowledgeRoutes(spaceId);
   return { redirectTo: returnPath };
+}
+
+export async function verifyKnowledgeItemCodeAction(input: { itemId: string; code: string }) {
+  const payload = revealItemSchema.safeParse(input);
+  if (!payload.success) {
+    return { ok: false as const, error: payload.error.issues[0]?.message ?? "Invalid unlock request." };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  const { data: accountRow, error: accountError } = await supabase
+    .from("accounts")
+    .select("settings")
+    .eq("id", account.accountId)
+    .maybeSingle();
+
+  if (accountError) {
+    return { ok: false as const, error: mapDbErrorMessage(accountError.message) };
+  }
+
+  const settings = readAccountSettings(accountRow?.settings);
+  const expectedHash =
+    typeof settings.knowledge_unlock_code_hash === "string" ? settings.knowledge_unlock_code_hash.trim() : "";
+
+  if (!expectedHash) {
+    return { ok: false as const, error: "Set an unlock code in Settings before opening hidden items." };
+  }
+
+  const receivedHash = createHash("sha256").update(payload.data.code).digest("hex");
+  if (receivedHash !== expectedHash) {
+    return { ok: false as const, error: "Incorrect unlock code." };
+  }
+
+  const { data: item, error } = await supabase
+    .from("knowledge_items")
+    .select("id, space_id, kind, title, url, content, created_at, checked, is_hidden")
+    .eq("id", payload.data.itemId)
+    .maybeSingle();
+
+  if (error) {
+    return { ok: false as const, error: mapDbErrorMessage(error.message) };
+  }
+
+  if (!item) {
+    return { ok: false as const, error: "Hidden item not found." };
+  }
+
+  return {
+    ok: true as const,
+    item: {
+      id: item.id,
+      space_id: item.space_id,
+      kind: item.kind,
+      title: item.title,
+      url: item.url,
+      content: item.content,
+      created_at: item.created_at,
+      checked: item.checked,
+      is_hidden: item.is_hidden
+    }
+  };
 }
 
 export async function createKnowledgeSpaceFormAction(
