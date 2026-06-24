@@ -3,8 +3,8 @@ import type { Supabase } from "./types";
 export type FinancePageData = {
   categories: Array<{ id: string; name: string; monthly_limit: string | null; image_url: string | null }>;
   categoryUsage: Array<{ category_id: string | null }>;
-  periodExpenses: Array<{ id: string; amount: string; category_id: string | null; occurred_on: string }>;
-  recentExpenses: Array<{ id: string; amount: string; category_id: string | null; occurred_on: string; notes: string | null }>;
+  periodExpenses: Array<{ id: string; amount: string; category_id: string | null; phase_id: string | null; project_id: string | null; occurred_on: string }>;
+  recentExpenses: Array<{ id: string; amount: string; category_id: string | null; phase_id: string | null; project_id: string | null; occurred_on: string; notes: string | null }>;
   subscriptions: Array<{
     id: string;
     name: string;
@@ -41,14 +41,14 @@ export async function getFinancePageData(
       .not("category_id", "is", null),
     supabase
       .from("ledger_entries")
-      .select("id, amount, category_id, occurred_on")
+      .select("id, amount, category_id, phase_id, project_id, occurred_on")
       .eq("account_id", accountId)
       .eq("entry_type", "expense")
       .gte("occurred_on", rangeStart)
       .lte("occurred_on", rangeEnd),
     supabase
       .from("ledger_entries")
-      .select("id, amount, category_id, occurred_on, notes")
+      .select("id, amount, category_id, phase_id, project_id, occurred_on, notes")
       .eq("account_id", accountId)
       .eq("entry_type", "expense")
       .gte("occurred_on", rangeStart)

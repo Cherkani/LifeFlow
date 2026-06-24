@@ -22,11 +22,9 @@ export async function GET() {
     }
 
     const columns = profile ? Object.keys(profile) : [];
-    const hasCycleTracking = columns.includes("cycle_tracking_enabled");
 
     return NextResponse.json({
       columns,
-      hasCycleTracking,
       sample: profile,
       expected: [
         "id",
@@ -36,8 +34,7 @@ export async function GET() {
         "timezone",
         "is_active",
         "created_at",
-        "last_signed_in_at",
-        "cycle_tracking_enabled"
+        "last_signed_in_at"
       ]
     });
   } catch (err) {

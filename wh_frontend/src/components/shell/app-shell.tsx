@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import {
-  CircleDot,
   LogOut,
   Menu,
   MessageCircle,
@@ -26,15 +26,13 @@ type AppShellProps = {
   accountName: string;
   role: string;
   userLabel: string;
-  showCycleTracking?: boolean;
 };
 
 export function AppShell({
   children,
   accountName,
   role,
-  userLabel,
-  showCycleTracking = false
+  userLabel
 }: AppShellProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -127,9 +125,9 @@ export function AppShell({
 
         <div className={cn("relative z-10 flex h-16 items-center justify-between border-b px-4", isDark ? "border-[#2c3e5f]" : "border-[#dadde9]")}>
           <Link href="/dashboard" className={cn("text-lg font-semibold tracking-tight", !desktopExpanded && "md:hidden")}>
-          Momentum Grid
+          LifeFlow
           </Link>
-          <span className={cn("hidden text-lg font-semibold md:block", desktopExpanded && "md:hidden")}>MG</span>
+          <span className={cn("hidden text-lg font-semibold md:block", desktopExpanded && "md:hidden")}>LF</span>
           <Button
             variant="ghost"
             size="icon"
@@ -166,7 +164,7 @@ export function AppShell({
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={item.href as Route}
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition",
                   active
@@ -184,25 +182,6 @@ export function AppShell({
               </Link>
             );
           })}
-          {showCycleTracking ? (
-            <Link
-              href="/cycle"
-              className={cn(
-                "mt-3 flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition",
-                pathname === "/cycle" || pathname.startsWith("/cycle")
-                  ? isDark
-                    ? "bg-[#3d5f9c] text-white shadow-[0_8px_24px_rgba(16,39,78,0.45)]"
-                    : "bg-[#7270a9] text-white shadow-[0_8px_22px_rgba(72,66,126,0.24)]"
-                  : isDark
-                    ? "text-[#a8bbdc] hover:bg-[#162742] hover:text-[#e6efff]"
-                    : "text-[#5f6586] hover:bg-[#eceff7] hover:text-[#384064]",
-                !desktopExpanded && "md:justify-center md:px-2"
-              )}
-            >
-              <CircleDot size={17} />
-              <span className={cn(!desktopExpanded && "md:hidden")}>Cycle</span>
-            </Link>
-          ) : null}
         </nav>
 
         <div className={cn("relative z-10 mt-auto border-t p-3", isDark ? "border-[#2c3e5f]" : "border-[#dadde9]")}>

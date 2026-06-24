@@ -66,6 +66,8 @@ type CategoryRow = {
 type ExpenseRow = {
   id: string;
   category_id: string | null;
+  phase_id?: string | null;
+  project_id?: string | null;
   amount: number;
   occurred_on: string;
   notes: string | null;
@@ -77,6 +79,9 @@ type PeriodExpenseRow = {
   amount: number;
   occurred_on: string;
 };
+
+type LifePhaseOption = { id: string; title: string; status: string };
+type LifeProjectOption = { id: string; name: string; phase_id: string | null; status: string };
 
 type SubscriptionRow = {
   id: string;
@@ -131,6 +136,45 @@ function buildFinanceHref(options?: {
   return queryValue.length > 0 ? `/finance?${queryValue}` : "/finance";
 }
 
+function LifeConnectionFields({
+  phases,
+  projects,
+  defaultPhaseId = "",
+  defaultProjectId = ""
+}: {
+  phases: LifePhaseOption[];
+  projects: LifeProjectOption[];
+  defaultPhaseId?: string;
+  defaultProjectId?: string;
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <div className="space-y-2">
+        <Label htmlFor="phaseId">Life phase</Label>
+        <Select id="phaseId" name="phaseId" defaultValue={defaultPhaseId}>
+          <option value="">No phase</option>
+          {phases.map((phase) => (
+            <option key={phase.id} value={phase.id}>
+              {phase.title}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="projectId">Project</Label>
+        <Select id="projectId" name="projectId" defaultValue={defaultProjectId}>
+          <option value="">No project</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.name}
+            </option>
+          ))}
+        </Select>
+      </div>
+    </div>
+  );
+}
+
 type FinanceModalsProps = {
   tab: "expenses" | "subscriptions" | "debts";
   period: "day" | "week" | "month";
@@ -171,6 +215,8 @@ type FinanceModalsProps = {
   periodPaymentsTotal: number;
   rangeStartIso: string;
   rangeEndIso: string;
+  lifePhases: LifePhaseOption[];
+  lifeProjects: LifeProjectOption[];
   previousAnchorIso: string;
   nextAnchorIso: string;
 };
@@ -362,6 +408,8 @@ export function FinanceModals({
   periodPaymentsTotal,
   rangeStartIso,
   rangeEndIso,
+  lifePhases,
+  lifeProjects,
   previousAnchorIso,
   nextAnchorIso
 }: FinanceModalsProps) {
@@ -604,7 +652,7 @@ export function FinanceModals({
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Top spend day in period</CardTitle>
+                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Top spend day in range</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-semibold text-[#0c1d3c]">
@@ -836,7 +884,7 @@ export function FinanceModals({
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Due in period</CardTitle>
+                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Due in range</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-semibold text-[#0c1d3c]">{formatMoneyDhs(dueSubscriptionsTotal)}</p>
@@ -1057,6 +1105,7 @@ export function FinanceModals({
                   <Input id="occurredOn" name="occurredOn" type="date" required defaultValue={anchorIso} />
                 </div>
               </div>
+              <LifeConnectionFields phases={lifePhases} projects={lifeProjects} />
               <div className="space-y-2">
                 <Label htmlFor="notes">Note (optional)</Label>
                 <Input id="notes" name="notes" placeholder="What was this expense?" />
@@ -1135,6 +1184,12 @@ export function FinanceModals({
                   <Input id="editOccurredOn" name="occurredOn" type="date" required defaultValue={editingExpense.occurred_on} />
                 </div>
               </div>
+              <LifeConnectionFields
+                phases={lifePhases}
+                projects={lifeProjects}
+                defaultPhaseId={editingExpense.phase_id ?? ""}
+                defaultProjectId={editingExpense.project_id ?? ""}
+              />
               <div className="space-y-2">
                 <Label htmlFor="editNotes">Note (optional)</Label>
                 <Input id="editNotes" name="notes" placeholder="What was this expense?" defaultValue={editingExpense.notes ?? ""} />

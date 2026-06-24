@@ -235,9 +235,9 @@ export async function loginDemoUserAction() {
         password,
         email_confirm: true,
         user_metadata: {
-          full_name: "Momentum Grid Demo",
+          full_name: "LifeFlow Demo",
           timezone: "Africa/Casablanca",
-          account_name: "Momentum Grid Demo"
+          account_name: "LifeFlow Demo"
         }
       });
 
@@ -256,9 +256,9 @@ export async function loginDemoUserAction() {
         password,
         options: {
           data: {
-            full_name: "Momentum Grid Demo",
+            full_name: "LifeFlow Demo",
             timezone: "Africa/Casablanca",
-            account_name: "Momentum Grid Demo"
+            account_name: "LifeFlow Demo"
           }
         }
       });

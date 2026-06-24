@@ -19,8 +19,6 @@ export type Database = {
           is_active: boolean;
           created_at: string;
           last_signed_in_at: string | null;
-          cycle_tracking_enabled: boolean;
-          luteal_phase_length: number;
         };
         Insert: {
           id: string;
@@ -31,8 +29,6 @@ export type Database = {
           is_active?: boolean;
           created_at?: string;
           last_signed_in_at?: string | null;
-          cycle_tracking_enabled?: boolean;
-          luteal_phase_length?: number;
         };
         Update: {
           id?: string;
@@ -43,8 +39,6 @@ export type Database = {
           is_active?: boolean;
           created_at?: string;
           last_signed_in_at?: string | null;
-          cycle_tracking_enabled?: boolean;
-          luteal_phase_length?: number;
         };
       };
       accounts: {
@@ -99,6 +93,8 @@ export type Database = {
           account_id: string;
           title: string;
           image_url: string | null;
+          phase_id: string | null;
+          project_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -107,6 +103,8 @@ export type Database = {
           account_id: string;
           title: string;
           image_url?: string | null;
+          phase_id?: string | null;
+          project_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -115,6 +113,8 @@ export type Database = {
           account_id?: string;
           title?: string;
           image_url?: string | null;
+          phase_id?: string | null;
+          project_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -164,6 +164,8 @@ export type Database = {
           title: string;
           description: string | null;
           image_url: string | null;
+          phase_id: string | null;
+          project_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -173,6 +175,8 @@ export type Database = {
           title: string;
           description?: string | null;
           image_url?: string | null;
+          phase_id?: string | null;
+          project_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -182,6 +186,8 @@ export type Database = {
           title?: string;
           description?: string | null;
           image_url?: string | null;
+          phase_id?: string | null;
+          project_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -191,6 +197,8 @@ export type Database = {
           id: string;
           account_id: string;
           objective_id: string | null;
+          phase_id: string | null;
+          project_id: string | null;
           title: string;
           type: "time_tracking" | "fixed_protocol" | "count" | "custom";
           weekly_target_minutes: number | null;
@@ -204,6 +212,8 @@ export type Database = {
           id?: string;
           account_id: string;
           objective_id?: string | null;
+          phase_id?: string | null;
+          project_id?: string | null;
           title: string;
           type?: "time_tracking" | "fixed_protocol" | "count" | "custom";
           weekly_target_minutes?: number | null;
@@ -217,6 +227,8 @@ export type Database = {
           id?: string;
           account_id?: string;
           objective_id?: string | null;
+          phase_id?: string | null;
+          project_id?: string | null;
           title?: string;
           type?: "time_tracking" | "fixed_protocol" | "count" | "custom";
           weekly_target_minutes?: number | null;
@@ -353,6 +365,8 @@ export type Database = {
         Row: {
           id: string;
           account_id: string;
+          phase_id: string | null;
+          project_id: string | null;
           title: string;
           details: string | null;
           event_date: string | null;
@@ -364,6 +378,8 @@ export type Database = {
         Insert: {
           id?: string;
           account_id: string;
+          phase_id?: string | null;
+          project_id?: string | null;
           title: string;
           details?: string | null;
           event_date?: string | null;
@@ -375,6 +391,8 @@ export type Database = {
         Update: {
           id?: string;
           account_id?: string;
+          phase_id?: string | null;
+          project_id?: string | null;
           title?: string;
           details?: string | null;
           event_date?: string | null;
@@ -405,6 +423,141 @@ export type Database = {
           name?: string;
           created_at?: string;
           updated_at?: string;
+        };
+      };
+      life_phases: {
+        Row: {
+          id: string;
+          account_id: string;
+          title: string;
+          phase_type: "school" | "study" | "internship" | "job" | "freelance" | "project" | "career_growth" | "travel" | "custom";
+          status: "past" | "current" | "planned" | "archived";
+          start_date: string | null;
+          end_date: string | null;
+          income_source: string | null;
+          monthly_income: string | null;
+          monthly_spending: string | null;
+          currency_code: string;
+          summary: string | null;
+          image_url: string | null;
+          position: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_id: string;
+          title: string;
+          phase_type?: "school" | "study" | "internship" | "job" | "freelance" | "project" | "career_growth" | "travel" | "custom";
+          status?: "past" | "current" | "planned" | "archived";
+          start_date?: string | null;
+          end_date?: string | null;
+          income_source?: string | null;
+          monthly_income?: string | null;
+          monthly_spending?: string | null;
+          currency_code?: string;
+          summary?: string | null;
+          image_url?: string | null;
+          position?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          account_id?: string;
+          title?: string;
+          phase_type?: "school" | "study" | "internship" | "job" | "freelance" | "project" | "career_growth" | "travel" | "custom";
+          status?: "past" | "current" | "planned" | "archived";
+          start_date?: string | null;
+          end_date?: string | null;
+          income_source?: string | null;
+          monthly_income?: string | null;
+          monthly_spending?: string | null;
+          currency_code?: string;
+          summary?: string | null;
+          image_url?: string | null;
+          position?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      life_projects: {
+        Row: {
+          id: string;
+          account_id: string;
+          phase_id: string | null;
+          name: string;
+          description: string | null;
+          status: "idea" | "active" | "paused" | "completed" | "archived";
+          start_date: string | null;
+          end_date: string | null;
+          progress: number;
+          outcome: string | null;
+          image_url: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_id: string;
+          phase_id?: string | null;
+          name: string;
+          description?: string | null;
+          status?: "idea" | "active" | "paused" | "completed" | "archived";
+          start_date?: string | null;
+          end_date?: string | null;
+          progress?: number;
+          outcome?: string | null;
+          image_url?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          account_id?: string;
+          phase_id?: string | null;
+          name?: string;
+          description?: string | null;
+          status?: "idea" | "active" | "paused" | "completed" | "archived";
+          start_date?: string | null;
+          end_date?: string | null;
+          progress?: number;
+          outcome?: string | null;
+          image_url?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      life_links: {
+        Row: {
+          id: string;
+          account_id: string;
+          source_type: "phase" | "project" | "goal" | "task" | "session" | "finance_entry" | "subscription" | "debt" | "event" | "knowledge_space" | "knowledge_item";
+          source_id: string;
+          target_type: "phase" | "project" | "goal" | "task" | "session" | "finance_entry" | "subscription" | "debt" | "event" | "knowledge_space" | "knowledge_item";
+          target_id: string;
+          relationship_type: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_id: string;
+          source_type: "phase" | "project" | "goal" | "task" | "session" | "finance_entry" | "subscription" | "debt" | "event" | "knowledge_space" | "knowledge_item";
+          source_id: string;
+          target_type: "phase" | "project" | "goal" | "task" | "session" | "finance_entry" | "subscription" | "debt" | "event" | "knowledge_space" | "knowledge_item";
+          target_id: string;
+          relationship_type?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          account_id?: string;
+          source_type?: "phase" | "project" | "goal" | "task" | "session" | "finance_entry" | "subscription" | "debt" | "event" | "knowledge_space" | "knowledge_item";
+          source_id?: string;
+          target_type?: "phase" | "project" | "goal" | "task" | "session" | "finance_entry" | "subscription" | "debt" | "event" | "knowledge_space" | "knowledge_item";
+          target_id?: string;
+          relationship_type?: string;
+          created_at?: string;
         };
       };
       period_cycles: {
@@ -528,6 +681,8 @@ export type Database = {
           id: string;
           account_id: string;
           category_id: string | null;
+          phase_id: string | null;
+          project_id: string | null;
           entry_type: "income" | "expense";
           amount: string;
           currency_code: string;
@@ -540,6 +695,8 @@ export type Database = {
           id?: string;
           account_id: string;
           category_id?: string | null;
+          phase_id?: string | null;
+          project_id?: string | null;
           entry_type: "income" | "expense";
           amount: string;
           currency_code?: string;
@@ -552,6 +709,8 @@ export type Database = {
           id?: string;
           account_id?: string;
           category_id?: string | null;
+          phase_id?: string | null;
+          project_id?: string | null;
           entry_type?: "income" | "expense";
           amount?: string;
           currency_code?: string;

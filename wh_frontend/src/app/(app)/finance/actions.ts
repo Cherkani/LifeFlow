@@ -27,6 +27,8 @@ const deleteCategorySchema = z.object({
 
 const createExpenseSchema = z.object({
   categoryId: z.string().uuid(),
+  phaseId: z.union([z.literal(""), z.string().uuid()]).optional(),
+  projectId: z.union([z.literal(""), z.string().uuid()]).optional(),
   amount: z.coerce.number().positive().max(100000000),
   occurredOn: dateInputSchema,
   notes: z.string().max(1000).optional()
@@ -53,6 +55,8 @@ const subscriptionIdSchema = z.object({
 const updateExpenseSchema = z.object({
   expenseId: z.string().uuid(),
   categoryId: z.string().uuid(),
+  phaseId: z.union([z.literal(""), z.string().uuid()]).optional(),
+  projectId: z.union([z.literal(""), z.string().uuid()]).optional(),
   amount: z.coerce.number().positive().max(100000000),
   occurredOn: dateInputSchema,
   notes: z.string().max(1000).optional()
@@ -122,6 +126,8 @@ export async function createExpenseAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = createExpenseSchema.safeParse({
     categoryId: formData.get("categoryId"),
+    phaseId: formData.get("phaseId"),
+    projectId: formData.get("projectId"),
     amount: formData.get("amount"),
     occurredOn: formData.get("occurredOn"),
     notes: formData.get("notes")
@@ -135,6 +141,8 @@ export async function createExpenseAction(formData: FormData) {
   await supabase.from("ledger_entries").insert({
     account_id: account.accountId,
     category_id: payload.data.categoryId,
+    phase_id: payload.data.phaseId || null,
+    project_id: payload.data.projectId || null,
     entry_type: "expense",
     amount: payload.data.amount.toFixed(2),
     currency_code: account.currencyCode,
@@ -152,6 +160,8 @@ export async function updateExpenseAction(formData: FormData) {
   const payload = updateExpenseSchema.safeParse({
     expenseId: formData.get("expenseId"),
     categoryId: formData.get("categoryId"),
+    phaseId: formData.get("phaseId"),
+    projectId: formData.get("projectId"),
     amount: formData.get("amount"),
     occurredOn: formData.get("occurredOn"),
     notes: formData.get("notes")
@@ -166,6 +176,8 @@ export async function updateExpenseAction(formData: FormData) {
     .from("ledger_entries")
     .update({
       category_id: payload.data.categoryId,
+      phase_id: payload.data.phaseId || null,
+      project_id: payload.data.projectId || null,
       amount: payload.data.amount.toFixed(2),
       occurred_on: payload.data.occurredOn,
       notes: payload.data.notes?.trim() || null

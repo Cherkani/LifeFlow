@@ -22,6 +22,8 @@ const optionalDateSchema = z.preprocess(
 
 const createEventSchema = z.object({
   title: z.string().trim().min(2).max(180),
+  phaseId: z.union([z.literal(""), z.string().uuid()]).optional(),
+  projectId: z.union([z.literal(""), z.string().uuid()]).optional(),
   eventDate: optionalDateSchema,
   eventTime: timeSchema,
   eventType: z.string().trim().min(1).max(60),
@@ -31,6 +33,8 @@ const createEventSchema = z.object({
 const updateEventSchema = z.object({
   eventId: z.string().uuid(),
   title: z.string().trim().min(2).max(180),
+  phaseId: z.union([z.literal(""), z.string().uuid()]).optional(),
+  projectId: z.union([z.literal(""), z.string().uuid()]).optional(),
   eventDate: optionalDateSchema,
   eventTime: timeSchema,
   eventType: z.string().trim().min(1).max(60),
@@ -65,6 +69,8 @@ export async function createCalendarEventAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = createEventSchema.safeParse({
     title: formData.get("title"),
+    phaseId: formData.get("phaseId"),
+    projectId: formData.get("projectId"),
     eventDate: formData.get("eventDate"),
     eventTime: formData.get("eventTime"),
     eventType: formData.get("eventType"),
@@ -86,6 +92,8 @@ export async function createCalendarEventAction(formData: FormData) {
   );
   const { error } = await supabase.from("calendar_events").insert({
     account_id: account.accountId,
+    phase_id: payload.data.phaseId || null,
+    project_id: payload.data.projectId || null,
     title: payload.data.title,
     event_date: payload.data.eventDate,
     event_time: payload.data.eventTime,
@@ -114,6 +122,8 @@ export async function updateCalendarEventAction(formData: FormData) {
   const payload = updateEventSchema.safeParse({
     eventId: formData.get("eventId"),
     title: formData.get("title"),
+    phaseId: formData.get("phaseId"),
+    projectId: formData.get("projectId"),
     eventDate: formData.get("eventDate"),
     eventTime: formData.get("eventTime"),
     eventType: formData.get("eventType"),
@@ -136,6 +146,8 @@ export async function updateCalendarEventAction(formData: FormData) {
     .from("calendar_events")
     .update({
       title: payload.data.title,
+      phase_id: payload.data.phaseId || null,
+      project_id: payload.data.projectId || null,
       event_date: payload.data.eventDate,
       event_time: payload.data.eventTime,
       event_type: payload.data.eventType,

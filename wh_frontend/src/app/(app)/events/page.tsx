@@ -3,7 +3,7 @@ import Link from "next/link";
 import { CalendarDays, ChevronLeft, ChevronRight, ListTodo } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { getCalendarEventTypeUsage, getCalendarEventTypes, getCalendarEvents, getCalendarUndatedEvents } from "@/lib/queries";
+import { getCalendarEventTypeUsage, getCalendarEventTypes, getCalendarEvents, getCalendarUndatedEvents, getLifeOptions } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
 
 import { EventsAddEvent } from "./events-add-event";
@@ -26,6 +26,8 @@ type CalendarEvent = {
   event_date: string | null;
   event_time: string | null;
   event_type: string;
+  phase_id: string | null;
+  project_id: string | null;
 };
 
 function isIsoDate(value: string | undefined) {
@@ -97,6 +99,7 @@ export default async function EventsPage({
   const backlogEvents = (await getCalendarUndatedEvents(supabase, account.accountId)) as CalendarEvent[];
   const eventTypeRows = await getCalendarEventTypes(supabase, account.accountId);
   const eventTypeUsageRows = await getCalendarEventTypeUsage(supabase, account.accountId);
+  const lifeOptions = await getLifeOptions(supabase, account.accountId);
   const eventTypes = eventTypeRows.map((type) => type.name);
   const eventTypeUsage = new Map<string, number>();
   for (const row of eventTypeUsageRows) {
@@ -190,7 +193,13 @@ export default async function EventsPage({
             <CardContent className="space-y-5 py-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-4xl font-semibold text-[#0c1d3c]">Important Dates Calendar</h2>
-                <EventsAddEvent monthKey={monthKey} selectedIso={selectedIso} eventTypes={eventTypes} />
+                <EventsAddEvent
+                  monthKey={monthKey}
+                  selectedIso={selectedIso}
+                  eventTypes={eventTypes}
+                  lifePhases={lifeOptions.phases}
+                  lifeProjects={lifeOptions.projects}
+                />
               </div>
 
               <div className="rounded-lg border border-[#d7e0f1] bg-[#eef3fb] p-4">
@@ -266,6 +275,8 @@ export default async function EventsPage({
                 selectedIso={selectedIso}
                 view="scheduled"
                 eventTypes={eventTypes}
+                lifePhases={lifeOptions.phases}
+                lifeProjects={lifeOptions.projects}
               />
             </CardContent>
           </Card>
@@ -278,6 +289,8 @@ export default async function EventsPage({
               monthKey={monthKey}
               selectedIso={selectedIso}
               eventTypes={eventTypes}
+              lifePhases={lifeOptions.phases}
+              lifeProjects={lifeOptions.projects}
             />
           </CardContent>
         </Card>

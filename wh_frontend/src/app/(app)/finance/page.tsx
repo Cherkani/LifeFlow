@@ -1,4 +1,4 @@
-import { getFinancePageData } from "@/lib/queries";
+import { getFinancePageData, getLifeOptions } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
 import { endOfIsoWeek, startOfIsoWeek } from "@/lib/utils";
 
@@ -106,6 +106,7 @@ export default async function FinancePage({
     rangeEnd,
     period
   );
+  const lifeOptions = await getLifeOptions(supabase, account.accountId);
   const categories = financeData.categories;
   const categoryUsageCounts = new Map<string, number>();
   for (const row of financeData.categoryUsage) {
@@ -244,6 +245,8 @@ export default async function FinancePage({
   const recentExpensesForClient = recentExpenses.map((e) => ({
     id: e.id,
     category_id: e.category_id,
+    phase_id: e.phase_id,
+    project_id: e.project_id,
     amount: Number(e.amount),
     occurred_on: e.occurred_on,
     notes: e.notes
@@ -260,6 +263,8 @@ export default async function FinancePage({
   const periodExpensesForClient = periodExpenses.map((e) => ({
     id: e.id,
     category_id: e.category_id,
+    phase_id: e.phase_id,
+    project_id: e.project_id,
     amount: Number(e.amount),
     occurred_on: e.occurred_on
   }));
@@ -295,6 +300,8 @@ export default async function FinancePage({
         periodPaymentsTotal={periodPaymentsTotal}
         rangeStartIso={rangeStart}
         rangeEndIso={rangeEnd}
+        lifePhases={lifeOptions.phases}
+        lifeProjects={lifeOptions.projects}
         previousAnchorIso={toIsoDate(previousAnchorDate)}
         nextAnchorIso={toIsoDate(nextAnchorDate)}
       />

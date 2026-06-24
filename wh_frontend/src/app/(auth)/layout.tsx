@@ -6,7 +6,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
     <main className="auth-shell relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10 sm:px-6">
       <Image
         src="/momentum-grid-auth-hero.jpg"
-        alt="Momentum Grid background"
+        alt="LifeFlow background"
         fill
         className="object-cover"
         priority

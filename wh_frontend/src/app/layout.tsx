@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 import "@/app/globals.css";
 
 export const metadata: Metadata = {
-  title: "Momentum Grid",
-  description: "A personal ERP for strategy, planning, execution, finance, and analytics."
+  title: "LifeFlow",
+  description: "A connected life map for phases, projects, money, objectives, notes, and daily execution."
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

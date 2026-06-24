@@ -3,6 +3,7 @@ import {
   CalendarDays,
   ChartNoAxesCombined,
   CircleDollarSign,
+  GitBranch,
   LayoutDashboard,
   NotebookPen,
   Repeat
@@ -10,6 +11,7 @@ import {
 
 export const appNavigation = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/life-map", label: "Life Map", icon: GitBranch },
   { href: "/planning", label: "Planner", icon: NotebookPen },
   { href: "/habits", label: "Execution", icon: Repeat },
   { href: "/events", label: "Calendar", icon: CalendarDays },

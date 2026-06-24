@@ -18,18 +18,7 @@ const profileSchema = z.object({
   timezone: z.preprocess(
     (v) => (v == null ? "" : String(v).trim()),
     z.string().min(2, "Please select a timezone").max(100)
-  ),
-  cycleTrackingEnabled: z
-    .union([z.literal("on"), z.literal("true"), z.null(), z.undefined()])
-    .optional()
-    .transform((v) => (v === "on" || v === "true")),
-  lutealPhaseLength: z
-    .preprocess((value) => {
-      if (value == null || value === "") return undefined;
-      const parsed = Number(value);
-      return Number.isNaN(parsed) ? value : parsed;
-    }, z.number().int("Luteal length must be whole days").min(8).max(20))
-    .optional()
+  )
 });
 
 const knowledgeUnlockCodeSchema = z
@@ -64,9 +53,7 @@ export async function signOutAction() {
 export async function updateProfileAction(formData: FormData) {
   const payload = profileSchema.safeParse({
     fullName: formData.get("fullName"),
-    timezone: formData.get("timezone"),
-    cycleTrackingEnabled: formData.get("cycleTrackingEnabled"),
-    lutealPhaseLength: formData.get("lutealPhaseLength")
+    timezone: formData.get("timezone")
   });
 
   if (!payload.success) {
@@ -80,9 +67,7 @@ export async function updateProfileAction(formData: FormData) {
   const { supabase, user } = await requireAppContext();
   const update: Record<string, unknown> = {
     full_name: payload.data.fullName,
-    timezone: payload.data.timezone,
-    cycle_tracking_enabled: payload.data.cycleTrackingEnabled ?? false,
-    luteal_phase_length: payload.data.lutealPhaseLength ?? 14
+    timezone: payload.data.timezone
   };
 
   const { error } = await supabase.from("profiles").update(update).eq("id", user.id);

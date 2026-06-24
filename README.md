@@ -1,6 +1,6 @@
-# Momentum Core
+# LifeFlow
 
-Momentum Core is a personal productivity platform built with Next.js and Supabase.
+LifeFlow is a connected life-history and planning platform built with Next.js and Supabase.
 
 ## Monorepo Structure
 
@@ -14,6 +14,7 @@ life_flow/
 ## Main Modules
 
 - Dashboard
+- Life Map
 - Planner
 - Weekly Tracker
 - Events
@@ -96,3 +97,4 @@ In `wh_frontend`:
 In `wh_supabase`:
 
 - `npm run run-migrations`
+- `npm run preview-life-migration -- --email=cherkaniaymen1@gmail.com`

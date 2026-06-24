@@ -21,11 +21,11 @@ export default async function LoginPage({
         <div className="space-y-5">
           <div className="space-y-3">
             <span className="inline-flex items-center rounded-full border border-[#aacaFF]/30 bg-[#13284a]/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#edf4ff]">
-              Momentum Grid
+              LifeFlow
             </span>
-            <h1 className="auth-title text-3xl font-semibold leading-tight sm:text-4xl">Plan your days with clarity and consistency.</h1>
+            <h1 className="auth-title text-3xl font-semibold leading-tight sm:text-4xl">Map your life with clarity and consistency.</h1>
             <p className="max-w-2xl text-sm leading-relaxed text-blue-100/90 sm:text-base">
-              One workspace for your tasks, events, habits, and cycle insights so you can stay focused and keep progress visible.
+              One workspace for life phases, projects, money, daily tasks, notes, events, and progress history.
             </p>
           </div>
 
@@ -156,7 +156,7 @@ export default async function LoginPage({
 
           <p className="flex items-center justify-center gap-1.5 border-t border-white/15 pt-4 text-center text-sm text-blue-100/80">
             <CheckCircle2 size={15} className="text-[#aad0ff]" />
-            <span>New to Momentum Grid?</span>
+            <span>New to LifeFlow?</span>
             <Link
               href="/signup"
               className="font-semibold text-white underline decoration-white/45 decoration-2 underline-offset-4 transition-colors duration-200 hover:text-[#dce9ff]"

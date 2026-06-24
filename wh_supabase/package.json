@@ -4,7 +4,9 @@
   "description": "Momentum Core Supabase backend migrations and tooling",
   "type": "module",
   "scripts": {
-    "run-migrations": "node scripts/run-migrations.mjs"
+    "run-migrations": "node scripts/run-migrations.mjs",
+    "preview-life-migration": "node scripts/preview-life-migration.mjs",
+    "apply-life-migration": "node scripts/apply-life-migration.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.47.0",
