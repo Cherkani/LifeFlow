@@ -4,7 +4,6 @@ import type { Supabase } from "./types";
 
 export type LifePhaseRow = Database["public"]["Tables"]["life_phases"]["Row"];
 export type LifeProjectRow = Database["public"]["Tables"]["life_projects"]["Row"];
-export type LifeLinkRow = Database["public"]["Tables"]["life_links"]["Row"];
 
 export type LifeGoalRow = {
   id: string;
@@ -65,7 +64,6 @@ export type LifePageData = {
   financeEntries: LifeFinanceRow[];
   events: LifeEventRow[];
   knowledgeSpaces: LifeKnowledgeSpaceRow[];
-  links: LifeLinkRow[];
 };
 
 export type LifeOptionData = {
@@ -95,7 +93,7 @@ export async function getLifeOptions(supabase: Supabase, accountId: string): Pro
 }
 
 export async function getLifePageData(supabase: Supabase, accountId: string): Promise<LifePageData> {
-  const [phasesRes, projectsRes, goalsRes, tasksRes, financeRes, eventsRes, spacesRes, linksRes] = await Promise.all([
+  const [phasesRes, projectsRes, goalsRes, tasksRes, financeRes, eventsRes, spacesRes] = await Promise.all([
     supabase
       .from("life_phases")
       .select("*")
@@ -134,16 +132,18 @@ export async function getLifePageData(supabase: Supabase, accountId: string): Pr
       .from("knowledge_spaces")
       .select("id, title, image_url, phase_id, project_id, created_at")
       .eq("account_id", accountId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("life_links")
-      .select("*")
-      .eq("account_id", accountId)
       .order("created_at", { ascending: false })
-      .limit(1000)
   ]);
 
-  const tasks = (tasksRes.data ?? []) as LifeTaskRow[];
+  const goals = (goalsRes.data ?? []) as LifeGoalRow[];
+  const goalById = new Map(goals.map((goal) => [goal.id, goal]));
+  const tasks = ((tasksRes.data ?? []) as LifeTaskRow[]).map((task) => {
+    const goal = task.objective_id ? goalById.get(task.objective_id) : null;
+    const hasOverride = task.phase_id !== null || task.project_id !== null;
+    return hasOverride
+      ? task
+      : { ...task, phase_id: goal?.phase_id ?? null, project_id: goal?.project_id ?? null };
+  });
   const taskIds = tasks.map((task) => task.id);
   const sessionsRes =
     taskIds.length > 0
@@ -158,12 +158,11 @@ export async function getLifePageData(supabase: Supabase, accountId: string): Pr
   return {
     phases: (phasesRes.data ?? []) as LifePhaseRow[],
     projects: (projectsRes.data ?? []) as LifeProjectRow[],
-    goals: (goalsRes.data ?? []) as LifeGoalRow[],
+    goals,
     tasks,
     sessions: (sessionsRes.data ?? []) as LifePageData["sessions"],
     financeEntries: (financeRes.data ?? []) as LifeFinanceRow[],
     events: (eventsRes.data ?? []) as LifeEventRow[],
-    knowledgeSpaces: (spacesRes.data ?? []) as LifeKnowledgeSpaceRow[],
-    links: (linksRes.data ?? []) as LifeLinkRow[]
+    knowledgeSpaces: (spacesRes.data ?? []) as LifeKnowledgeSpaceRow[]
   };
 }

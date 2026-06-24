@@ -85,39 +85,6 @@ drop policy if exists life_projects_admin on public.life_projects;
 create policy life_projects_admin on public.life_projects
   for all using (is_admin()) with check (is_admin());
 
-
-create table if not exists public.life_links (
-  id uuid primary key default gen_random_uuid(),
-  account_id uuid not null references public.accounts(id) on delete cascade,
-  source_type text not null
-    check (source_type in ('phase', 'project', 'goal', 'task', 'session', 'finance_entry', 'subscription', 'debt', 'event', 'knowledge_space', 'knowledge_item')),
-  source_id uuid not null,
-  target_type text not null
-    check (target_type in ('phase', 'project', 'goal', 'task', 'session', 'finance_entry', 'subscription', 'debt', 'event', 'knowledge_space', 'knowledge_item')),
-  target_id uuid not null,
-  relationship_type text not null default 'related',
-  created_at timestamptz not null default now(),
-  check (source_type != target_type or source_id != target_id),
-  unique (account_id, source_type, source_id, target_type, target_id, relationship_type)
-);
-
-create index if not exists idx_life_links_source
-  on public.life_links(account_id, source_type, source_id);
-create index if not exists idx_life_links_target
-  on public.life_links(account_id, target_type, target_id);
-
-alter table public.life_links enable row level security;
-
-drop policy if exists life_links_member on public.life_links;
-create policy life_links_member on public.life_links
-  for all using (account_id in (select account_ids_for_user()))
-  with check (account_id in (select account_ids_for_user()));
-
-drop policy if exists life_links_admin on public.life_links;
-create policy life_links_admin on public.life_links
-  for all using (is_admin()) with check (is_admin());
-
-
 alter table public.ledger_entries
   add column if not exists phase_id uuid references public.life_phases(id) on delete set null,
   add column if not exists project_id uuid references public.life_projects(id) on delete set null;
@@ -148,11 +115,4 @@ alter table public.knowledge_spaces
 create index if not exists idx_knowledge_spaces_phase on public.knowledge_spaces(phase_id);
 create index if not exists idx_knowledge_spaces_project on public.knowledge_spaces(project_id);
 
-
-alter table if exists public.profiles
-  drop column if exists cycle_tracking_enabled,
-  drop column if exists luteal_phase_length;
-
-drop table if exists public.ovulation_confirmations cascade;
-drop table if exists public.period_daily_logs cascade;
-drop table if exists public.period_cycles cascade;
+-- Cycle tracking is a separate feature and must not be removed by Life Context.

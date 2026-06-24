@@ -72,22 +72,6 @@ async function selectAll(table, queryBuilder) {
   return data ?? [];
 }
 
-async function upsertLifeLink(accountId, sourceType, sourceId, targetType, targetId, relationshipType) {
-  if (!sourceId || !targetId) return;
-  const { error } = await supabase.from("life_links").upsert(
-    {
-      account_id: accountId,
-      source_type: sourceType,
-      source_id: sourceId,
-      target_type: targetType,
-      target_id: targetId,
-      relationship_type: relationshipType
-    },
-    { onConflict: "account_id,source_type,source_id,target_type,target_id,relationship_type" }
-  );
-  if (error) throw error;
-}
-
 const { data: profile, error: profileError } = await supabase
   .from("profiles")
   .select("id, full_name, email")
@@ -200,14 +184,12 @@ for (const objective of objectives) {
   const { error } = await supabase.from("habit_objectives").update({ phase_id: phaseId }).eq("account_id", accountId).eq("id", objective.id);
   if (error) throw error;
   updatedObjectives += 1;
-  await upsertLifeLink(accountId, "phase", phaseId, "goal", objective.id, "migrated_from_objective");
 
   const objectiveHabits = habits.filter((habit) => habit.objective_id === objective.id);
   for (const habit of objectiveHabits) {
     const { error: taskError } = await supabase.from("habits").update({ phase_id: phaseId }).eq("account_id", accountId).eq("id", habit.id);
     if (taskError) throw taskError;
     updatedTasks += 1;
-    await upsertLifeLink(accountId, "phase", phaseId, "task", habit.id, "migrated_from_objective");
   }
 }
 
@@ -217,7 +199,6 @@ for (const event of importantEvents) {
   const { error } = await supabase.from("calendar_events").update({ phase_id: phaseId }).eq("account_id", accountId).eq("id", event.id);
   if (error) throw error;
   updatedEvents += 1;
-  await upsertLifeLink(accountId, "phase", phaseId, "event", event.id, "migrated_from_event");
 }
 
 const projectCandidates = [
@@ -254,7 +235,6 @@ for (const candidate of projectCandidates) {
       .eq("id", candidate.sourceId);
     if (updateError) throw updateError;
     updatedKnowledgeSpaces += 1;
-    await upsertLifeLink(accountId, "project", data.id, "knowledge_space", candidate.sourceId, "migrated_from_knowledge_space");
   }
 
   if (candidate.source === "objective") {
@@ -264,7 +244,6 @@ for (const candidate of projectCandidates) {
       .eq("account_id", accountId)
       .eq("id", candidate.sourceId);
     if (updateError) throw updateError;
-    await upsertLifeLink(accountId, "project", data.id, "goal", candidate.sourceId, "migrated_from_objective");
   }
 }
 

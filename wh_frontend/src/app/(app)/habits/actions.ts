@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { RedirectResult } from "@/lib/action-with-state";
+import { resolveOwnedLifeContext } from "@/lib/life-context-server";
 import { requireAppContext } from "@/lib/server-context";
 
 const dateInputSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
@@ -113,14 +114,16 @@ export async function createObjectiveAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
+  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
+  if (!context) return { redirectTo: returnPath };
 
   await supabase.from("habit_objectives").insert({
     account_id: account.accountId,
     title: payload.data.title,
     description: payload.data.description?.trim() ? payload.data.description : null,
     image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null,
-    phase_id: payload.data.phaseId,
-    project_id: payload.data.projectId
+    phase_id: context.phaseId,
+    project_id: context.projectId
   });
 
   revalidatePath(returnPath.split("?")[0] || "/habits");
@@ -143,6 +146,8 @@ export async function updateObjectiveAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
+  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
+  if (!context) return { redirectTo: returnPath };
 
   const { error } = await supabase
     .from("habit_objectives")
@@ -150,8 +155,8 @@ export async function updateObjectiveAction(formData: FormData) {
       title: payload.data.title,
       description: payload.data.description?.trim() ? payload.data.description : null,
       image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null,
-      phase_id: payload.data.phaseId,
-      project_id: payload.data.projectId
+      phase_id: context.phaseId,
+      project_id: context.projectId
     })
     .eq("id", payload.data.objectiveId)
     .eq("account_id", account.accountId);
@@ -159,13 +164,6 @@ export async function updateObjectiveAction(formData: FormData) {
   if (error) {
     return { redirectTo: returnPath };
   }
-
-  // Tasks follow their objective; sessions resolve their context through the task.
-  await supabase
-    .from("habits")
-    .update({ phase_id: payload.data.phaseId, project_id: payload.data.projectId })
-    .eq("account_id", account.accountId)
-    .eq("objective_id", payload.data.objectiveId);
 
   revalidatePath(returnPath.split("?")[0] || "/habits");
   return { redirectTo: returnPath };
@@ -252,8 +250,8 @@ export async function createHabitAction(formData: FormData) {
   await supabase.from("habits").insert({
     account_id: account.accountId,
     objective_id: payload.data.objectiveId,
-    phase_id: objective.phase_id,
-    project_id: objective.project_id,
+    phase_id: null,
+    project_id: null,
     title: payload.data.title,
     type: payload.data.type,
     weekly_target_minutes: payload.data.weeklyTargetMinutes ?? null,
@@ -589,8 +587,8 @@ export async function addCompensationSessionAction(formData: FormData) {
       .insert({
         account_id: account.accountId,
         objective_id: objectiveId,
-        phase_id: objective.phase_id,
-        project_id: objective.project_id,
+        phase_id: null,
+        project_id: null,
         title: newTaskTitle,
         type: "time_tracking",
         weekly_target_minutes: null,

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { RedirectResult } from "@/lib/action-with-state";
+import { resolveOwnedLifeContext } from "@/lib/life-context-server";
 import { requireAppContext } from "@/lib/server-context";
 
 const timeSchema = z.preprocess(
@@ -83,6 +84,8 @@ export async function createCalendarEventAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
+  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
+  if (!context) return { redirectTo: returnPath };
   await supabase.from("calendar_event_types").upsert(
     {
       account_id: account.accountId,
@@ -92,8 +95,8 @@ export async function createCalendarEventAction(formData: FormData) {
   );
   const { error } = await supabase.from("calendar_events").insert({
     account_id: account.accountId,
-    phase_id: payload.data.phaseId || null,
-    project_id: payload.data.projectId || null,
+    phase_id: context.phaseId,
+    project_id: context.projectId,
     title: payload.data.title,
     event_date: payload.data.eventDate,
     event_time: payload.data.eventTime,
@@ -135,6 +138,8 @@ export async function updateCalendarEventAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
+  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
+  if (!context) return { redirectTo: returnPath };
   await supabase.from("calendar_event_types").upsert(
     {
       account_id: account.accountId,
@@ -146,8 +151,8 @@ export async function updateCalendarEventAction(formData: FormData) {
     .from("calendar_events")
     .update({
       title: payload.data.title,
-      phase_id: payload.data.phaseId || null,
-      project_id: payload.data.projectId || null,
+      phase_id: context.phaseId,
+      project_id: context.projectId,
       event_date: payload.data.eventDate,
       event_time: payload.data.eventTime,
       event_type: payload.data.eventType,

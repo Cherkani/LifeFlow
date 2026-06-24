@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { RedirectResult } from "@/lib/action-with-state";
+import { resolveOwnedLifeContext } from "@/lib/life-context-server";
 import { requireAppContext } from "@/lib/server-context";
 
 const createSpaceSchema = z.object({
@@ -180,6 +181,8 @@ export async function createKnowledgeSpaceAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
+  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
+  if (!context) return redirectTarget(returnPath, "error", "That life context is unavailable.");
   const imageUrl = normalizeOptional(payload.data.imageUrl);
   const safeImageUrl = imageUrl && URL.canParse(imageUrl) ? imageUrl : null;
 
@@ -189,8 +192,8 @@ export async function createKnowledgeSpaceAction(formData: FormData) {
       account_id: account.accountId,
       title: payload.data.title,
       image_url: safeImageUrl,
-      phase_id: payload.data.phaseId,
-      project_id: payload.data.projectId
+      phase_id: context.phaseId,
+      project_id: context.projectId
     })
     .select("id")
     .single();
@@ -223,6 +226,8 @@ export async function updateKnowledgeSpaceAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
+  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
+  if (!context) return redirectTarget(returnPath, "error", "That life context is unavailable.");
   const imageUrl = normalizeOptional(payload.data.imageUrl);
   const safeImageUrl = imageUrl && URL.canParse(imageUrl) ? imageUrl : null;
 
@@ -231,8 +236,8 @@ export async function updateKnowledgeSpaceAction(formData: FormData) {
     .update({
       title: payload.data.title,
       image_url: safeImageUrl,
-      phase_id: payload.data.phaseId,
-      project_id: payload.data.projectId
+      phase_id: context.phaseId,
+      project_id: context.projectId
     })
     .eq("id", payload.data.spaceId)
     .eq("account_id", account.accountId)

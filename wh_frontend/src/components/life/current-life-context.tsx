@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { GitBranch, Layers3 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -46,30 +47,18 @@ export function CurrentLifeContextProvider({
   initialProjectId: string | null;
   initialScope: LifeScope;
 }) {
-  const storageKey = `lifeflow-context:${accountId}`;
+  const router = useRouter();
   const [activePhaseId, setPhase] = useState<string | null>(initialPhaseId);
   const [activeProjectId, setProject] = useState<string | null>(initialProjectId);
   const [scope, setScopeState] = useState<LifeScope>(initialScope);
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) return;
-    try {
-      const saved = JSON.parse(raw) as { phaseId?: unknown; projectId?: unknown };
-      const phaseId = typeof saved.phaseId === "string" && phases.some((phase) => phase.id === saved.phaseId) ? saved.phaseId : null;
-      const project = typeof saved.projectId === "string" ? projects.find((item) => item.id === saved.projectId) : null;
-      const projectId = project && (!phaseId || !project.phase_id || project.phase_id === phaseId) ? project.id : null;
-      setPhase(phaseId);
-      setProject(projectId);
-      persistCookie(cookieName("phase", accountId), phaseId);
-      persistCookie(cookieName("project", accountId), projectId);
-    } catch {
-      window.localStorage.removeItem(storageKey);
-    }
-  }, [accountId, phases, projects, storageKey]);
+    setPhase(initialPhaseId);
+    setProject(initialProjectId);
+    setScopeState(initialScope);
+  }, [initialPhaseId, initialProjectId, initialScope]);
 
   function persist(phaseId: string | null, projectId: string | null) {
-    window.localStorage.setItem(storageKey, JSON.stringify({ phaseId, projectId }));
     persistCookie(cookieName("phase", accountId), phaseId);
     persistCookie(cookieName("project", accountId), projectId);
   }
@@ -83,6 +72,7 @@ export function CurrentLifeContextProvider({
     setPhase(nextPhaseId);
     setProject(nextProjectId);
     persist(nextPhaseId, nextProjectId);
+    router.refresh();
   }
 
   function setActiveProjectId(id: string | null) {
@@ -92,6 +82,7 @@ export function CurrentLifeContextProvider({
     setPhase(nextPhaseId);
     setProject(nextProjectId);
     persist(nextPhaseId, nextProjectId);
+    router.refresh();
   }
 
   function setScope(nextScope: LifeScope) {
@@ -106,6 +97,7 @@ export function CurrentLifeContextProvider({
     } else {
       persistCookie(`lifeflow-scope-${accountId}`, validScope);
     }
+    router.refresh();
   }
 
   const value = { phases, projects, activePhaseId, activeProjectId, scope, setActivePhaseId, setActiveProjectId, setScope };
@@ -123,8 +115,9 @@ export function useCurrentLifeContext() {
 
 export function CurrentLifeContextSelector({ compact = false }: { compact?: boolean }) {
   const { phases, projects, activePhaseId, activeProjectId, setActivePhaseId, setActiveProjectId } = useCurrentLifeContext();
+  const selectablePhases = phases.filter((phase) => phase.status !== "archived");
   const visibleProjects = projects.filter(
-    (project) => !activePhaseId || !project.phase_id || project.phase_id === activePhaseId
+    (project) => project.status !== "archived" && project.status !== "completed" && (!activePhaseId || !project.phase_id || project.phase_id === activePhaseId)
   );
 
   return (
@@ -134,15 +127,12 @@ export function CurrentLifeContextSelector({ compact = false }: { compact?: bool
         <span className="sr-only">Current phase</span>
         <select
           value={activePhaseId ?? ""}
-          onChange={(event) => {
-            setActivePhaseId(event.target.value || null);
-            window.location.reload();
-          }}
+          onChange={(event) => setActivePhaseId(event.target.value || null)}
           className="h-9 max-w-44 rounded-lg border border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg)] py-1 pl-7 pr-7 text-xs font-medium text-[var(--app-text-strong)]"
           title="Current life phase"
         >
           <option value="">No current phase</option>
-          {phases.map((phase) => <option key={phase.id} value={phase.id}>{phase.title}</option>)}
+          {selectablePhases.map((phase) => <option key={phase.id} value={phase.id}>{phase.title}</option>)}
         </select>
       </label>
       {!compact ? (
@@ -151,10 +141,7 @@ export function CurrentLifeContextSelector({ compact = false }: { compact?: bool
           <span className="sr-only">Current project</span>
           <select
             value={activeProjectId ?? ""}
-            onChange={(event) => {
-              setActiveProjectId(event.target.value || null);
-              window.location.reload();
-            }}
+            onChange={(event) => setActiveProjectId(event.target.value || null)}
             className="h-9 max-w-48 rounded-lg border border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg)] py-1 pl-7 pr-7 text-xs font-medium text-[var(--app-text-strong)]"
             title="Current life project"
           >
@@ -200,10 +187,7 @@ export function CurrentLifeMiniSummary({
                 key={item}
                 type="button"
                 disabled={(item === "phase" && !activePhaseId) || (item === "project" && !activeProjectId)}
-                onClick={() => {
-                  setScope(item);
-                  window.location.reload();
-                }}
+                onClick={() => setScope(item)}
                 className={`rounded-md px-2 py-1 text-[11px] font-medium capitalize transition ${scope === item ? "bg-[var(--app-btn-primary-bg)] text-[var(--app-btn-primary-fg)]" : "text-[var(--app-text-muted)] hover:bg-[var(--app-panel-bg-soft)] disabled:opacity-40"}`}
               >
                 {item === "phase" ? "Current phase" : item === "project" ? "Current project" : item}

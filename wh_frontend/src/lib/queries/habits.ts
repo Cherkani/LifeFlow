@@ -23,9 +23,18 @@ export async function getHabitsPageData(
       .eq("week_start_date", weekStartIso)
       .maybeSingle()
   ]);
+  const objectives = (objectivesRes.data ?? []) as HabitsPageData["objectives"];
+  const objectiveById = new Map(objectives.map((objective) => [objective.id, objective]));
+  const categories = ((categoriesRes.data ?? []) as HabitsPageData["categories"]).map((task) => {
+    const objective = task.objective_id ? objectiveById.get(task.objective_id) : null;
+    const hasOverride = task.phase_id !== null || task.project_id !== null;
+    return hasOverride
+      ? task
+      : { ...task, phase_id: objective?.phase_id ?? null, project_id: objective?.project_id ?? null };
+  });
   return {
-    objectives: (objectivesRes.data ?? []) as HabitsPageData["objectives"],
-    categories: (categoriesRes.data ?? []) as HabitsPageData["categories"],
+    objectives,
+    categories,
     templates: (templatesRes.data ?? []) as HabitsPageData["templates"],
     currentWeek: currentWeekRes.data as HabitsPageData["currentWeek"]
   };

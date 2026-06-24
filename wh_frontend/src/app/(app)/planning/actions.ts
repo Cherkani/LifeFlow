@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { RedirectResult } from "@/lib/action-with-state";
+import { resolveOwnedLifeContext } from "@/lib/life-context-server";
 import { requireAppContext } from "@/lib/server-context";
 
 const dateInputSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
@@ -52,12 +53,14 @@ export async function createTemplateAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
+  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
+  if (!context) return { redirectTo: returnPath };
 
   await supabase.from("templates").insert({
     account_id: account.accountId,
     objective_id: null,
-    phase_id: payload.data.phaseId,
-    project_id: payload.data.projectId,
+    phase_id: context.phaseId,
+    project_id: context.projectId,
     name: payload.data.name
   });
 
@@ -201,13 +204,15 @@ export async function createTemplateWithDailyTasksAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
+  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
+  if (!context) return { redirectTo: returnPath };
   const { data: template } = await supabase
     .from("templates")
     .insert({
       account_id: account.accountId,
       objective_id: null,
-      phase_id: payload.data.phaseId,
-      project_id: payload.data.projectId,
+      phase_id: context.phaseId,
+      project_id: context.projectId,
       name: payload.data.name
     })
     .select("id")
@@ -223,10 +228,9 @@ export async function createTemplateWithDailyTasksAction(formData: FormData) {
     .select("id, phase_id, project_id")
     .eq("account_id", account.accountId)
     .in("id", objectiveIds);
-  const contextByObjective = new Map((objectivesRes.data ?? []).map((objective) => [objective.id, objective]));
+  if ((objectivesRes.data ?? []).length !== objectiveIds.length) return { redirectTo: returnPath };
 
   for (const task of parsedTasks.tasks) {
-    const objectiveContext = contextByObjective.get(task.objectiveId);
     const metadata: Record<string, string> = {};
     if (task.startTime) {
       metadata.preferred_start_time = task.startTime;
@@ -236,8 +240,8 @@ export async function createTemplateWithDailyTasksAction(formData: FormData) {
       .insert({
         account_id: account.accountId,
         objective_id: task.objectiveId,
-        phase_id: objectiveContext?.phase_id ?? payload.data.phaseId,
-        project_id: objectiveContext?.project_id ?? payload.data.projectId,
+        phase_id: null,
+        project_id: null,
         title: task.title,
         type: "time_tracking",
         weekly_target_minutes: null,
@@ -285,6 +289,8 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
+  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
+  if (!context) return { redirectTo: returnPath };
 
   const objectiveIds = Array.from(new Set(parsedTasks.tasks.map((task) => task.objectiveId)));
   const objectivesRes = await supabase
@@ -292,7 +298,7 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
     .select("id, phase_id, project_id")
     .eq("account_id", account.accountId)
     .in("id", objectiveIds);
-  const contextByObjective = new Map((objectivesRes.data ?? []).map((objective) => [objective.id, objective]));
+  if ((objectivesRes.data ?? []).length !== objectiveIds.length) return { redirectTo: returnPath };
 
   const templateRes = await supabase
     .from("templates")
@@ -320,9 +326,6 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
   const habitMetadataById = new Map(existingHabitsRes.data?.map((habit) => [habit.id, habit.metadata]));
 
   for (const task of parsedTasks.tasks) {
-    const objectiveContext = contextByObjective.get(task.objectiveId);
-    const phaseId = objectiveContext?.phase_id ?? payload.data.phaseId;
-    const projectId = objectiveContext?.project_id ?? payload.data.projectId;
     if (task.habitId) {
       const matchingHabitExists = existingHabitIdSet.has(task.habitId);
       if (!matchingHabitExists) {
@@ -345,8 +348,8 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
         .update({
           title: task.title,
           objective_id: task.objectiveId,
-          phase_id: phaseId,
-          project_id: projectId,
+          phase_id: null,
+          project_id: null,
           minimum_minutes: task.plannedMinutes,
           metadata
         })
@@ -377,8 +380,8 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
         .insert({
           account_id: account.accountId,
           objective_id: task.objectiveId,
-          phase_id: phaseId,
-          project_id: projectId,
+          phase_id: null,
+          project_id: null,
           title: task.title,
           type: "time_tracking",
           weekly_target_minutes: null,
@@ -418,7 +421,7 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
 
   await supabase
     .from("templates")
-    .update({ name: payload.data.name, phase_id: payload.data.phaseId, project_id: payload.data.projectId })
+    .update({ name: payload.data.name, phase_id: context.phaseId, project_id: context.projectId })
     .eq("id", payload.data.templateId)
     .eq("account_id", account.accountId);
 

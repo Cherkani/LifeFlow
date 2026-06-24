@@ -36,9 +36,18 @@ export async function getPlanningData(supabase: Supabase, accountId: string): Pr
       .eq("account_id", accountId)
       .order("week_start_date", { ascending: true })
   ]);
+  const objectives = (objectivesRes.data ?? []) as PlanningObjectiveRow[];
+  const objectiveById = new Map(objectives.map((objective) => [objective.id, objective]));
+  const tasks = ((tasksRes.data ?? []) as PlanningTaskRow[]).map((task) => {
+    const objective = task.objective_id ? objectiveById.get(task.objective_id) : null;
+    const hasOverride = task.phase_id !== null || task.project_id !== null;
+    return hasOverride
+      ? task
+      : { ...task, phase_id: objective?.phase_id ?? null, project_id: objective?.project_id ?? null };
+  });
   return {
-    objectives: (objectivesRes.data ?? []) as PlanningObjectiveRow[],
-    tasks: (tasksRes.data ?? []) as PlanningTaskRow[],
+    objectives,
+    tasks,
     templates: (templatesRes.data ?? []) as PlanningTemplateRow[],
     weeks: (weeksRes.data ?? []) as PlanningWeekRow[]
   };

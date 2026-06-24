@@ -1,11 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
-import { ArrowLeft, BookOpen, BriefcaseBusiness, CalendarDays, CircleDollarSign, GitBranch, NotebookPen, Target } from "lucide-react";
+import { ArrowLeft, BookOpen, BriefcaseBusiness, CalendarDays, CircleDollarSign, NotebookPen, Target } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { ActionForm } from "@/components/forms/action-form";
+import { SubmitButton } from "@/components/forms/submit-button";
+import { updateLifePhaseFormAction } from "@/app/(app)/life-map/actions";
 import { getLifePageData, type LifePhaseRow } from "@/lib/queries/life";
 import { requireAppContext } from "@/lib/server-context";
 import { formatMoneyDhs } from "@/lib/utils";
@@ -65,7 +72,6 @@ export default async function PhaseDetailPage({ params }: PageProps) {
   const finance = data.financeEntries.filter((entry) => entry.phase_id === phase.id);
   const events = data.events.filter((event) => event.phase_id === phase.id);
   const notes = data.knowledgeSpaces.filter((space) => space.phase_id === phase.id);
-  const links = data.links.filter((link) => link.source_id === phase.id || link.target_id === phase.id);
 
   const income = finance.filter((entry) => entry.entry_type === "income").reduce((sum, entry) => sum + Number(entry.amount), 0);
   const spending = finance.filter((entry) => entry.entry_type === "expense").reduce((sum, entry) => sum + Number(entry.amount), 0);
@@ -119,12 +125,49 @@ export default async function PhaseDetailPage({ params }: PageProps) {
             <ListPanel title="Daily Tasks" icon={<NotebookPen size={16} />} rows={tasks.map((task) => task.title)} />
             <ListPanel title="Money" icon={<CircleDollarSign size={16} />} rows={finance.map((entry) => `${entry.entry_type}: ${money(entry.amount)} · ${entry.occurred_on}`)} />
             <ListPanel title="Events" icon={<CalendarDays size={16} />} rows={events.map((event) => `${event.title}${event.event_date ? ` · ${event.event_date}` : ""}`)} />
-            <ListPanel title="Notes And Links" icon={<GitBranch size={16} />} rows={[...notes.map((note) => note.title), ...links.map((link) => `${link.source_type} to ${link.target_type}`)]} />
+            <ListPanel title="Notes" icon={<BookOpen size={16} />} rows={notes.map((note) => note.title)} />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Edit or archive this phase</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ActionForm action={updateLifePhaseFormAction} className="space-y-4">
+            <input type="hidden" name="phaseId" value={phase.id} />
+            <input type="hidden" name="returnPath" value={`/life-map/phases/${phase.id}`} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Title" id="editPhaseTitle"><Input id="editPhaseTitle" name="title" required defaultValue={phase.title} /></Field>
+              <Field label="Type" id="editPhaseType">
+                <Select id="editPhaseType" name="phaseType" defaultValue={phase.phase_type}>
+                  {Object.entries(phaseTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </Select>
+              </Field>
+              <Field label="Status" id="editPhaseStatus">
+                <Select id="editPhaseStatus" name="status" defaultValue={phase.status}>
+                  {Object.entries(phaseStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </Select>
+              </Field>
+              <Field label="Income source" id="editPhaseIncomeSource"><Input id="editPhaseIncomeSource" name="incomeSource" defaultValue={phase.income_source ?? ""} /></Field>
+              <Field label="Start" id="editPhaseStart"><Input id="editPhaseStart" name="startDate" type="date" defaultValue={phase.start_date ?? ""} /></Field>
+              <Field label="End" id="editPhaseEnd"><Input id="editPhaseEnd" name="endDate" type="date" defaultValue={phase.end_date ?? ""} /></Field>
+              <Field label="Monthly income estimate" id="editPhaseIncome"><Input id="editPhaseIncome" name="monthlyIncome" type="number" min="0" step="0.01" defaultValue={phase.monthly_income ?? ""} /></Field>
+              <Field label="Monthly spending estimate" id="editPhaseSpending"><Input id="editPhaseSpending" name="monthlySpending" type="number" min="0" step="0.01" defaultValue={phase.monthly_spending ?? ""} /></Field>
+            </div>
+            <Field label="Story" id="editPhaseSummary"><Textarea id="editPhaseSummary" name="summary" rows={4} defaultValue={phase.summary ?? ""} /></Field>
+            <Field label="Image URL" id="editPhaseImage"><Input id="editPhaseImage" name="imageUrl" type="url" defaultValue={phase.image_url ?? ""} /></Field>
+            <SubmitButton label="Save phase" pendingLabel="Saving..." />
+          </ActionForm>
         </CardContent>
       </Card>
     </div>
   );
+}
+
+function Field({ label, id, children }: { label: string; id: string; children: ReactNode }) {
+  return <div className="space-y-2"><Label htmlFor={id}>{label}</Label>{children}</div>;
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

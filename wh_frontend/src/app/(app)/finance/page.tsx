@@ -21,12 +21,16 @@ type DebtRow = {
   remaining_balance: number | null;
   status: "open" | "closed";
   due_date: string | null;
+  phase_id: string | null;
+  project_id: string | null;
 };
 
 type SubscriptionRow = {
   id: string;
   name: string;
   amount: number;
+  phase_id: string | null;
+  project_id: string | null;
   recurrence: "monthly" | "yearly";
   next_due_date: string | null;
   end_date: string | null;
@@ -119,18 +123,23 @@ export default async function FinancePage({
   }
   const periodExpenses = financeData.periodExpenses.filter((item) => matchesLifeFilter(item, lifeFilter));
   const recentExpenses = financeData.recentExpenses.filter((item) => matchesLifeFilter(item, lifeFilter));
+  const periodIncome = financeData.periodIncome.filter((item) => matchesLifeFilter(item, lifeFilter));
   const subscriptions = financeData.subscriptions.map((subscription) => ({
     id: subscription.id,
     name: subscription.name,
     amount: Number(subscription.amount),
+    phase_id: subscription.phase_id,
+    project_id: subscription.project_id,
     recurrence: subscription.recurrence,
     next_due_date: subscription.next_due_date,
     end_date: subscription.end_date,
     notes: subscription.notes,
     is_active: subscription.is_active
   })) as SubscriptionRow[];
-  const debts = financeData.debts as unknown as DebtRow[];
-  const payments = financeData.payments;
+  const subscriptionsInContext = subscriptions.filter((subscription) => matchesLifeFilter(subscription, lifeFilter));
+  const debts = (financeData.debts as unknown as DebtRow[]).filter((debt) => matchesLifeFilter(debt, lifeFilter));
+  const debtIdsInContext = new Set(debts.map((debt) => debt.id));
+  const payments = financeData.payments.filter((payment) => debtIdsInContext.has(payment.debt_id));
 
   const categoryNameById: Record<string, string> = {};
   for (const c of categories) {
@@ -140,6 +149,18 @@ export default async function FinancePage({
   for (const d of debts) {
     debtNameById[d.id] = d.name;
   }
+
+  const periodDays =
+    period === "week" ? 7 : period === "month" ? rangeEndDate.getDate() - rangeStartDate.getDate() + 1 : 1;
+  const timelineDates = Array.from({ length: periodDays }, (_, index) => {
+    const date = new Date(rangeStartDate);
+    date.setDate(rangeStartDate.getDate() + index);
+    return date;
+  });
+  const budgetFactor = timelineDates.reduce((sum, date) => {
+    const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    return sum + 1 / daysInMonth;
+  }, 0);
 
   const spentByCategory = new Map<string, number>();
   const spentByDay = new Map<string, number>();
@@ -151,29 +172,38 @@ export default async function FinancePage({
   }
 
   const totalSpent = periodExpenses.reduce((sum, entry) => sum + Number(entry.amount), 0);
-  const periodDays =
-    period === "week" ? 7 : period === "month" ? rangeEndDate.getDate() - rangeStartDate.getDate() + 1 : 1;
+  const periodIncomeTotal = periodIncome.reduce((sum, entry) => sum + Number(entry.amount), 0);
+  const netCashFlow = periodIncomeTotal - totalSpent;
+  const savingsRate = periodIncomeTotal > 0 ? (netCashFlow / periodIncomeTotal) * 100 : null;
   const averageDaySpend = periodDays > 0 ? totalSpent / periodDays : 0;
   const topDay = [...spentByDay.entries()].sort((a, b) => b[1] - a[1])[0];
 
   const categoryMetrics = categories.map((category) => {
     const spent = spentByCategory.get(category.id) ?? 0;
-    const limit = category.monthly_limit ? Number(category.monthly_limit) : 0;
+    const monthlyLimit = category.monthly_limit ? Number(category.monthly_limit) : 0;
+    const periodLimit = monthlyLimit * budgetFactor;
+    const remaining = periodLimit - spent;
     return {
       id: category.id,
       name: category.name,
       spent,
-      limit,
-      over: limit > 0 && spent > limit
+      limit: monthlyLimit,
+      periodLimit,
+      remaining,
+      utilization: periodLimit > 0 ? (spent / periodLimit) * 100 : 0,
+      over: periodLimit > 0 && spent > periodLimit
     };
   });
   const overLimitCount = categoryMetrics.filter((row) => row.over).length;
 
-  const timelineDates = Array.from({ length: periodDays }, (_, index) => {
-    const date = new Date(rangeStartDate);
-    date.setDate(rangeStartDate.getDate() + index);
-    return date;
-  });
+  const periodBudget = categoryMetrics.reduce((sum, entry) => sum + entry.periodLimit, 0);
+  const budgetRemaining = periodBudget - totalSpent;
+  const budgetUtilization = periodBudget > 0 ? (totalSpent / periodBudget) * 100 : 0;
+  const categoryLimitById = new Map(categoryMetrics.map((entry) => [entry.id, entry.periodLimit]));
+  const unbudgetedSpend = periodExpenses.reduce((sum, expense) => {
+    const limit = expense.category_id ? categoryLimitById.get(expense.category_id) ?? 0 : 0;
+    return limit > 0 ? sum : sum + Number(expense.amount);
+  }, 0);
 
   const dailyChartData = timelineDates.map((date) => {
     const key = toIsoDate(date);
@@ -192,11 +222,38 @@ export default async function FinancePage({
     .map((row) => ({
       name: row.name,
       spent: Number(row.spent.toFixed(2)),
-      limit: Number(row.limit.toFixed(2))
+      limit: Number(row.periodLimit.toFixed(2))
     }));
 
-  const activeSubscriptions = subscriptions.filter((subscription) => subscription.is_active);
-  const visibleSubscriptions = subscriptions.filter((subscription) =>
+  const incomeByDay = new Map<string, number>();
+  for (const income of periodIncome) {
+    incomeByDay.set(income.occurred_on, (incomeByDay.get(income.occurred_on) ?? 0) + Number(income.amount));
+  }
+  const debtPaymentByDay = new Map<string, number>();
+  for (const payment of payments) {
+    debtPaymentByDay.set(payment.paid_at, (debtPaymentByDay.get(payment.paid_at) ?? 0) + Number(payment.amount));
+  }
+  let runningNet = 0;
+  const cashFlowData = timelineDates.map((date) => {
+    const key = toIsoDate(date);
+    const income = incomeByDay.get(key) ?? 0;
+    const expense = (spentByDay.get(key) ?? 0) + (debtPaymentByDay.get(key) ?? 0);
+    const net = income - expense;
+    runningNet += net;
+    return {
+      day:
+        period === "week"
+          ? date.toLocaleDateString("en-US", { weekday: "short" })
+          : date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      income: Number(income.toFixed(2)),
+      expense: Number(expense.toFixed(2)),
+      net: Number(net.toFixed(2)),
+      cumulative: Number(runningNet.toFixed(2))
+    };
+  });
+
+  const activeSubscriptions = subscriptionsInContext.filter((subscription) => subscription.is_active);
+  const visibleSubscriptions = subscriptionsInContext.filter((subscription) =>
     isSubscriptionVisibleInRange(subscription, rangeStart)
   );
   const dueSubscriptions = activeSubscriptions.filter((subscription) => {
@@ -237,6 +294,11 @@ export default async function FinancePage({
   const periodPaymentsTotal = payments
     .filter((p) => p.paid_at >= rangeStart && p.paid_at <= rangeEnd)
     .reduce((sum, p) => sum + Number(p.amount), 0);
+  const actualOutputTotal = totalSpent + periodPaymentsTotal;
+  const committedOutputTotal = actualOutputTotal + dueSubscriptionsTotal;
+  const netAfterDebtPayments = periodIncomeTotal - actualOutputTotal;
+  const netAfterCommittedOutput = periodIncomeTotal - committedOutputTotal;
+  const subscriptionBudgetPressure = periodBudget > 0 ? (dueSubscriptionsTotal / periodBudget) * 100 : null;
 
   const categoriesForClient = categories.map((c) => ({
     id: c.id,
@@ -254,6 +316,12 @@ export default async function FinancePage({
     amount: Number(e.amount),
     occurred_on: e.occurred_on,
     notes: e.notes
+  }));
+  const periodIncomeForClient = periodIncome.map((entry) => ({
+    id: entry.id,
+    amount: Number(entry.amount),
+    occurred_on: entry.occurred_on,
+    notes: entry.notes
   }));
 
   const paymentsForClient = payments.map((p) => ({
@@ -296,12 +364,21 @@ export default async function FinancePage({
         categoryNameById={categoryNameById}
         debtNameById={debtNameById}
         recentExpenses={recentExpensesForClient}
+        periodIncome={periodIncomeForClient}
+        periodIncomeTotal={periodIncomeTotal}
+        netCashFlow={netCashFlow}
+        savingsRate={savingsRate}
+        periodBudget={periodBudget}
+        budgetRemaining={budgetRemaining}
+        budgetUtilization={budgetUtilization}
+        unbudgetedSpend={unbudgetedSpend}
         periodExpenses={periodExpensesForClient}
         payments={paymentsForClient}
         debts={debts}
         dailyChartData={dailyChartData}
         categoryChartData={categoryChartData}
-        subscriptions={subscriptions}
+        cashFlowData={cashFlowData}
+        subscriptions={subscriptionsInContext}
         subscriptionDueChartData={subscriptionDueChartData}
         totalSpent={totalSpent}
         averageDaySpend={averageDaySpend}
@@ -310,9 +387,14 @@ export default async function FinancePage({
         activeSubscriptionCount={visibleSubscriptions.length}
         recurringMonthlyCost={recurringMonthlyCost}
         dueSubscriptionsTotal={dueSubscriptionsTotal}
+        subscriptionBudgetPressure={subscriptionBudgetPressure}
         nextSubscription={nextSubscription}
         openDebtTotal={openDebtTotal}
         periodPaymentsTotal={periodPaymentsTotal}
+        actualOutputTotal={actualOutputTotal}
+        committedOutputTotal={committedOutputTotal}
+        netAfterDebtPayments={netAfterDebtPayments}
+        netAfterCommittedOutput={netAfterCommittedOutput}
         rangeStartIso={rangeStart}
         rangeEndIso={rangeEnd}
         lifePhases={lifeOptions.phases}

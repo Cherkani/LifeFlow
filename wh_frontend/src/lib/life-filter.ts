@@ -17,13 +17,13 @@ export function resolveLifeFilter(
 ): LifeFilter {
   const phaseCookie = cookies.get(`lifeflow-phase-${accountId}`);
   const savedPhaseId = phaseCookie?.value ?? null;
-  const phaseId = options.phases.some((phase) => phase.id === savedPhaseId)
+  const phaseId = options.phases.some((phase) => phase.id === savedPhaseId && phase.status !== "archived")
     ? savedPhaseId
     : phaseCookie
       ? null
       : options.phases.find((phase) => phase.status === "current")?.id ?? null;
   const savedProjectId = cookies.get(`lifeflow-project-${accountId}`)?.value ?? null;
-  const project = options.projects.find((item) => item.id === savedProjectId);
+  const project = options.projects.find((item) => item.id === savedProjectId && item.status !== "archived" && item.status !== "completed");
   const projectId = project && (!phaseId || !project.phase_id || project.phase_id === phaseId) ? project.id : null;
   const rawScope = cookies.get(`lifeflow-scope-${accountId}`)?.value;
   const scope: LifeScope = rawScope === "phase" || rawScope === "project" || rawScope === "unlinked" ? rawScope : "all";

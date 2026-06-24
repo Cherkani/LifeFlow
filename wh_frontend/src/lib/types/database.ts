@@ -16,6 +16,8 @@ export type Database = {
           email: string | null;
           role: "admin" | "user";
           timezone: string | null;
+          cycle_tracking_enabled: boolean;
+          luteal_phase_length: number;
           is_active: boolean;
           created_at: string;
           last_signed_in_at: string | null;
@@ -26,6 +28,8 @@ export type Database = {
           email?: string | null;
           role?: "admin" | "user";
           timezone?: string | null;
+          cycle_tracking_enabled?: boolean;
+          luteal_phase_length?: number;
           is_active?: boolean;
           created_at?: string;
           last_signed_in_at?: string | null;
@@ -36,6 +40,8 @@ export type Database = {
           email?: string | null;
           role?: "admin" | "user";
           timezone?: string | null;
+          cycle_tracking_enabled?: boolean;
+          luteal_phase_length?: number;
           is_active?: boolean;
           created_at?: string;
           last_signed_in_at?: string | null;
@@ -534,58 +540,26 @@ export type Database = {
           updated_at?: string;
         };
       };
-      life_links: {
-        Row: {
-          id: string;
-          account_id: string;
-          source_type: "phase" | "project" | "goal" | "task" | "session" | "finance_entry" | "subscription" | "debt" | "event" | "knowledge_space" | "knowledge_item";
-          source_id: string;
-          target_type: "phase" | "project" | "goal" | "task" | "session" | "finance_entry" | "subscription" | "debt" | "event" | "knowledge_space" | "knowledge_item";
-          target_id: string;
-          relationship_type: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          account_id: string;
-          source_type: "phase" | "project" | "goal" | "task" | "session" | "finance_entry" | "subscription" | "debt" | "event" | "knowledge_space" | "knowledge_item";
-          source_id: string;
-          target_type: "phase" | "project" | "goal" | "task" | "session" | "finance_entry" | "subscription" | "debt" | "event" | "knowledge_space" | "knowledge_item";
-          target_id: string;
-          relationship_type?: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          account_id?: string;
-          source_type?: "phase" | "project" | "goal" | "task" | "session" | "finance_entry" | "subscription" | "debt" | "event" | "knowledge_space" | "knowledge_item";
-          source_id?: string;
-          target_type?: "phase" | "project" | "goal" | "task" | "session" | "finance_entry" | "subscription" | "debt" | "event" | "knowledge_space" | "knowledge_item";
-          target_id?: string;
-          relationship_type?: string;
-          created_at?: string;
-        };
-      };
       period_cycles: {
         Row: {
           id: string;
           user_id: string;
           period_start: string;
-          period_end: string;
+          period_end: string | null;
           created_at: string;
         };
         Insert: {
           id?: string;
           user_id: string;
           period_start: string;
-          period_end: string;
+          period_end?: string | null;
           created_at?: string;
         };
         Update: {
           id?: string;
           user_id?: string;
           period_start?: string;
-          period_end?: string;
+          period_end?: string | null;
           created_at?: string;
         };
       };
@@ -737,6 +711,8 @@ export type Database = {
           due_date: string | null;
           status: "open" | "closed";
           remaining_balance: string | null;
+          phase_id: string | null;
+          project_id: string | null;
           created_by: string | null;
           created_at: string;
         };
@@ -750,6 +726,8 @@ export type Database = {
           due_date?: string | null;
           status?: "open" | "closed";
           remaining_balance?: string | null;
+          phase_id?: string | null;
+          project_id?: string | null;
           created_by?: string | null;
           created_at?: string;
         };
@@ -763,6 +741,8 @@ export type Database = {
           due_date?: string | null;
           status?: "open" | "closed";
           remaining_balance?: string | null;
+          phase_id?: string | null;
+          project_id?: string | null;
           created_by?: string | null;
           created_at?: string;
         };
@@ -809,6 +789,8 @@ export type Database = {
           name: string;
           amount: string;
           currency_code: string;
+          phase_id: string | null;
+          project_id: string | null;
           recurrence: "monthly" | "yearly";
           next_due_date: string | null;
           end_date: string | null;
@@ -823,6 +805,8 @@ export type Database = {
           name: string;
           amount: string;
           currency_code?: string;
+          phase_id?: string | null;
+          project_id?: string | null;
           recurrence: "monthly" | "yearly";
           next_due_date?: string | null;
           end_date?: string | null;
@@ -837,6 +821,8 @@ export type Database = {
           name?: string;
           amount?: string;
           currency_code?: string;
+          phase_id?: string | null;
+          project_id?: string | null;
           recurrence?: "monthly" | "yearly";
           next_due_date?: string | null;
           end_date?: string | null;

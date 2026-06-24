@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { RedirectResult } from "@/lib/action-with-state";
+import { getOwnedObjectiveContext, resolveOwnedLifeContext } from "@/lib/life-context-server";
 import { requireAppContext } from "@/lib/server-context";
 
 const optionalDateSchema = z.preprocess(
@@ -49,6 +50,9 @@ const createProjectSchema = z.object({
   imageUrl: z.string().trim().optional()
 });
 
+const updatePhaseSchema = createPhaseSchema.extend({ phaseId: z.string().uuid() });
+const updateProjectSchema = createProjectSchema.extend({ projectId: z.string().uuid() });
+
 const createObjectiveSchema = z.object({
   phaseId: optionalUuidSchema,
   projectId: optionalUuidSchema,
@@ -89,29 +93,6 @@ function normalizeOptionalText(value: string | undefined) {
 function normalizeOptionalUrl(value: string | undefined) {
   const trimmed = normalizeOptionalText(value);
   return trimmed && URL.canParse(trimmed) ? trimmed : null;
-}
-
-async function upsertLifeLink(
-  accountId: string,
-  sourceType: "phase" | "project",
-  sourceId: string | null,
-  targetType: "project" | "goal" | "task" | "finance_entry" | "event" | "knowledge_space",
-  targetId: string,
-  relationshipType: string
-) {
-  if (!sourceId) return;
-  const { supabase } = await requireAppContext();
-  await supabase.from("life_links").upsert(
-    {
-      account_id: accountId,
-      source_type: sourceType,
-      source_id: sourceId,
-      target_type: targetType,
-      target_id: targetId,
-      relationship_type: relationshipType
-    },
-    { onConflict: "account_id,source_type,source_id,target_type,target_id,relationship_type" }
-  );
 }
 
 export async function createLifePhaseAction(formData: FormData) {
@@ -175,11 +156,88 @@ export async function createLifeProjectAction(formData: FormData) {
   if (!payload.success) return { redirectTo: returnPath };
 
   const { supabase, account } = await requireAppContext();
-  const { data: project } = await supabase
-    .from("life_projects")
-    .insert({
+  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, null);
+  if (!context) return { redirectTo: returnPath };
+  await supabase.from("life_projects").insert({
       account_id: account.accountId,
-      phase_id: payload.data.phaseId,
+      phase_id: context.phaseId,
+      name: payload.data.name,
+      description: normalizeOptionalText(payload.data.description),
+      status: payload.data.status,
+      start_date: payload.data.startDate,
+      end_date: payload.data.endDate,
+      progress: payload.data.progress,
+      outcome: normalizeOptionalText(payload.data.outcome),
+      image_url: normalizeOptionalUrl(payload.data.imageUrl)
+    });
+
+  revalidatePath("/life-map", "layout");
+  revalidatePath("/dashboard");
+  return { redirectTo: returnPath };
+}
+
+export async function updateLifePhaseAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = updatePhaseSchema.safeParse({
+    phaseId: formData.get("phaseId"),
+    title: formData.get("title"),
+    phaseType: formData.get("phaseType"),
+    status: formData.get("status"),
+    startDate: formData.get("startDate"),
+    endDate: formData.get("endDate"),
+    incomeSource: formData.get("incomeSource"),
+    monthlyIncome: formData.get("monthlyIncome"),
+    monthlySpending: formData.get("monthlySpending"),
+    summary: formData.get("summary"),
+    imageUrl: formData.get("imageUrl")
+  });
+  if (!payload.success) return { redirectTo: returnPath };
+
+  const { supabase, account } = await requireAppContext();
+  await supabase
+    .from("life_phases")
+    .update({
+      title: payload.data.title,
+      phase_type: payload.data.phaseType,
+      status: payload.data.status,
+      start_date: payload.data.startDate,
+      end_date: payload.data.endDate,
+      income_source: normalizeOptionalText(payload.data.incomeSource),
+      monthly_income: payload.data.monthlyIncome === null ? null : payload.data.monthlyIncome.toFixed(2),
+      monthly_spending: payload.data.monthlySpending === null ? null : payload.data.monthlySpending.toFixed(2),
+      summary: normalizeOptionalText(payload.data.summary),
+      image_url: normalizeOptionalUrl(payload.data.imageUrl)
+    })
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.phaseId);
+
+  revalidatePath("/life-map", "layout");
+  return { redirectTo: returnPath };
+}
+
+export async function updateLifeProjectAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = updateProjectSchema.safeParse({
+    projectId: formData.get("projectId"),
+    phaseId: formData.get("phaseId"),
+    name: formData.get("name"),
+    description: formData.get("description"),
+    status: formData.get("status"),
+    startDate: formData.get("startDate"),
+    endDate: formData.get("endDate"),
+    progress: formData.get("progress"),
+    outcome: formData.get("outcome"),
+    imageUrl: formData.get("imageUrl")
+  });
+  if (!payload.success) return { redirectTo: returnPath };
+
+  const { supabase, account } = await requireAppContext();
+  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, null);
+  if (!context) return { redirectTo: returnPath };
+  await supabase
+    .from("life_projects")
+    .update({
+      phase_id: context.phaseId,
       name: payload.data.name,
       description: normalizeOptionalText(payload.data.description),
       status: payload.data.status,
@@ -189,15 +247,21 @@ export async function createLifeProjectAction(formData: FormData) {
       outcome: normalizeOptionalText(payload.data.outcome),
       image_url: normalizeOptionalUrl(payload.data.imageUrl)
     })
-    .select("id")
-    .single();
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.projectId);
 
-  if (project?.id && payload.data.phaseId) {
-    await upsertLifeLink(account.accountId, "phase", payload.data.phaseId, "project", project.id, "contains_project");
-  }
+  // A project owns its phase. Keep denormalized phase columns consistent when
+  // the project moves to another chapter.
+  await Promise.all([
+    supabase.from("habit_objectives").update({ phase_id: context.phaseId }).eq("account_id", account.accountId).eq("project_id", payload.data.projectId),
+    supabase.from("habits").update({ phase_id: context.phaseId }).eq("account_id", account.accountId).eq("project_id", payload.data.projectId),
+    supabase.from("templates").update({ phase_id: context.phaseId }).eq("account_id", account.accountId).eq("project_id", payload.data.projectId),
+    supabase.from("ledger_entries").update({ phase_id: context.phaseId }).eq("account_id", account.accountId).eq("project_id", payload.data.projectId),
+    supabase.from("calendar_events").update({ phase_id: context.phaseId }).eq("account_id", account.accountId).eq("project_id", payload.data.projectId),
+    supabase.from("knowledge_spaces").update({ phase_id: context.phaseId }).eq("account_id", account.accountId).eq("project_id", payload.data.projectId)
+  ]);
 
   revalidatePath("/life-map", "layout");
-  revalidatePath("/dashboard");
   return { redirectTo: returnPath };
 }
 
@@ -213,22 +277,15 @@ export async function createLifeObjectiveAction(formData: FormData) {
   if (!payload.success) return { redirectTo: returnPath };
 
   const { supabase, account } = await requireAppContext();
-  const { data: objective } = await supabase
-    .from("habit_objectives")
-    .insert({
+  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
+  if (!context) return { redirectTo: returnPath };
+  await supabase.from("habit_objectives").insert({
       account_id: account.accountId,
-      phase_id: payload.data.phaseId,
-      project_id: payload.data.projectId,
+      phase_id: context.phaseId,
+      project_id: context.projectId,
       title: payload.data.title,
       description: normalizeOptionalText(payload.data.description)
-    })
-    .select("id")
-    .single();
-
-  if (objective?.id) {
-    await upsertLifeLink(account.accountId, "phase", payload.data.phaseId, "goal", objective.id, "goal_for_phase");
-    await upsertLifeLink(account.accountId, "project", payload.data.projectId, "goal", objective.id, "goal_for_project");
-  }
+    });
 
   revalidatePath("/life-map", "layout");
   revalidatePath("/planning");
@@ -250,26 +307,24 @@ export async function createLifeTaskAction(formData: FormData) {
   if (!payload.success) return { redirectTo: returnPath };
 
   const { supabase, account } = await requireAppContext();
-  const { data: task } = await supabase
-    .from("habits")
-    .insert({
+  const objective = await getOwnedObjectiveContext(supabase, account.accountId, payload.data.objectiveId);
+  if (!objective) return { redirectTo: returnPath };
+  const hasOverride = Boolean(payload.data.phaseId || payload.data.projectId);
+  const context = hasOverride
+    ? await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId)
+    : { phaseId: objective.phase_id, projectId: objective.project_id };
+  if (!context) return { redirectTo: returnPath };
+  await supabase.from("habits").insert({
       account_id: account.accountId,
       objective_id: payload.data.objectiveId,
-      phase_id: payload.data.phaseId,
-      project_id: payload.data.projectId,
+      phase_id: hasOverride ? context.phaseId : null,
+      project_id: hasOverride ? context.projectId : null,
       title: payload.data.title,
       type: "time_tracking",
       minimum_minutes: payload.data.minimumMinutes === "" ? null : payload.data.minimumMinutes ?? null,
       weekly_target_minutes: payload.data.weeklyTargetMinutes === "" ? null : payload.data.weeklyTargetMinutes ?? null,
       metadata: {}
-    })
-    .select("id")
-    .single();
-
-  if (task?.id) {
-    await upsertLifeLink(account.accountId, "phase", payload.data.phaseId, "task", task.id, "task_for_phase");
-    await upsertLifeLink(account.accountId, "project", payload.data.projectId, "task", task.id, "task_for_project");
-  }
+    });
 
   revalidatePath("/life-map", "layout");
   revalidatePath("/planning");
@@ -290,9 +345,11 @@ export async function attachLifeEntityAction(formData: FormData) {
   if (!payload.success) return { redirectTo: returnPath };
 
   const { supabase, account } = await requireAppContext();
+  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
+  if (!context) return { redirectTo: returnPath };
   const updates = {
-    phase_id: payload.data.phaseId,
-    project_id: payload.data.projectId
+    phase_id: context.phaseId,
+    project_id: context.projectId
   };
 
   if (payload.data.entityType === "goal") {
@@ -306,9 +363,6 @@ export async function attachLifeEntityAction(formData: FormData) {
   } else if (payload.data.entityType === "knowledge_space") {
     await supabase.from("knowledge_spaces").update(updates).eq("account_id", account.accountId).eq("id", payload.data.entityId);
   }
-
-  await upsertLifeLink(account.accountId, "phase", payload.data.phaseId, payload.data.entityType, payload.data.entityId, "attached_to_phase");
-  await upsertLifeLink(account.accountId, "project", payload.data.projectId, payload.data.entityType, payload.data.entityId, "attached_to_project");
 
   revalidatePath("/life-map", "layout");
   revalidatePath("/dashboard");
@@ -339,6 +393,20 @@ export async function createLifeObjectiveFormAction(
   formData: FormData
 ): Promise<RedirectResult | null> {
   return createLifeObjectiveAction(formData);
+}
+
+export async function updateLifePhaseFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return updateLifePhaseAction(formData);
+}
+
+export async function updateLifeProjectFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return updateLifeProjectAction(formData);
 }
 
 export async function createLifeTaskFormAction(

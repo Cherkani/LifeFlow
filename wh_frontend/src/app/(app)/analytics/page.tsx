@@ -251,7 +251,7 @@ export default async function AnalyticsPage({
         projects={lifeData.projects}
         stats={[
           { label: "linked sessions", value: linkedMonthSessions.length },
-          { label: "life links", value: lifeData.links.length }
+          { label: "linked tasks", value: linkedTaskIds.size }
         ]}
       />
 

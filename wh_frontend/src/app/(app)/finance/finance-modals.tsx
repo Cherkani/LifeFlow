@@ -8,6 +8,7 @@ import Link from "next/link";
 import type { Route } from "next";
 
 import { FinanceCharts } from "@/app/(app)/finance/finance-charts";
+import { FinanceReport } from "@/app/(app)/finance/finance-report";
 import {
   closeDebtAction,
   createDebtFormAction,
@@ -46,6 +47,8 @@ type DebtRow = {
   remaining_balance: number | null;
   status: "open" | "closed";
   due_date: string | null;
+  phase_id: string | null;
+  project_id: string | null;
 };
 
 type PaymentRow = {
@@ -75,6 +78,8 @@ type ExpenseRow = {
   notes: string | null;
 };
 
+type IncomeRow = { id: string; amount: number; occurred_on: string; notes: string | null };
+
 type PeriodExpenseRow = {
   id: string;
   category_id: string | null;
@@ -89,6 +94,8 @@ type SubscriptionRow = {
   id: string;
   name: string;
   amount: number;
+  phase_id: string | null;
+  project_id: string | null;
   recurrence: "monthly" | "yearly";
   next_due_date: string | null;
   end_date: string | null;
@@ -186,16 +193,25 @@ type FinanceModalsProps = {
   anchorIso: string;
   categories: CategoryRow[];
   openDebts: DebtRow[];
-  categoryMetrics: Array<{ id: string; name: string; spent: number; limit: number; over: boolean }>;
+  categoryMetrics: Array<{ id: string; name: string; spent: number; limit: number; periodLimit: number; remaining: number; utilization: number; over: boolean }>;
   categoryNameById: Record<string, string>;
   debtNameById: Record<string, string>;
   recentExpenses: ExpenseRow[];
+  periodIncome: IncomeRow[];
+  periodIncomeTotal: number;
+  netCashFlow: number;
+  savingsRate: number | null;
+  periodBudget: number;
+  budgetRemaining: number;
+  budgetUtilization: number;
+  unbudgetedSpend: number;
   periodExpenses: PeriodExpenseRow[];
   subscriptions: SubscriptionRow[];
   payments: PaymentRow[];
   debts: DebtRow[];
   dailyChartData: Array<{ day: string; amount: number }>;
   categoryChartData: Array<{ name: string; spent: number; limit: number }>;
+  cashFlowData: Array<{ day: string; income: number; expense: number; net: number; cumulative: number }>;
   subscriptionDueChartData: Array<{ day: string; amount: number }>;
   totalSpent: number;
   averageDaySpend: number;
@@ -204,6 +220,7 @@ type FinanceModalsProps = {
   activeSubscriptionCount: number;
   recurringMonthlyCost: number;
   dueSubscriptionsTotal: number;
+  subscriptionBudgetPressure: number | null;
   nextSubscription:
     | {
         id: string;
@@ -218,6 +235,10 @@ type FinanceModalsProps = {
     | undefined;
   openDebtTotal: number;
   periodPaymentsTotal: number;
+  actualOutputTotal: number;
+  committedOutputTotal: number;
+  netAfterDebtPayments: number;
+  netAfterCommittedOutput: number;
   rangeStartIso: string;
   rangeEndIso: string;
   lifePhases: LifePhaseOption[];
@@ -394,12 +415,21 @@ export function FinanceModals({
   categoryNameById,
   debtNameById,
   recentExpenses,
+  periodIncome,
+  periodIncomeTotal,
+  netCashFlow,
+  savingsRate,
+  periodBudget,
+  budgetRemaining,
+  budgetUtilization,
+  unbudgetedSpend,
   periodExpenses,
   subscriptions,
   payments,
   debts,
   dailyChartData,
   categoryChartData,
+  cashFlowData,
   subscriptionDueChartData,
   totalSpent,
   averageDaySpend,
@@ -408,9 +438,14 @@ export function FinanceModals({
   activeSubscriptionCount,
   recurringMonthlyCost,
   dueSubscriptionsTotal,
+  subscriptionBudgetPressure,
   nextSubscription,
   openDebtTotal,
   periodPaymentsTotal,
+  actualOutputTotal,
+  committedOutputTotal,
+  netAfterDebtPayments,
+  netAfterCommittedOutput,
   rangeStartIso,
   rangeEndIso,
   lifePhases,
@@ -646,41 +681,42 @@ export function FinanceModals({
 
       {tab === "expenses" ? (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Period spent</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold text-rose-700">{formatMoneyDhs(totalSpent)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Average / day</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold text-[#0c1d3c]">{formatMoneyDhs(averageDaySpend)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Top spend day in range</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold text-[#0c1d3c]">
-                  {topDay ? `${topDay[0]} · ${formatMoneyDhs(topDay[1])}` : "No data"}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Over-limit categories</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold text-amber-700">{overLimitCount}</p>
-              </CardContent>
-            </Card>
+          <FinanceReport
+            income={periodIncomeTotal}
+            expenses={totalSpent}
+            net={netCashFlow}
+            periodBudget={periodBudget}
+            budgetRemaining={budgetRemaining}
+            budgetUtilization={budgetUtilization}
+            savingsRate={savingsRate}
+            unbudgetedSpend={unbudgetedSpend}
+            debtPayments={periodPaymentsTotal}
+            actualOutput={actualOutputTotal}
+            committedOutput={committedOutputTotal}
+            netAfterDebtPayments={netAfterDebtPayments}
+            netAfterCommittedOutput={netAfterCommittedOutput}
+            dueSubscriptions={dueSubscriptionsTotal}
+            recurringMonthlyCost={recurringMonthlyCost}
+            openDebtTotal={openDebtTotal}
+            categories={categoryMetrics.map((category) => ({
+              id: category.id,
+              name: category.name,
+              spent: category.spent,
+              periodLimit: category.periodLimit,
+              remaining: category.remaining,
+              utilization: category.utilization,
+              over: category.over
+            }))}
+            cashFlow={cashFlowData}
+            dailyExpenses={filteredDailyChartData}
+            categoryChart={filteredCategoryChartData}
+            subscriptions={subscriptionDueChartData}
+          />
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <Card><CardHeader><CardTitle className="text-sm uppercase tracking-wide text-slate-500">Average / day</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold text-[#0c1d3c]">{formatMoneyDhs(averageDaySpend)}</p></CardContent></Card>
+            <Card><CardHeader><CardTitle className="text-sm uppercase tracking-wide text-slate-500">Top spend day</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold text-[#0c1d3c]">{topDay ? `${topDay[0]} · ${formatMoneyDhs(topDay[1])}` : "No data"}</p></CardContent></Card>
+            <Card><CardHeader><CardTitle className="text-sm uppercase tracking-wide text-slate-500">Over-limit categories</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold text-amber-700">{overLimitCount}</p></CardContent></Card>
           </div>
 
           {categories.length > 0 && (
@@ -727,11 +763,19 @@ export function FinanceModals({
             </Card>
           )}
 
-          <FinanceCharts
-            dailyExpenses={filteredDailyChartData}
-            categories={filteredCategoryChartData}
-            subscriptions={subscriptionDueChartData}
-          />
+          {periodIncome.length > 0 ? (
+            <Card>
+              <CardHeader><CardTitle>Income in this period</CardTitle></CardHeader>
+              <CardContent className="space-y-2">
+                {periodIncome.map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between gap-3 rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+                    <div><p className="text-sm font-medium text-[#0c1d3c]">{entry.notes || "Income"}</p><p className="text-xs text-slate-500">{entry.occurred_on}</p></div>
+                    <Badge variant="secondary">+{formatMoneyDhs(entry.amount)}</Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -820,7 +864,7 @@ export function FinanceModals({
                           <div>
                             <p className="text-sm font-semibold text-[#0c1d3c]">{category.name}</p>
                             <p className="text-[11px] text-[#4a5f83]">
-                              {category.limit > 0 ? `${formatMoneyDhs(category.limit)} limit` : "No limit set"}
+                              {category.limit > 0 ? `${formatMoneyDhs(category.limit)} monthly limit` : "No limit set"}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
@@ -872,7 +916,7 @@ export function FinanceModals({
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge variant={category.over ? "danger" : "secondary"}>{formatMoneyDhs(category.spent)} spent</Badge>
-                          <Badge variant="secondary">{category.limit > 0 ? "Tracked" : "Untracked"}</Badge>
+                          <Badge variant="secondary">{category.periodLimit > 0 ? `${formatMoneyDhs(category.periodLimit)} allowance` : "Untracked"}</Badge>
                         </div>
                       </div>
                     );
@@ -901,6 +945,9 @@ export function FinanceModals({
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-semibold text-[#0c1d3c]">{formatMoneyDhs(dueSubscriptionsTotal)}</p>
+                {subscriptionBudgetPressure !== null ? (
+                  <p className="mt-1 text-xs text-[#4a5f83]">{subscriptionBudgetPressure.toFixed(0)}% of period budget allowance</p>
+                ) : null}
               </CardContent>
             </Card>
             <Card>
@@ -1265,6 +1312,7 @@ export function FinanceModals({
                 <Input id="dueDate" name="dueDate" type="date" />
               </div>
             </div>
+            <LifeConnectionFields phases={lifePhases} projects={lifeProjects} />
             <SubmitButton label="Save debt" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>
         </ModalShell>
@@ -1351,6 +1399,7 @@ export function FinanceModals({
                 <Input id="subscriptionEndDate" name="endDate" type="date" />
               </div>
             </div>
+            <LifeConnectionFields phases={lifePhases} projects={lifeProjects} />
             <div className="space-y-2">
               <Label htmlFor="subscriptionNotes">Notes</Label>
               <Input id="subscriptionNotes" name="notes" placeholder="Optional note" />
@@ -1411,6 +1460,12 @@ export function FinanceModals({
                 />
               </div>
             </div>
+            <LifeConnectionFields
+              phases={lifePhases}
+              projects={lifeProjects}
+              defaultPhaseId={editingSubscription.phase_id ?? ""}
+              defaultProjectId={editingSubscription.project_id ?? ""}
+            />
             <div className="space-y-2">
               <Label htmlFor="editSubscriptionNotes">Notes</Label>
               <Input id="editSubscriptionNotes" name="notes" defaultValue={editingSubscription.notes ?? ""} />

@@ -392,7 +392,6 @@ export default async function LifeMapPage({ searchParams }: { searchParams: Life
                   <ConnectionList title="Notes" icon={BookOpen} rows={spacesForPhase.map((space) => space.title)} />
                   <ConnectionList title="Events" icon={CalendarDays} rows={eventsForPhase.map((event) => event.title)} />
                   <ConnectionList title="Money" icon={CircleDollarSign} rows={financeForPhase.map((entry) => `${entry.entry_type}: ${money(entry.amount)} · ${entry.occurred_on}`)} />
-                  <ConnectionList title="Internal Links" icon={GitBranch} rows={data.links.filter((link) => link.source_id === selectedPhase.id || link.target_id === selectedPhase.id).map((link) => `${link.source_type} to ${link.target_type}`)} />
                 </section>
               </CardContent>
             </Card>
