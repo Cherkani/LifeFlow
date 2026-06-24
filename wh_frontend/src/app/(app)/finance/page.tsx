@@ -1,6 +1,9 @@
 import { getFinancePageData, getLifeOptions } from "@/lib/queries";
+import { cookies } from "next/headers";
+import { LifeSummaryBand } from "@/components/life/life-context";
 import { requireAppContext } from "@/lib/server-context";
 import { endOfIsoWeek, startOfIsoWeek } from "@/lib/utils";
+import { matchesLifeFilter, resolveLifeFilter } from "@/lib/life-filter";
 
 import { FinanceModals } from "./finance-modals";
 
@@ -107,14 +110,15 @@ export default async function FinancePage({
     period
   );
   const lifeOptions = await getLifeOptions(supabase, account.accountId);
+  const lifeFilter = resolveLifeFilter(await cookies(), account.accountId, lifeOptions);
   const categories = financeData.categories;
   const categoryUsageCounts = new Map<string, number>();
   for (const row of financeData.categoryUsage) {
     if (!row.category_id) continue;
     categoryUsageCounts.set(row.category_id, (categoryUsageCounts.get(row.category_id) ?? 0) + 1);
   }
-  const periodExpenses = financeData.periodExpenses;
-  const recentExpenses = financeData.recentExpenses;
+  const periodExpenses = financeData.periodExpenses.filter((item) => matchesLifeFilter(item, lifeFilter));
+  const recentExpenses = financeData.recentExpenses.filter((item) => matchesLifeFilter(item, lifeFilter));
   const subscriptions = financeData.subscriptions.map((subscription) => ({
     id: subscription.id,
     name: subscription.name,
@@ -271,6 +275,17 @@ export default async function FinancePage({
 
   return (
     <div className="finance-theme space-y-6">
+      <LifeSummaryBand
+        title="Money attached to life chapters"
+        description="Expenses and income become part of the story when they connect to a phase or project."
+        phases={lifeOptions.phases}
+        projects={lifeOptions.projects}
+        stats={[
+          { label: "linked entries", value: periodExpenses.filter((entry) => entry.phase_id || entry.project_id).length },
+          { label: "unlinked spend", value: periodExpenses.filter((entry) => !entry.phase_id && !entry.project_id).length }
+        ]}
+      />
+
       <FinanceModals
         tab={tab}
         period={period}

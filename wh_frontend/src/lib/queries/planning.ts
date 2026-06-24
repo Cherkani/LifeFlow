@@ -1,8 +1,8 @@
 import type { Supabase } from "./types";
 
-export type PlanningObjectiveRow = { id: string; title: string; description: string | null; image_url: string | null };
-export type PlanningTaskRow = { id: string; title: string; objective_id: string | null; metadata: unknown };
-export type PlanningTemplateRow = { id: string; name: string; objective_id: string | null };
+export type PlanningObjectiveRow = { id: string; title: string; description: string | null; image_url: string | null; phase_id: string | null; project_id: string | null };
+export type PlanningTaskRow = { id: string; title: string; objective_id: string | null; metadata: unknown; phase_id: string | null; project_id: string | null };
+export type PlanningTemplateRow = { id: string; name: string; objective_id: string | null; phase_id: string | null; project_id: string | null };
 export type PlanningWeekRow = { id: string; template_id: string; week_start_date: string };
 
 export type PlanningData = {
@@ -16,18 +16,18 @@ export async function getPlanningData(supabase: Supabase, accountId: string): Pr
   const [objectivesRes, tasksRes, templatesRes, weeksRes] = await Promise.all([
     supabase
       .from("habit_objectives")
-      .select("id, title, description, image_url")
+      .select("id, title, description, image_url, phase_id, project_id")
       .eq("account_id", accountId)
       .order("created_at", { ascending: false }),
     supabase
       .from("habits")
-      .select("id, title, objective_id, metadata")
+      .select("id, title, objective_id, metadata, phase_id, project_id")
       .eq("account_id", accountId)
       .eq("is_active", true)
       .order("created_at", { ascending: false }),
     supabase
       .from("templates")
-      .select("id, name, objective_id")
+      .select("id, name, objective_id, phase_id, project_id")
       .eq("account_id", accountId)
       .order("created_at", { ascending: false }),
     supabase

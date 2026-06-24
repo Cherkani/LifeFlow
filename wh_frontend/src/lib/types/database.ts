@@ -285,6 +285,8 @@ export type Database = {
           id: string;
           account_id: string;
           objective_id: string | null;
+          phase_id: string | null;
+          project_id: string | null;
           name: string;
           created_at: string;
           updated_at: string;
@@ -293,6 +295,8 @@ export type Database = {
           id?: string;
           account_id: string;
           objective_id?: string | null;
+          phase_id?: string | null;
+          project_id?: string | null;
           name: string;
           created_at?: string;
           updated_at?: string;
@@ -301,6 +305,8 @@ export type Database = {
           id?: string;
           account_id?: string;
           objective_id?: string | null;
+          phase_id?: string | null;
+          project_id?: string | null;
           name?: string;
           created_at?: string;
           updated_at?: string;

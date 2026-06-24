@@ -1,9 +1,9 @@
 import type { Supabase } from "./types";
 
 export type HabitsPageData = {
-  objectives: Array<{ id: string; title: string; image_url: string | null }>;
-  categories: Array<{ id: string; title: string; objective_id: string | null }>;
-  templates: Array<{ id: string; name: string }>;
+  objectives: Array<{ id: string; title: string; image_url: string | null; phase_id: string | null; project_id: string | null }>;
+  categories: Array<{ id: string; title: string; objective_id: string | null; phase_id: string | null; project_id: string | null }>;
+  templates: Array<{ id: string; name: string; phase_id: string | null; project_id: string | null }>;
   currentWeek: { id: string; template_id: string } | null;
 };
 
@@ -13,9 +13,9 @@ export async function getHabitsPageData(
   weekStartIso: string
 ): Promise<HabitsPageData> {
   const [objectivesRes, categoriesRes, templatesRes, currentWeekRes] = await Promise.all([
-    supabase.from("habit_objectives").select("id, title, image_url").eq("account_id", accountId),
-    supabase.from("habits").select("id, title, objective_id").eq("account_id", accountId).eq("is_active", true),
-    supabase.from("templates").select("id, name").eq("account_id", accountId).order("created_at", { ascending: false }),
+    supabase.from("habit_objectives").select("id, title, image_url, phase_id, project_id").eq("account_id", accountId),
+    supabase.from("habits").select("id, title, objective_id, phase_id, project_id").eq("account_id", accountId).eq("is_active", true),
+    supabase.from("templates").select("id, name, phase_id, project_id").eq("account_id", accountId).order("created_at", { ascending: false }),
     supabase
       .from("weeks")
       .select("id, template_id")

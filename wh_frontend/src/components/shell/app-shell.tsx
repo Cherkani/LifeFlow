@@ -18,21 +18,34 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { signOutAction } from "@/app/(app)/actions";
 import { Button } from "@/components/ui/button";
+import { CurrentLifeContextProvider, CurrentLifeContextSelector } from "@/components/life/current-life-context";
 import { appNavigation } from "@/lib/constants/navigation";
+import type { LifeOptionData } from "@/lib/queries/life";
+import type { LifeScope } from "@/lib/life-filter";
 import { cn } from "@/lib/utils";
 
 type AppShellProps = {
   children: ReactNode;
+  accountId: string;
   accountName: string;
   role: string;
   userLabel: string;
+  lifeOptions: LifeOptionData;
+  initialPhaseId: string | null;
+  initialProjectId: string | null;
+  initialScope: LifeScope;
 };
 
 export function AppShell({
   children,
+  accountId,
   accountName,
   role,
-  userLabel
+  userLabel,
+  lifeOptions,
+  initialPhaseId,
+  initialProjectId,
+  initialScope
 }: AppShellProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -78,6 +91,14 @@ export function AppShell({
   const firstNameInitial = (accountName.trim().split(/\s+/)[0] || userLabel || "U").slice(0, 1).toUpperCase();
 
   return (
+    <CurrentLifeContextProvider
+      accountId={accountId}
+      phases={lifeOptions.phases}
+      projects={lifeOptions.projects}
+      initialPhaseId={initialPhaseId}
+      initialProjectId={initialProjectId}
+      initialScope={initialScope}
+    >
     <div
       data-theme={theme}
       className={cn(
@@ -142,6 +163,9 @@ export function AppShell({
         <div className={cn("relative z-10 border-b px-4 py-4", isDark ? "border-[#2c3e5f]" : "border-[#dadde9]", !desktopExpanded && "md:px-3")}>
           <p className={cn("text-xs uppercase tracking-wide", isDark ? "text-[#91a7cb]" : "text-[#7a819f]", !desktopExpanded && "md:hidden")}>Menu</p>
           <p className={cn("text-sm font-medium", isDark ? "text-[#e3edff]" : "text-[#374067]", !desktopExpanded && "md:hidden")}>{accountName}</p>
+          <div className="mt-3 md:hidden">
+            <CurrentLifeContextSelector />
+          </div>
           <div className={cn("hidden md:flex md:items-center md:justify-center", desktopExpanded && "md:hidden")}>
             <span
               className={cn(
@@ -246,7 +270,9 @@ export function AppShell({
             >
               <Menu size={18} />
             </Button>
-            <div className="hidden md:block" />
+            <div className="hidden min-w-0 md:block">
+              <CurrentLifeContextSelector />
+            </div>
             <div className="flex items-center gap-3">
               <Button
                 type="button"
@@ -274,5 +300,6 @@ export function AppShell({
         <main className="mx-auto w-full max-w-7xl overflow-x-hidden px-4 py-6 sm:px-6">{children}</main>
       </div>
     </div>
+    </CurrentLifeContextProvider>
   );
 }

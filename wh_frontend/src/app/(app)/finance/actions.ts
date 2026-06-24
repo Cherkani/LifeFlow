@@ -34,6 +34,14 @@ const createExpenseSchema = z.object({
   notes: z.string().max(1000).optional()
 });
 
+const createIncomeSchema = z.object({
+  phaseId: z.union([z.literal(""), z.string().uuid()]).optional(),
+  projectId: z.union([z.literal(""), z.string().uuid()]).optional(),
+  amount: z.coerce.number().positive().max(100000000),
+  occurredOn: dateInputSchema,
+  notes: z.string().max(1000).optional()
+});
+
 const subscriptionSchema = z.object({
   name: z.string().trim().min(2).max(140),
   amount: z.coerce.number().positive().max(100000000),
@@ -152,6 +160,36 @@ export async function createExpenseAction(formData: FormData) {
   });
 
   revalidatePath("/finance", "layout");
+  return { redirectTo: returnPath };
+}
+
+export async function createIncomeAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = createIncomeSchema.safeParse({
+    phaseId: formData.get("phaseId"),
+    projectId: formData.get("projectId"),
+    amount: formData.get("amount"),
+    occurredOn: formData.get("occurredOn"),
+    notes: formData.get("notes")
+  });
+  if (!payload.success) return { redirectTo: returnPath };
+
+  const { supabase, user, account } = await requireAppContext();
+  await supabase.from("ledger_entries").insert({
+    account_id: account.accountId,
+    category_id: null,
+    phase_id: payload.data.phaseId || null,
+    project_id: payload.data.projectId || null,
+    entry_type: "income",
+    amount: payload.data.amount.toFixed(2),
+    currency_code: account.currencyCode,
+    occurred_on: payload.data.occurredOn,
+    notes: payload.data.notes?.trim() || null,
+    created_by: user.id
+  });
+
+  revalidatePath("/finance", "layout");
+  revalidatePath("/analytics", "layout");
   return { redirectTo: returnPath };
 }
 
@@ -498,6 +536,13 @@ export async function createExpenseFormAction(
   formData: FormData
 ): Promise<RedirectResult | null> {
   return createExpenseAction(formData);
+}
+
+export async function createIncomeFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return createIncomeAction(formData);
 }
 
 export async function createSubscriptionFormAction(

@@ -1,4 +1,7 @@
-import { getKnowledgeItems, getKnowledgeSpaces } from "@/lib/queries";
+import { getKnowledgeItems, getKnowledgeSpaces, getLifeOptions } from "@/lib/queries";
+import { cookies } from "next/headers";
+import { LifeSummaryBand } from "@/components/life/life-context";
+import { matchesLifeFilter, resolveLifeFilter } from "@/lib/life-filter";
 import { requireAppContext } from "@/lib/server-context";
 
 import { KnowledgeModals } from "./knowledge-modals";
@@ -23,7 +26,10 @@ export default async function KnowledgePage({
   const params = await searchParams;
   const { supabase, account } = await requireAppContext();
 
-  const spaces = await getKnowledgeSpaces(supabase, account.accountId);
+  const allSpaces = await getKnowledgeSpaces(supabase, account.accountId);
+  const lifeOptions = await getLifeOptions(supabase, account.accountId);
+  const lifeFilter = resolveLifeFilter(await cookies(), account.accountId, lifeOptions);
+  const spaces = allSpaces.filter((item) => matchesLifeFilter(item, lifeFilter));
   const spaceIds = spaces.map((space) => space.id);
   const items = (await getKnowledgeItems(supabase, spaceIds)) as KnowledgeItem[];
 
@@ -57,6 +63,13 @@ export default async function KnowledgePage({
 
   return (
     <div className="knowledge-theme space-y-6">
+      <LifeSummaryBand
+        title="Knowledge with a home"
+        description="Notes and references stay attached to the chapter or project that gave them meaning."
+        phases={lifeOptions.phases}
+        projects={lifeOptions.projects}
+        stats={[{ label: "visible topics", value: spaces.length }]}
+      />
       <KnowledgeModals
         spaces={spaces}
         filteredSpaces={filteredSpaces}
@@ -64,6 +77,8 @@ export default async function KnowledgePage({
         query={query}
         errorMessage={errorMessage}
         successMessage={successMessage}
+        lifePhases={lifeOptions.phases}
+        lifeProjects={lifeOptions.projects}
       />
     </div>
   );

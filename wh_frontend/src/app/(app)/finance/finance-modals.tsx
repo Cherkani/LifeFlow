@@ -14,6 +14,7 @@ import {
   createDebtPaymentFormAction,
   createExpenseCategoryFormAction,
   createExpenseFormAction,
+  createIncomeFormAction,
   createSubscriptionFormAction,
   deleteExpenseCategoryFormAction,
   deleteDebtFormAction,
@@ -25,6 +26,7 @@ import {
   updateSubscriptionFormAction
 } from "@/app/(app)/finance/actions";
 import { ActionForm } from "@/components/forms/action-form";
+import { useCurrentLifeContext } from "@/components/life/current-life-context";
 import { PexelsImagePicker } from "@/components/forms/pexels-image-picker";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Badge } from "@/components/ui/badge";
@@ -139,19 +141,22 @@ function buildFinanceHref(options?: {
 function LifeConnectionFields({
   phases,
   projects,
-  defaultPhaseId = "",
-  defaultProjectId = ""
+  defaultPhaseId,
+  defaultProjectId
 }: {
   phases: LifePhaseOption[];
   projects: LifeProjectOption[];
   defaultPhaseId?: string;
   defaultProjectId?: string;
 }) {
+  const { activePhaseId, activeProjectId } = useCurrentLifeContext();
+  const selectedPhaseId = defaultPhaseId === undefined ? activePhaseId ?? "" : defaultPhaseId;
+  const selectedProjectId = defaultProjectId === undefined ? activeProjectId ?? "" : defaultProjectId;
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <div className="space-y-2">
         <Label htmlFor="phaseId">Life phase</Label>
-        <Select id="phaseId" name="phaseId" defaultValue={defaultPhaseId}>
+        <Select key={`finance-phase-${selectedPhaseId}`} id="phaseId" name="phaseId" defaultValue={selectedPhaseId}>
           <option value="">No phase</option>
           {phases.map((phase) => (
             <option key={phase.id} value={phase.id}>
@@ -162,7 +167,7 @@ function LifeConnectionFields({
       </div>
       <div className="space-y-2">
         <Label htmlFor="projectId">Project</Label>
-        <Select id="projectId" name="projectId" defaultValue={defaultProjectId}>
+        <Select key={`finance-project-${selectedProjectId}`} id="projectId" name="projectId" defaultValue={selectedProjectId}>
           <option value="">No project</option>
           {projects.map((project) => (
             <option key={project.id} value={project.id}>
@@ -415,7 +420,7 @@ export function FinanceModals({
 }: FinanceModalsProps) {
   const todayIso = toDateInputValue(new Date());
   const [activeModal, setActiveModal] = useState<
-    "expense" | "edit-expense" | "debt-entry" | "expense-category" | "edit-category" | "subscription" | "edit-subscription" | null
+    "expense" | "income" | "edit-expense" | "debt-entry" | "expense-category" | "edit-category" | "subscription" | "edit-subscription" | null
   >(null);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
@@ -507,6 +512,14 @@ export function FinanceModals({
             >
               <Plus size={16} />
               Add Expense
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveModal("income")}
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800"
+            >
+              <Plus size={16} />
+              Add Income
             </button>
             <button
               type="button"
@@ -1113,6 +1126,30 @@ export function FinanceModals({
               <SubmitButton label="Save expense" pendingLabel="Saving..." className="w-full sm:w-auto" />
             </ActionForm>
           )}
+        </ModalShell>
+      ) : null}
+
+      {activeModal === "income" ? (
+        <ModalShell title="Add Income" description="Record income in the current life chapter." onClose={closeModal}>
+          <ActionForm action={createIncomeFormAction} className="space-y-4" onSuccess={closeModal}>
+            <input type="hidden" name="returnPath" value={baseHref} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="incomeAmount">Amount</Label>
+                <Input id="incomeAmount" name="amount" type="number" min={0} step="0.01" required placeholder="0.00" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="incomeOccurredOn">Date</Label>
+                <Input id="incomeOccurredOn" name="occurredOn" type="date" required defaultValue={anchorIso} />
+              </div>
+            </div>
+            <LifeConnectionFields phases={lifePhases} projects={lifeProjects} />
+            <div className="space-y-2">
+              <Label htmlFor="incomeNotes">Source or note (optional)</Label>
+              <Input id="incomeNotes" name="notes" placeholder="e.g. Salary, freelance invoice" />
+            </div>
+            <SubmitButton label="Save income" pendingLabel="Saving..." className="w-full sm:w-auto" />
+          </ActionForm>
         </ModalShell>
       ) : null}
 
