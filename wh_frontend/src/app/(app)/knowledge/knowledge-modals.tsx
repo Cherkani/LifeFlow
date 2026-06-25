@@ -17,8 +17,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ModalShell } from "@/components/ui/modal-shell";
 import { SectionHeader } from "@/components/ui/section-header";
-import { Select } from "@/components/ui/select";
-import type { LifeOptionData } from "@/lib/queries/life";
 import {
   createKnowledgeSpaceFormAction,
   deleteKnowledgeSpaceFormAction,
@@ -31,8 +29,6 @@ type KnowledgeSpace = {
   id: string;
   title: string;
   image_url: string | null;
-  phase_id: string | null;
-  project_id: string | null;
   updated_at: string;
 };
 
@@ -43,8 +39,6 @@ type KnowledgeModalsProps = {
   query: string;
   errorMessage?: string;
   successMessage?: string;
-  lifePhases: LifeOptionData["phases"];
-  lifeProjects: LifeOptionData["projects"];
 };
 
 function buildKnowledgeSpaceHref(spaceId: string): Route {
@@ -57,16 +51,12 @@ export function KnowledgeModals({
   countsBySpace,
   query,
   errorMessage,
-  successMessage,
-  lifePhases,
-  lifeProjects
+  successMessage
 }: KnowledgeModalsProps) {
   const [activeModal, setActiveModal] = useState<"new-topic" | "edit-topic" | null>(null);
   const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
 
   const editingSpace = editingSpaceId ? spaces.find((s) => s.id === editingSpaceId) ?? null : null;
-  const phaseById = new Map(lifePhases.map((phase) => [phase.id, phase]));
-  const projectById = new Map(lifeProjects.map((project) => [project.id, project]));
 
   const closeModal = () => {
     setActiveModal(null);
@@ -129,9 +119,6 @@ export function KnowledgeModals({
                           <Badge>{counts.total} items</Badge>
                           <Badge variant="secondary">{counts.links} links</Badge>
                           <Badge variant="secondary">{counts.notes} notes</Badge>
-                          {space.phase_id ? <Badge variant="secondary">{phaseById.get(space.phase_id)?.title ?? "Phase"}</Badge> : null}
-                          {space.project_id ? <Badge variant="secondary">{projectById.get(space.project_id)?.name ?? "Project"}</Badge> : null}
-                          {!space.phase_id && !space.project_id ? <Badge variant="warning">Unlinked</Badge> : null}
                         </div>
                       </div>
                       <div className="flex items-center justify-between border-t border-[#d7e0f1] bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#4a5f83]">
@@ -190,7 +177,7 @@ export function KnowledgeModals({
 
       {activeModal === "new-topic" ? (
         <ModalShell title="Create Topic" description="Add a new topic and optionally select a cover image from Pexels." onClose={closeModal}>
-          <CreateTopicForm action={createKnowledgeSpaceFormAction} onSuccess={closeModal} lifePhases={lifePhases} lifeProjects={lifeProjects} />
+          <CreateTopicForm action={createKnowledgeSpaceFormAction} onSuccess={closeModal} />
         </ModalShell>
       ) : null}
 
@@ -213,12 +200,6 @@ export function KnowledgeModals({
               inputName="imageUrl"
               label="Topic image (optional)"
               defaultValue={editingSpace.image_url ?? ""}
-            />
-            <LifeConnectionFields
-              phases={lifePhases}
-              projects={lifeProjects}
-              defaultPhaseId={editingSpace.phase_id ?? ""}
-              defaultProjectId={editingSpace.project_id ?? ""}
             />
             <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>
@@ -245,44 +226,5 @@ export function KnowledgeModals({
         </ModalShell>
       ) : null}
     </>
-  );
-}
-
-function LifeConnectionFields({
-  phases,
-  projects,
-  defaultPhaseId = "",
-  defaultProjectId = ""
-}: {
-  phases: LifeOptionData["phases"];
-  projects: LifeOptionData["projects"];
-  defaultPhaseId?: string;
-  defaultProjectId?: string;
-}) {
-  return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <div className="space-y-2">
-        <Label htmlFor="spacePhaseId">Life phase</Label>
-        <Select id="spacePhaseId" name="phaseId" defaultValue={defaultPhaseId}>
-          <option value="">No phase</option>
-          {phases.map((phase) => (
-            <option key={phase.id} value={phase.id}>
-              {phase.title}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="spaceProjectId">Life project</Label>
-        <Select id="spaceProjectId" name="projectId" defaultValue={defaultProjectId}>
-          <option value="">No project</option>
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.name}
-            </option>
-          ))}
-        </Select>
-      </div>
-    </div>
   );
 }

@@ -12,7 +12,6 @@ import { SubmitButton } from "@/components/forms/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ModalShell } from "@/components/ui/modal-shell";
-import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { EventsTypeField } from "./events-type-field";
 
@@ -23,8 +22,6 @@ type CalendarEvent = {
   event_date: string | null;
   event_time: string | null;
   event_type: string;
-  phase_id: string | null;
-  project_id: string | null;
 };
 
 type EventsListProps = {
@@ -34,8 +31,6 @@ type EventsListProps = {
   view?: "scheduled" | "backlog";
   emptyMessage?: string;
   eventTypes?: string[];
-  lifePhases?: Array<{ id: string; title: string }>;
-  lifeProjects?: Array<{ id: string; name: string }>;
 };
 
 function formatTime(time: string) {
@@ -60,9 +55,7 @@ export function EventsList({
   selectedIso,
   view = "scheduled",
   emptyMessage,
-  eventTypes = [],
-  lifePhases = [],
-  lifeProjects = []
+  eventTypes = []
 }: EventsListProps) {
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [deletingEvent, setDeletingEvent] = useState<CalendarEvent | null>(null);
@@ -175,30 +168,6 @@ export function EventsList({
                 defaultValue={editingEvent.details ?? ""}
                 placeholder="Add context or location."
               />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="editEventPhaseId">Life phase</Label>
-                <Select id="editEventPhaseId" name="phaseId" defaultValue={editingEvent.phase_id ?? ""}>
-                  <option value="">No phase</option>
-                  {lifePhases.map((phase) => (
-                    <option key={phase.id} value={phase.id}>
-                      {phase.title}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="editEventProjectId">Life project</Label>
-                <Select id="editEventProjectId" name="projectId" defaultValue={editingEvent.project_id ?? ""}>
-                  <option value="">No project</option>
-                  {lifeProjects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
             </div>
             <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>

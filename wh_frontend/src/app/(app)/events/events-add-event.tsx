@@ -5,7 +5,6 @@ import { CirclePlus } from "lucide-react";
 
 import { createCalendarEventFormAction } from "@/app/(app)/events/actions";
 import { ActionForm } from "@/components/forms/action-form";
-import { useCurrentLifeContext } from "@/components/life/current-life-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ModalShell } from "@/components/ui/modal-shell";
@@ -17,8 +16,6 @@ type EventsAddEventProps = {
   monthKey: string;
   selectedIso: string;
   eventTypes: string[];
-  lifePhases: Array<{ id: string; title: string }>;
-  lifeProjects: Array<{ id: string; name: string }>;
 };
 
 function buildEventsHref(month: string, date: string, modal?: string) {
@@ -29,8 +26,7 @@ function buildEventsHref(month: string, date: string, modal?: string) {
   return `/events?${query.toString()}`;
 }
 
-export function EventsAddEvent({ monthKey, selectedIso, eventTypes, lifePhases, lifeProjects }: EventsAddEventProps) {
-  const { activePhaseId, activeProjectId } = useCurrentLifeContext();
+export function EventsAddEvent({ monthKey, selectedIso, eventTypes }: EventsAddEventProps) {
   const [isOpen, setIsOpen] = useState(false);
   const closeModalHref = buildEventsHref(monthKey, selectedIso);
 
@@ -79,26 +75,6 @@ export function EventsAddEvent({ monthKey, selectedIso, eventTypes, lifePhases, 
             <div className="space-y-2">
               <Label htmlFor="eventDetails">Details (optional)</Label>
               <Textarea id="eventDetails" name="details" placeholder="Add context or location." />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="eventPhaseId">Life phase</Label>
-                <select key={`event-phase-${activePhaseId}`} id="eventPhaseId" name="phaseId" defaultValue={activePhaseId ?? ""} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                  <option value="">No phase</option>
-                  {lifePhases.map((phase) => (
-                    <option key={phase.id} value={phase.id}>{phase.title}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="eventProjectId">Project</Label>
-                <select key={`event-project-${activeProjectId}`} id="eventProjectId" name="projectId" defaultValue={activeProjectId ?? ""} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                  <option value="">No project</option>
-                  {lifeProjects.map((project) => (
-                    <option key={project.id} value={project.id}>{project.name}</option>
-                  ))}
-                </select>
-              </div>
             </div>
             <SubmitButton label="Save event" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>

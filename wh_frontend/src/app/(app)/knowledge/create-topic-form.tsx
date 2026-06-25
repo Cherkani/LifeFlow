@@ -5,14 +5,11 @@ import { Search } from "lucide-react";
 import Image from "next/image";
 
 import { ActionForm } from "@/components/forms/action-form";
-import { useCurrentLifeContext } from "@/components/life/current-life-context";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import type { RedirectResult } from "@/lib/action-with-state";
-import type { LifeOptionData } from "@/lib/queries/life";
 
 type PexelsPhoto = {
   id: number;
@@ -26,12 +23,9 @@ type PexelsPhoto = {
 type CreateTopicFormProps = {
   action: (prevState: RedirectResult | null, formData: FormData) => Promise<RedirectResult | null>;
   onSuccess?: () => void;
-  lifePhases: LifeOptionData["phases"];
-  lifeProjects: LifeOptionData["projects"];
 };
 
-export function CreateTopicForm({ action, onSuccess, lifePhases, lifeProjects }: CreateTopicFormProps) {
-  const { activePhaseId, activeProjectId } = useCurrentLifeContext();
+export function CreateTopicForm({ action, onSuccess }: CreateTopicFormProps) {
   const [search, setSearch] = useState("");
   const [gallery, setGallery] = useState<PexelsPhoto[]>([]);
   const [selectedImage, setSelectedImage] = useState<string>("");
@@ -66,31 +60,6 @@ export function CreateTopicForm({ action, onSuccess, lifePhases, lifeProjects }:
       <div className="space-y-2">
         <Label htmlFor="spaceTitle">Topic title</Label>
         <Input id="spaceTitle" name="title" required placeholder="e.g. AI Research, Marketing, Product Ideas" />
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="newSpacePhaseId">Life phase</Label>
-          <Select key={`new-space-phase-${activePhaseId}`} id="newSpacePhaseId" name="phaseId" defaultValue={activePhaseId ?? ""}>
-            <option value="">No phase</option>
-            {lifePhases.map((phase) => (
-              <option key={phase.id} value={phase.id}>
-                {phase.title}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="newSpaceProjectId">Life project</Label>
-          <Select key={`new-space-project-${activeProjectId}`} id="newSpaceProjectId" name="projectId" defaultValue={activeProjectId ?? ""}>
-            <option value="">No project</option>
-            {lifeProjects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </Select>
-        </div>
       </div>
 
       <div className="space-y-2">

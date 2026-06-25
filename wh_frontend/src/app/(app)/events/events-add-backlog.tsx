@@ -5,7 +5,6 @@ import { ListPlus } from "lucide-react";
 
 import { createCalendarEventFormAction } from "@/app/(app)/events/actions";
 import { ActionForm } from "@/components/forms/action-form";
-import { useCurrentLifeContext } from "@/components/life/current-life-context";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,7 +28,6 @@ type EventsAddBacklogProps = {
 };
 
 export function EventsAddBacklog({ monthKey, selectedIso, view = "backlog", eventTypes = [] }: EventsAddBacklogProps) {
-  const { activePhaseId, activeProjectId } = useCurrentLifeContext();
   const [isOpen, setIsOpen] = useState(false);
   const returnPath = buildEventsHref(monthKey, selectedIso, view);
 
@@ -58,8 +56,6 @@ export function EventsAddBacklog({ monthKey, selectedIso, view = "backlog", even
           >
             <input type="hidden" name="returnPath" value={returnPath} />
             <input type="hidden" name="eventDate" value="" />
-            <input type="hidden" name="phaseId" value={activePhaseId ?? ""} />
-            <input type="hidden" name="projectId" value={activeProjectId ?? ""} />
             <div className="space-y-2">
               <Label htmlFor="backlogTitle">Title</Label>
               <Input

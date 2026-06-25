@@ -4,26 +4,17 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { RedirectResult } from "@/lib/action-with-state";
-import { resolveOwnedLifeContext } from "@/lib/life-context-server";
 import { requireAppContext } from "@/lib/server-context";
 
 const dateInputSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
-const optionalUuidSchema = z.preprocess(
-  (value) => (typeof value === "string" ? value.trim() : ""),
-  z.union([z.literal(""), z.string().uuid()]).transform((value) => value || null)
-);
 
 const createTemplateSchema = z.object({
-  name: z.string().trim().min(2, "Template name is required").max(140),
-  phaseId: optionalUuidSchema,
-  projectId: optionalUuidSchema
+  name: z.string().trim().min(2, "Template name is required").max(140)
 });
 
 const updateTemplateSchema = z.object({
   templateId: z.string().uuid(),
-  name: z.string().trim().min(2, "Template name is required").max(140),
-  phaseId: optionalUuidSchema,
-  projectId: optionalUuidSchema
+  name: z.string().trim().min(2, "Template name is required").max(140)
 });
 
 const deleteTemplateSchema = z.object({
@@ -43,9 +34,7 @@ function getSafeReturnPath(raw: FormDataEntryValue | null) {
 export async function createTemplateAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = createTemplateSchema.safeParse({
-    name: formData.get("name"),
-    phaseId: formData.get("phaseId"),
-    projectId: formData.get("projectId")
+    name: formData.get("name")
   });
 
   if (!payload.success) {
@@ -53,14 +42,10 @@ export async function createTemplateAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
-  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
-  if (!context) return { redirectTo: returnPath };
 
   await supabase.from("templates").insert({
     account_id: account.accountId,
     objective_id: null,
-    phase_id: context.phaseId,
-    project_id: context.projectId,
     name: payload.data.name
   });
 
@@ -189,9 +174,7 @@ function parseTasksPayload(formData: FormData, options?: { allowExistingHabitIds
 export async function createTemplateWithDailyTasksAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = createTemplateSchema.safeParse({
-    name: formData.get("name"),
-    phaseId: formData.get("phaseId"),
-    projectId: formData.get("projectId")
+    name: formData.get("name")
   });
 
   if (!payload.success) {
@@ -204,15 +187,11 @@ export async function createTemplateWithDailyTasksAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
-  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
-  if (!context) return { redirectTo: returnPath };
   const { data: template } = await supabase
     .from("templates")
     .insert({
       account_id: account.accountId,
       objective_id: null,
-      phase_id: context.phaseId,
-      project_id: context.projectId,
       name: payload.data.name
     })
     .select("id")
@@ -225,7 +204,7 @@ export async function createTemplateWithDailyTasksAction(formData: FormData) {
   const objectiveIds = Array.from(new Set(parsedTasks.tasks.map((task) => task.objectiveId)));
   const objectivesRes = await supabase
     .from("habit_objectives")
-    .select("id, phase_id, project_id")
+    .select("id")
     .eq("account_id", account.accountId)
     .in("id", objectiveIds);
   if ((objectivesRes.data ?? []).length !== objectiveIds.length) return { redirectTo: returnPath };
@@ -240,8 +219,6 @@ export async function createTemplateWithDailyTasksAction(formData: FormData) {
       .insert({
         account_id: account.accountId,
         objective_id: task.objectiveId,
-        phase_id: null,
-        project_id: null,
         title: task.title,
         type: "time_tracking",
         weekly_target_minutes: null,
@@ -274,9 +251,7 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = updateTemplateSchema.safeParse({
     templateId: formData.get("templateId"),
-    name: formData.get("name"),
-    phaseId: formData.get("phaseId"),
-    projectId: formData.get("projectId")
+    name: formData.get("name")
   });
 
   if (!payload.success) {
@@ -289,13 +264,11 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
-  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
-  if (!context) return { redirectTo: returnPath };
 
   const objectiveIds = Array.from(new Set(parsedTasks.tasks.map((task) => task.objectiveId)));
   const objectivesRes = await supabase
     .from("habit_objectives")
-    .select("id, phase_id, project_id")
+    .select("id")
     .eq("account_id", account.accountId)
     .in("id", objectiveIds);
   if ((objectivesRes.data ?? []).length !== objectiveIds.length) return { redirectTo: returnPath };
@@ -348,8 +321,6 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
         .update({
           title: task.title,
           objective_id: task.objectiveId,
-          phase_id: null,
-          project_id: null,
           minimum_minutes: task.plannedMinutes,
           metadata
         })
@@ -380,8 +351,6 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
         .insert({
           account_id: account.accountId,
           objective_id: task.objectiveId,
-          phase_id: null,
-          project_id: null,
           title: task.title,
           type: "time_tracking",
           weekly_target_minutes: null,
@@ -421,7 +390,7 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
 
   await supabase
     .from("templates")
-    .update({ name: payload.data.name, phase_id: context.phaseId, project_id: context.projectId })
+    .update({ name: payload.data.name })
     .eq("id", payload.data.templateId)
     .eq("account_id", account.accountId);
 

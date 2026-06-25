@@ -1,5 +1,4 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { cookies } from "next/headers";
 
 import { AnalyticsCharts } from "@/app/(app)/analytics/analytics-charts";
 import { LifeSummaryBand } from "@/components/life/life-context";
@@ -7,13 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   getAnalyticsInitialData,
-  getAnalyticsSessions,
-  getLifePageData
+  getAnalyticsSessions
 } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
-import { formatMoneyDhs } from "@/lib/utils";
-import { matchesLifeFilter, resolveLifeFilter } from "@/lib/life-filter";
-import { endOfIsoWeek, startOfIsoWeek } from "@/lib/utils";
+import { endOfIsoWeek, formatMoneyDhs, startOfIsoWeek } from "@/lib/utils";
 
 type AnalyticsSearchParams = Promise<{
   week?: string;
@@ -108,19 +104,9 @@ export default async function AnalyticsPage({
     monthStartIso,
     monthEndIso
   );
-  const lifeData = await getLifePageData(supabase, account.accountId);
   const habitIds = initialData.habitIds;
   const categories = initialData.categories as Array<{ id: string; name: string; monthly_limit: string | null }>;
-  const allMonthExpenses = initialData.monthExpenses as Array<{ amount: string; category_id: string | null; occurred_on: string }>;
-  const lifeOptions = { phases: lifeData.phases, projects: lifeData.projects };
-  const lifeFilter = resolveLifeFilter(await cookies(), account.accountId, lifeOptions);
-  const visibleTaskIds = new Set(lifeData.tasks.filter((task) => matchesLifeFilter(task, lifeFilter)).map((task) => task.id));
-  const monthExpenses = lifeFilter.scope === "all"
-    ? allMonthExpenses
-    : lifeData.financeEntries
-        .filter((entry) => entry.entry_type === "expense" && entry.occurred_on >= monthStartIso && entry.occurred_on <= monthEndIso)
-        .filter((entry) => matchesLifeFilter(entry, lifeFilter))
-        .map((entry) => ({ amount: entry.amount, category_id: entry.category_id, occurred_on: entry.occurred_on }));
+  const monthExpenses = initialData.monthExpenses as Array<{ amount: string; category_id: string | null; occurred_on: string }>;
 
   const sessionsResult = await getAnalyticsSessions(
     supabase,
@@ -133,10 +119,9 @@ export default async function AnalyticsPage({
     monthEndIso
   );
 
-  const filterSessions = (sessions: HabitSession[]) => lifeFilter.scope === "all" ? sessions : sessions.filter((session) => visibleTaskIds.has(session.habit_id));
-  const weekSessions = filterSessions((sessionsResult.weekSessions ?? []) as HabitSession[]);
-  const previousWeekSessions = filterSessions((sessionsResult.previousWeekSessions ?? []) as HabitSession[]);
-  const monthSessions = filterSessions((sessionsResult.monthSessions ?? []) as HabitSession[]);
+  const weekSessions = (sessionsResult.weekSessions ?? []) as HabitSession[];
+  const previousWeekSessions = (sessionsResult.previousWeekSessions ?? []) as HabitSession[];
+  const monthSessions = (sessionsResult.monthSessions ?? []) as HabitSession[];
 
   const weekPlannedHours = weekSessions.reduce((sum, session) => sum + session.planned_minutes, 0) / 60;
   const weekDoneHours = weekSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;
@@ -222,36 +207,15 @@ export default async function AnalyticsPage({
   const overLimitCount = categoriesWithMetrics.filter((category) => category.overBy > 0).length;
   const monthPace = monthLimit > 0 ? Math.round((monthSpent / monthLimit) * 100) : 0;
   const activeDays = weeklyChartData.filter((row) => row.doneHours > 0).length;
-  const linkedTaskIds = new Set(lifeData.tasks.filter((task) => task.phase_id || task.project_id).map((task) => task.id));
-  const linkedMonthSessions = monthSessions.filter((session) => linkedTaskIds.has(session.habit_id));
-  const phaseHealthRows = lifeData.phases.slice(0, 6).map((phase) => {
-    const phaseTasks = lifeData.tasks.filter((task) => task.phase_id === phase.id);
-    const phaseTaskIds = new Set(phaseTasks.map((task) => task.id));
-    const phaseSessions = monthSessions.filter((session) => phaseTaskIds.has(session.habit_id));
-    const phaseMoney = lifeData.financeEntries.filter(
-      (entry) => entry.phase_id === phase.id && entry.occurred_on >= monthStartIso && entry.occurred_on <= monthEndIso
-    );
-    const income = phaseMoney.filter((entry) => entry.entry_type === "income").reduce((sum, entry) => sum + Number(entry.amount), 0);
-    const expense = phaseMoney.filter((entry) => entry.entry_type === "expense").reduce((sum, entry) => sum + Number(entry.amount), 0);
-    return {
-      id: phase.id,
-      title: phase.title,
-      tasks: phaseTasks.length,
-      completion: percent(phaseSessions.filter((session) => session.completed).length, phaseSessions.length),
-      net: income - expense
-    };
-  });
 
   return (
     <div className="space-y-6">
       <LifeSummaryBand
-        title="Analysis across phases and projects"
-        description="Weekly execution, monthly spending, and life chapters now read as one system."
-        phases={lifeData.phases}
-        projects={lifeData.projects}
+        title="Analysis"
+        description="Weekly execution and monthly spending in one view."
         stats={[
-          { label: "linked sessions", value: linkedMonthSessions.length },
-          { label: "linked tasks", value: linkedTaskIds.size }
+          { label: "sessions", value: monthSessions.length },
+          { label: "expenses", value: monthExpenses.length }
         ]}
       />
 
@@ -367,30 +331,6 @@ export default async function AnalyticsPage({
         expenseCategories={expensePieData}
         currencyCode={account.currencyCode}
       />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>LifeFlow Phase Health</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {phaseHealthRows.length > 0 ? (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {phaseHealthRows.map((row) => (
-                <div key={row.id} className="rounded-lg border border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg-soft)] p-3">
-                  <p className="font-semibold text-[var(--app-text-strong)]">{row.title}</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Badge variant="secondary">{row.tasks} tasks</Badge>
-                    <Badge variant={row.completion >= 75 ? "secondary" : "warning"}>{row.completion}% completion</Badge>
-                    <Badge variant="secondary">{formatMoneyDhs(row.net)} net</Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-[#4a5f83]">Create phases in Life Map to see chapter-level analysis.</p>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

@@ -1,13 +1,11 @@
 import type { Route } from "next";
-import { cookies } from "next/headers";
 import Link from "next/link";
 import { CalendarDays, ChevronLeft, ChevronRight, ListTodo } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { LifeSummaryBand } from "@/components/life/life-context";
-import { getCalendarEventTypeUsage, getCalendarEventTypes, getCalendarEvents, getCalendarUndatedEvents, getLifeOptions } from "@/lib/queries";
+import { getCalendarEventTypeUsage, getCalendarEventTypes, getCalendarEvents, getCalendarUndatedEvents } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
-import { matchesLifeFilter, resolveLifeFilter } from "@/lib/life-filter";
 
 import { EventsAddEvent } from "./events-add-event";
 import { EventsBacklogContent } from "./events-backlog-content";
@@ -29,8 +27,6 @@ type CalendarEvent = {
   event_date: string | null;
   event_time: string | null;
   event_type: string;
-  phase_id: string | null;
-  project_id: string | null;
 };
 
 function isIsoDate(value: string | undefined) {
@@ -102,10 +98,8 @@ export default async function EventsPage({
   const allBacklogEvents = (await getCalendarUndatedEvents(supabase, account.accountId)) as CalendarEvent[];
   const eventTypeRows = await getCalendarEventTypes(supabase, account.accountId);
   const eventTypeUsageRows = await getCalendarEventTypeUsage(supabase, account.accountId);
-  const lifeOptions = await getLifeOptions(supabase, account.accountId);
-  const lifeFilter = resolveLifeFilter(await cookies(), account.accountId, lifeOptions);
-  const events = allEvents.filter((item) => matchesLifeFilter(item, lifeFilter));
-  const backlogEvents = allBacklogEvents.filter((item) => matchesLifeFilter(item, lifeFilter));
+  const events = allEvents;
+  const backlogEvents = allBacklogEvents;
   const eventTypes = eventTypeRows.map((type) => type.name);
   const eventTypeUsage = new Map<string, number>();
   for (const row of eventTypeUsageRows) {
@@ -148,12 +142,10 @@ export default async function EventsPage({
   return (
     <div className="space-y-6">
       <LifeSummaryBand
-        title="Calendar as life evidence"
-        description="Events can mark phase milestones, project deadlines, interviews, exams, and important memory points."
-        phases={lifeOptions.phases}
-        projects={lifeOptions.projects}
+        title="Calendar"
+        description="Events can mark meetings, deadlines, interviews, exams, and important memory points."
         stats={[
-          { label: "linked events", value: [...events, ...backlogEvents].filter((event) => event.phase_id || event.project_id).length },
+          { label: "backlog", value: backlogEvents.length },
           { label: "this month", value: events.length }
         ]}
       />
@@ -214,8 +206,6 @@ export default async function EventsPage({
                   monthKey={monthKey}
                   selectedIso={selectedIso}
                   eventTypes={eventTypes}
-                  lifePhases={lifeOptions.phases}
-                  lifeProjects={lifeOptions.projects}
                 />
               </div>
 
@@ -292,8 +282,6 @@ export default async function EventsPage({
                 selectedIso={selectedIso}
                 view="scheduled"
                 eventTypes={eventTypes}
-                lifePhases={lifeOptions.phases}
-                lifeProjects={lifeOptions.projects}
               />
             </CardContent>
           </Card>
@@ -306,8 +294,6 @@ export default async function EventsPage({
               monthKey={monthKey}
               selectedIso={selectedIso}
               eventTypes={eventTypes}
-              lifePhases={lifeOptions.phases}
-              lifeProjects={lifeOptions.projects}
             />
           </CardContent>
         </Card>

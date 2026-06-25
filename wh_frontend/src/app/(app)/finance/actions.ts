@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { RedirectResult } from "@/lib/action-with-state";
-import { resolveOwnedLifeContext } from "@/lib/life-context-server";
 import { requireAppContext } from "@/lib/server-context";
 
 const dateInputSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
@@ -28,16 +27,12 @@ const deleteCategorySchema = z.object({
 
 const createExpenseSchema = z.object({
   categoryId: z.string().uuid(),
-  phaseId: z.union([z.literal(""), z.string().uuid()]).optional(),
-  projectId: z.union([z.literal(""), z.string().uuid()]).optional(),
   amount: z.coerce.number().positive().max(100000000),
   occurredOn: dateInputSchema,
   notes: z.string().max(1000).optional()
 });
 
 const createIncomeSchema = z.object({
-  phaseId: z.union([z.literal(""), z.string().uuid()]).optional(),
-  projectId: z.union([z.literal(""), z.string().uuid()]).optional(),
   amount: z.coerce.number().positive().max(100000000),
   occurredOn: dateInputSchema,
   notes: z.string().max(1000).optional()
@@ -45,8 +40,6 @@ const createIncomeSchema = z.object({
 
 const subscriptionSchema = z.object({
   name: z.string().trim().min(2).max(140),
-  phaseId: z.union([z.literal(""), z.string().uuid()]).optional(),
-  projectId: z.union([z.literal(""), z.string().uuid()]).optional(),
   amount: z.coerce.number().positive().max(100000000),
   recurrence: z.enum(["monthly", "yearly"]),
   nextDueDate: z.union([z.literal(""), dateInputSchema]).optional(),
@@ -66,8 +59,6 @@ const subscriptionIdSchema = z.object({
 const updateExpenseSchema = z.object({
   expenseId: z.string().uuid(),
   categoryId: z.string().uuid(),
-  phaseId: z.union([z.literal(""), z.string().uuid()]).optional(),
-  projectId: z.union([z.literal(""), z.string().uuid()]).optional(),
   amount: z.coerce.number().positive().max(100000000),
   occurredOn: dateInputSchema,
   notes: z.string().max(1000).optional()
@@ -80,8 +71,6 @@ const deleteExpenseSchema = z.object({
 const debtSchema = z.object({
   type: z.enum(["owed", "owing"]),
   name: z.string().trim().min(2).max(140),
-  phaseId: z.union([z.literal(""), z.string().uuid()]).optional(),
-  projectId: z.union([z.literal(""), z.string().uuid()]).optional(),
   principal: z.coerce.number().positive().max(100000000),
   apr: z.union([z.literal(""), z.coerce.number().min(0).max(100)]).optional(),
   dueDate: z.union([z.literal(""), dateInputSchema]).optional(),
@@ -139,8 +128,6 @@ export async function createExpenseAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = createExpenseSchema.safeParse({
     categoryId: formData.get("categoryId"),
-    phaseId: formData.get("phaseId"),
-    projectId: formData.get("projectId"),
     amount: formData.get("amount"),
     occurredOn: formData.get("occurredOn"),
     notes: formData.get("notes")
@@ -151,13 +138,9 @@ export async function createExpenseAction(formData: FormData) {
   }
 
   const { supabase, user, account } = await requireAppContext();
-  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
-  if (!context) return { redirectTo: returnPath };
   await supabase.from("ledger_entries").insert({
     account_id: account.accountId,
     category_id: payload.data.categoryId,
-    phase_id: context.phaseId,
-    project_id: context.projectId,
     entry_type: "expense",
     amount: payload.data.amount.toFixed(2),
     currency_code: account.currencyCode,
@@ -173,8 +156,6 @@ export async function createExpenseAction(formData: FormData) {
 export async function createIncomeAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = createIncomeSchema.safeParse({
-    phaseId: formData.get("phaseId"),
-    projectId: formData.get("projectId"),
     amount: formData.get("amount"),
     occurredOn: formData.get("occurredOn"),
     notes: formData.get("notes")
@@ -182,13 +163,9 @@ export async function createIncomeAction(formData: FormData) {
   if (!payload.success) return { redirectTo: returnPath };
 
   const { supabase, user, account } = await requireAppContext();
-  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
-  if (!context) return { redirectTo: returnPath };
   await supabase.from("ledger_entries").insert({
     account_id: account.accountId,
     category_id: null,
-    phase_id: context.phaseId,
-    project_id: context.projectId,
     entry_type: "income",
     amount: payload.data.amount.toFixed(2),
     currency_code: account.currencyCode,
@@ -207,8 +184,6 @@ export async function updateExpenseAction(formData: FormData) {
   const payload = updateExpenseSchema.safeParse({
     expenseId: formData.get("expenseId"),
     categoryId: formData.get("categoryId"),
-    phaseId: formData.get("phaseId"),
-    projectId: formData.get("projectId"),
     amount: formData.get("amount"),
     occurredOn: formData.get("occurredOn"),
     notes: formData.get("notes")
@@ -219,14 +194,10 @@ export async function updateExpenseAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
-  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
-  if (!context) return { redirectTo: returnPath };
   await supabase
     .from("ledger_entries")
     .update({
       category_id: payload.data.categoryId,
-      phase_id: context.phaseId,
-      project_id: context.projectId,
       amount: payload.data.amount.toFixed(2),
       occurred_on: payload.data.occurredOn,
       notes: payload.data.notes?.trim() || null
@@ -243,8 +214,6 @@ export async function createSubscriptionAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = subscriptionSchema.safeParse({
     name: formData.get("name"),
-    phaseId: formData.get("phaseId"),
-    projectId: formData.get("projectId"),
     amount: formData.get("amount"),
     recurrence: formData.get("recurrence"),
     nextDueDate: formData.get("nextDueDate"),
@@ -258,13 +227,9 @@ export async function createSubscriptionAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
-  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
-  if (!context) return { redirectTo: returnPath };
   await supabase.from("subscriptions").insert({
     account_id: account.accountId,
     name: payload.data.name,
-    phase_id: context.phaseId,
-    project_id: context.projectId,
     amount: payload.data.amount.toFixed(2),
     currency_code: account.currencyCode,
     recurrence: payload.data.recurrence,
@@ -283,8 +248,6 @@ export async function updateSubscriptionAction(formData: FormData) {
   const payload = updateSubscriptionSchema.safeParse({
     subscriptionId: formData.get("subscriptionId"),
     name: formData.get("name"),
-    phaseId: formData.get("phaseId"),
-    projectId: formData.get("projectId"),
     amount: formData.get("amount"),
     recurrence: formData.get("recurrence"),
     nextDueDate: formData.get("nextDueDate"),
@@ -298,14 +261,10 @@ export async function updateSubscriptionAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
-  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
-  if (!context) return { redirectTo: returnPath };
   await supabase
     .from("subscriptions")
     .update({
       name: payload.data.name,
-      phase_id: context.phaseId,
-      project_id: context.projectId,
       amount: payload.data.amount.toFixed(2),
       recurrence: payload.data.recurrence,
       next_due_date: payload.data.nextDueDate === "" ? null : payload.data.nextDueDate,
@@ -398,8 +357,6 @@ export async function createDebtAction(formData: FormData) {
   const payload = debtSchema.safeParse({
     type: formData.get("type"),
     name: formData.get("name"),
-    phaseId: formData.get("phaseId"),
-    projectId: formData.get("projectId"),
     principal: formData.get("principal"),
     apr: formData.get("apr"),
     dueDate: formData.get("dueDate"),
@@ -411,15 +368,11 @@ export async function createDebtAction(formData: FormData) {
   }
 
   const { supabase, user, account } = await requireAppContext();
-  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
-  if (!context) return { redirectTo: returnPath };
 
   await supabase.from("debts").insert({
     account_id: account.accountId,
     type: payload.data.type,
     name: payload.data.name,
-    phase_id: context.phaseId,
-    project_id: context.projectId,
     principal: payload.data.principal.toFixed(2),
     apr: payload.data.apr === "" || typeof payload.data.apr === "undefined" ? null : payload.data.apr.toFixed(3),
     due_date: payload.data.dueDate === "" ? null : payload.data.dueDate,

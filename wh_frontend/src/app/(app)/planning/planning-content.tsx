@@ -6,7 +6,6 @@ import Image from "next/image";
 
 import { createObjectiveFormAction, deleteObjectiveFormAction, updateObjectiveFormAction } from "@/app/(app)/habits/actions";
 import { ActionForm } from "@/components/forms/action-form";
-import { useCurrentLifeContext } from "@/components/life/current-life-context";
 import { PexelsImagePicker } from "@/components/forms/pexels-image-picker";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +16,6 @@ import { ModalShell } from "@/components/ui/modal-shell";
 import { SectionHeader } from "@/components/ui/section-header";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { LifeOptionData } from "@/lib/queries/life";
 import {
   createTemplateWithDailyTasksFormAction,
   deleteTemplateFormAction,
@@ -36,57 +34,11 @@ function getStartTime(metadata: unknown) {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-function LifeConnectionFields({
-  phases,
-  projects,
-  defaultPhaseId,
-  defaultProjectId,
-  fieldPrefix = "objective"
-}: {
-  phases: LifeOptionData["phases"];
-  projects: LifeOptionData["projects"];
-  defaultPhaseId?: string;
-  defaultProjectId?: string;
-  fieldPrefix?: string;
-}) {
-  const { activePhaseId, activeProjectId } = useCurrentLifeContext();
-  const selectedPhaseId = defaultPhaseId === undefined ? activePhaseId ?? "" : defaultPhaseId;
-  const selectedProjectId = defaultProjectId === undefined ? activeProjectId ?? "" : defaultProjectId;
-  return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <div className="space-y-2">
-        <Label htmlFor={`${fieldPrefix}PhaseId`}>Life phase</Label>
-        <Select key={`${fieldPrefix}-${selectedPhaseId}-phase`} id={`${fieldPrefix}PhaseId`} name="phaseId" defaultValue={selectedPhaseId}>
-          <option value="">No phase</option>
-          {phases.map((phase) => (
-            <option key={phase.id} value={phase.id}>
-              {phase.title}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor={`${fieldPrefix}ProjectId`}>Life project</Label>
-        <Select key={`${fieldPrefix}-${selectedProjectId}-project`} id={`${fieldPrefix}ProjectId`} name="projectId" defaultValue={selectedProjectId}>
-          <option value="">No project</option>
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.name}
-            </option>
-          ))}
-        </Select>
-      </div>
-    </div>
-  );
-}
-
 type Objective = {
   id: string;
   title: string;
   description: string | null;
   image_url: string | null;
-  phase_id: string | null;
-  project_id: string | null;
 };
 
 type Task = {
@@ -94,16 +46,12 @@ type Task = {
   title: string;
   objective_id: string | null;
   metadata: unknown;
-  phase_id: string | null;
-  project_id: string | null;
 };
 
 type Template = {
   id: string;
   name: string;
   objective_id: string | null;
-  phase_id: string | null;
-  project_id: string | null;
 };
 
 type TemplateEntry = {
@@ -131,8 +79,6 @@ type PlanningContentProps = {
     totalTemplateEntries: number;
     assignedWeeksCount: number;
   };
-  lifePhases: LifeOptionData["phases"];
-  lifeProjects: LifeOptionData["projects"];
 };
 
 export function PlanningContent({
@@ -144,9 +90,7 @@ export function PlanningContent({
   templateIdsByObjective,
   taskCountByObjective,
   weekCountByTemplate,
-  stats,
-  lifePhases,
-  lifeProjects
+  stats
 }: PlanningContentProps) {
   const [activeModal, setActiveModal] = useState<
     "create-objective" | "edit-objective" | "create-template" | "edit-template" | null
@@ -179,9 +123,6 @@ export function PlanningContent({
   const selectedTemplateEntries = selectedTemplate
     ? entries.filter((entry) => entry.template_id === selectedTemplate.id)
     : [];
-  const phaseById = new Map(lifePhases.map((phase) => [phase.id, phase]));
-  const projectById = new Map(lifeProjects.map((project) => [project.id, project]));
-
   const closeModal = () => {
     setActiveModal(null);
     setEditingObjectiveId(null);
@@ -351,11 +292,6 @@ export function PlanningContent({
                           </p>
                         ) : null}
                         <div className="mt-2 space-y-1">
-                          <div className="flex flex-wrap gap-1">
-                            {objective.phase_id ? <Badge variant="secondary">{phaseById.get(objective.phase_id)?.title ?? "Phase"}</Badge> : null}
-                            {objective.project_id ? <Badge variant="secondary">{projectById.get(objective.project_id)?.name ?? "Project"}</Badge> : null}
-                            {!objective.phase_id && !objective.project_id ? <Badge variant="warning">Unlinked</Badge> : null}
-                          </div>
                           <p className="text-xs font-medium text-[#6b7da1]">
                             {templateCount} template{templateCount !== 1 ? "s" : ""}
                           </p>
@@ -538,7 +474,6 @@ export function PlanningContent({
               />
             </div>
             <PexelsImagePicker inputName="imageUrl" label="Objective image (optional)" />
-            <LifeConnectionFields phases={lifePhases} projects={lifeProjects} />
             <SubmitButton label="Save objective" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>
         </ModalShell>
@@ -581,12 +516,6 @@ export function PlanningContent({
               inputName="imageUrl"
               label="Objective image (optional)"
               defaultValue={editingObjective.image_url ?? ""}
-            />
-            <LifeConnectionFields
-              phases={lifePhases}
-              projects={lifeProjects}
-              defaultPhaseId={editingObjective.phase_id ?? ""}
-              defaultProjectId={editingObjective.project_id ?? ""}
             />
             <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>
@@ -638,7 +567,6 @@ export function PlanningContent({
                   placeholder="e.g. Focus Week, Exam Week"
                 />
               </div>
-              <LifeConnectionFields phases={lifePhases} projects={lifeProjects} fieldPrefix="template" />
               <div className="space-y-2">
                 <p className="text-sm font-medium text-[#0c1d3c]">Daily tasks</p>
                 <TemplateTaskBuilder
@@ -679,13 +607,6 @@ export function PlanningContent({
                       defaultValue={editingTemplate.name}
                     />
                   </div>
-                  <LifeConnectionFields
-                    phases={lifePhases}
-                    projects={lifeProjects}
-                    defaultPhaseId={editingTemplate.phase_id ?? ""}
-                    defaultProjectId={editingTemplate.project_id ?? ""}
-                    fieldPrefix="editTemplate"
-                  />
                   <TemplateTaskBuilder
                     objectives={objectives.map((o) => ({ id: o.id, title: o.title }))}
                     initialTasks={editingTemplateInitialTasks}

@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { RedirectResult } from "@/lib/action-with-state";
-import { resolveOwnedLifeContext } from "@/lib/life-context-server";
 import { requireAppContext } from "@/lib/server-context";
 
 const timeSchema = z.preprocess(
@@ -23,8 +22,6 @@ const optionalDateSchema = z.preprocess(
 
 const createEventSchema = z.object({
   title: z.string().trim().min(2).max(180),
-  phaseId: z.union([z.literal(""), z.string().uuid()]).optional(),
-  projectId: z.union([z.literal(""), z.string().uuid()]).optional(),
   eventDate: optionalDateSchema,
   eventTime: timeSchema,
   eventType: z.string().trim().min(1).max(60),
@@ -34,8 +31,6 @@ const createEventSchema = z.object({
 const updateEventSchema = z.object({
   eventId: z.string().uuid(),
   title: z.string().trim().min(2).max(180),
-  phaseId: z.union([z.literal(""), z.string().uuid()]).optional(),
-  projectId: z.union([z.literal(""), z.string().uuid()]).optional(),
   eventDate: optionalDateSchema,
   eventTime: timeSchema,
   eventType: z.string().trim().min(1).max(60),
@@ -70,8 +65,6 @@ export async function createCalendarEventAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = createEventSchema.safeParse({
     title: formData.get("title"),
-    phaseId: formData.get("phaseId"),
-    projectId: formData.get("projectId"),
     eventDate: formData.get("eventDate"),
     eventTime: formData.get("eventTime"),
     eventType: formData.get("eventType"),
@@ -84,8 +77,6 @@ export async function createCalendarEventAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
-  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
-  if (!context) return { redirectTo: returnPath };
   await supabase.from("calendar_event_types").upsert(
     {
       account_id: account.accountId,
@@ -95,8 +86,6 @@ export async function createCalendarEventAction(formData: FormData) {
   );
   const { error } = await supabase.from("calendar_events").insert({
     account_id: account.accountId,
-    phase_id: context.phaseId,
-    project_id: context.projectId,
     title: payload.data.title,
     event_date: payload.data.eventDate,
     event_time: payload.data.eventTime,
@@ -125,8 +114,6 @@ export async function updateCalendarEventAction(formData: FormData) {
   const payload = updateEventSchema.safeParse({
     eventId: formData.get("eventId"),
     title: formData.get("title"),
-    phaseId: formData.get("phaseId"),
-    projectId: formData.get("projectId"),
     eventDate: formData.get("eventDate"),
     eventTime: formData.get("eventTime"),
     eventType: formData.get("eventType"),
@@ -138,8 +125,6 @@ export async function updateCalendarEventAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
-  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
-  if (!context) return { redirectTo: returnPath };
   await supabase.from("calendar_event_types").upsert(
     {
       account_id: account.accountId,
@@ -151,8 +136,6 @@ export async function updateCalendarEventAction(formData: FormData) {
     .from("calendar_events")
     .update({
       title: payload.data.title,
-      phase_id: context.phaseId,
-      project_id: context.projectId,
       event_date: payload.data.eventDate,
       event_time: payload.data.eventTime,
       event_type: payload.data.eventType,

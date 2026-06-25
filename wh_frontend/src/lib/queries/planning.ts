@@ -1,8 +1,8 @@
 import type { Supabase } from "./types";
 
-export type PlanningObjectiveRow = { id: string; title: string; description: string | null; image_url: string | null; phase_id: string | null; project_id: string | null };
-export type PlanningTaskRow = { id: string; title: string; objective_id: string | null; metadata: unknown; phase_id: string | null; project_id: string | null };
-export type PlanningTemplateRow = { id: string; name: string; objective_id: string | null; phase_id: string | null; project_id: string | null };
+export type PlanningObjectiveRow = { id: string; title: string; description: string | null; image_url: string | null };
+export type PlanningTaskRow = { id: string; title: string; objective_id: string | null; metadata: unknown };
+export type PlanningTemplateRow = { id: string; name: string; objective_id: string | null };
 export type PlanningWeekRow = { id: string; template_id: string; week_start_date: string };
 
 export type PlanningData = {
@@ -16,18 +16,18 @@ export async function getPlanningData(supabase: Supabase, accountId: string): Pr
   const [objectivesRes, tasksRes, templatesRes, weeksRes] = await Promise.all([
     supabase
       .from("habit_objectives")
-      .select("id, title, description, image_url, phase_id, project_id")
+      .select("id, title, description, image_url")
       .eq("account_id", accountId)
       .order("created_at", { ascending: false }),
     supabase
       .from("habits")
-      .select("id, title, objective_id, metadata, phase_id, project_id")
+      .select("id, title, objective_id, metadata")
       .eq("account_id", accountId)
       .eq("is_active", true)
       .order("created_at", { ascending: false }),
     supabase
       .from("templates")
-      .select("id, name, objective_id, phase_id, project_id")
+      .select("id, name, objective_id")
       .eq("account_id", accountId)
       .order("created_at", { ascending: false }),
     supabase
@@ -36,18 +36,9 @@ export async function getPlanningData(supabase: Supabase, accountId: string): Pr
       .eq("account_id", accountId)
       .order("week_start_date", { ascending: true })
   ]);
-  const objectives = (objectivesRes.data ?? []) as PlanningObjectiveRow[];
-  const objectiveById = new Map(objectives.map((objective) => [objective.id, objective]));
-  const tasks = ((tasksRes.data ?? []) as PlanningTaskRow[]).map((task) => {
-    const objective = task.objective_id ? objectiveById.get(task.objective_id) : null;
-    const hasOverride = task.phase_id !== null || task.project_id !== null;
-    return hasOverride
-      ? task
-      : { ...task, phase_id: objective?.phase_id ?? null, project_id: objective?.project_id ?? null };
-  });
   return {
-    objectives,
-    tasks,
+    objectives: (objectivesRes.data ?? []) as PlanningObjectiveRow[],
+    tasks: (tasksRes.data ?? []) as PlanningTaskRow[],
     templates: (templatesRes.data ?? []) as PlanningTemplateRow[],
     weeks: (weeksRes.data ?? []) as PlanningWeekRow[]
   };

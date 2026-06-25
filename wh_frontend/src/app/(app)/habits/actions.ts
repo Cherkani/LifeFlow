@@ -4,30 +4,21 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { RedirectResult } from "@/lib/action-with-state";
-import { resolveOwnedLifeContext } from "@/lib/life-context-server";
 import { requireAppContext } from "@/lib/server-context";
 
 const dateInputSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
-const optionalUuidSchema = z.preprocess(
-  (value) => (typeof value === "string" ? value.trim() : ""),
-  z.union([z.literal(""), z.string().uuid()]).transform((value) => (value === "" ? null : value))
-);
 
 const createObjectiveSchema = z.object({
   title: z.string().trim().min(2, "Objective title is required").max(160),
   description: z.string().trim().max(1200).optional(),
-  imageUrl: z.string().trim().optional(),
-  phaseId: optionalUuidSchema,
-  projectId: optionalUuidSchema
+  imageUrl: z.string().trim().optional()
 });
 
 const updateObjectiveSchema = z.object({
   objectiveId: z.string().uuid(),
   title: z.string().trim().min(2, "Objective title is required").max(160),
   description: z.string().trim().max(1200).optional(),
-  imageUrl: z.string().trim().optional(),
-  phaseId: optionalUuidSchema,
-  projectId: optionalUuidSchema
+  imageUrl: z.string().trim().optional()
 });
 
 const deleteObjectiveSchema = z.object({
@@ -104,9 +95,7 @@ export async function createObjectiveAction(formData: FormData) {
   const payload = createObjectiveSchema.safeParse({
     title: formData.get("title"),
     description: formData.get("description"),
-    imageUrl: formData.get("imageUrl"),
-    phaseId: formData.get("phaseId"),
-    projectId: formData.get("projectId")
+    imageUrl: formData.get("imageUrl")
   });
 
   if (!payload.success) {
@@ -114,16 +103,12 @@ export async function createObjectiveAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
-  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
-  if (!context) return { redirectTo: returnPath };
 
   await supabase.from("habit_objectives").insert({
     account_id: account.accountId,
     title: payload.data.title,
     description: payload.data.description?.trim() ? payload.data.description : null,
-    image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null,
-    phase_id: context.phaseId,
-    project_id: context.projectId
+    image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null
   });
 
   revalidatePath(returnPath.split("?")[0] || "/habits");
@@ -136,9 +121,7 @@ export async function updateObjectiveAction(formData: FormData) {
     objectiveId: formData.get("objectiveId"),
     title: formData.get("title"),
     description: formData.get("description"),
-    imageUrl: formData.get("imageUrl"),
-    phaseId: formData.get("phaseId"),
-    projectId: formData.get("projectId")
+    imageUrl: formData.get("imageUrl")
   });
 
   if (!payload.success) {
@@ -146,17 +129,13 @@ export async function updateObjectiveAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
-  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
-  if (!context) return { redirectTo: returnPath };
 
   const { error } = await supabase
     .from("habit_objectives")
     .update({
       title: payload.data.title,
       description: payload.data.description?.trim() ? payload.data.description : null,
-      image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null,
-      phase_id: context.phaseId,
-      project_id: context.projectId
+      image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null
     })
     .eq("id", payload.data.objectiveId)
     .eq("account_id", account.accountId);
@@ -238,7 +217,7 @@ export async function createHabitAction(formData: FormData) {
   const { supabase, account } = await requireAppContext();
   const { data: objective } = await supabase
     .from("habit_objectives")
-    .select("id, phase_id, project_id")
+    .select("id")
     .eq("account_id", account.accountId)
     .eq("id", payload.data.objectiveId)
     .maybeSingle();
@@ -250,8 +229,6 @@ export async function createHabitAction(formData: FormData) {
   await supabase.from("habits").insert({
     account_id: account.accountId,
     objective_id: payload.data.objectiveId,
-    phase_id: null,
-    project_id: null,
     title: payload.data.title,
     type: payload.data.type,
     weekly_target_minutes: payload.data.weeklyTargetMinutes ?? null,
@@ -574,7 +551,7 @@ export async function addCompensationSessionAction(formData: FormData) {
 
     const { data: objective } = await supabase
       .from("habit_objectives")
-      .select("id, phase_id, project_id")
+      .select("id")
       .eq("account_id", account.accountId)
       .eq("id", objectiveId)
       .maybeSingle();
@@ -587,8 +564,6 @@ export async function addCompensationSessionAction(formData: FormData) {
       .insert({
         account_id: account.accountId,
         objective_id: objectiveId,
-        phase_id: null,
-        project_id: null,
         title: newTaskTitle,
         type: "time_tracking",
         weekly_target_minutes: null,

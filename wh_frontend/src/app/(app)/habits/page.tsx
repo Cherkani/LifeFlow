@@ -1,5 +1,4 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { cookies } from "next/headers";
 import Link from "next/link";
 import type { Route } from "next";
 
@@ -13,20 +12,18 @@ import { WeekResetModal } from "@/app/(app)/habits/week-reset-modal";
 import { DailyObjectiveChart } from "@/app/(app)/habits/daily-objective-chart";
 import { CategoryObjectiveChart } from "@/app/(app)/habits/category-objective-chart";
 import { ActionForm } from "@/components/forms/action-form";
-import { LifeContext, LifeSummaryBand } from "@/components/life/life-context";
+import { LifeSummaryBand } from "@/components/life/life-context";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import {
   getHabitsPageData,
-  getLifeOptions,
   getMonthSessions,
   getTemplateEntriesOrder,
   getWeekSessions
 } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
-import { matchesLifeFilter, resolveLifeFilter } from "@/lib/life-filter";
 import { endOfIsoWeek, startOfIsoWeek } from "@/lib/utils";
 
 type HabitsSearchParams = Promise<{
@@ -40,23 +37,17 @@ type Category = {
   id: string;
   title: string;
   objective_id: string | null;
-  phase_id: string | null;
-  project_id: string | null;
 };
 
 type Objective = {
   id: string;
   title: string;
   image_url: string | null;
-  phase_id: string | null;
-  project_id: string | null;
 };
 
 type Template = {
   id: string;
   name: string;
-  phase_id: string | null;
-  project_id: string | null;
 };
 
 type Session = {
@@ -132,11 +123,9 @@ export default async function HabitsPage({
 
   const { supabase, account } = await requireAppContext();
   const habitsData = await getHabitsPageData(supabase, account.accountId, weekStartIso);
-  const lifeOptions = await getLifeOptions(supabase, account.accountId);
-  const lifeFilter = resolveLifeFilter(await cookies(), account.accountId, lifeOptions);
-  const categories = (habitsData.categories as Category[]).filter((item) => matchesLifeFilter(item, lifeFilter));
-  const objectives = (habitsData.objectives as Objective[]).filter((item) => matchesLifeFilter(item, lifeFilter));
-  const templates = (habitsData.templates as Template[]).filter((item) => matchesLifeFilter(item, lifeFilter));
+  const categories = habitsData.categories as Category[];
+  const objectives = habitsData.objectives as Objective[];
+  const templates = habitsData.templates as Template[];
   const currentWeek = habitsData.currentWeek;
   const categoryById = new Map(categories.map((category) => [category.id, category]));
   const objectiveById = new Map(objectives.map((objective) => [objective.id, objective]));
@@ -323,12 +312,10 @@ export default async function HabitsPage({
   return (
     <div className="space-y-6">
       <LifeSummaryBand
-        title="Execute inside your life chapter"
-        description="Every checked session now rolls up to objectives, phases, and projects so execution becomes part of your life history."
-        phases={lifeOptions.phases}
-        projects={lifeOptions.projects}
+        title="Execution"
+        description="Track weekly sessions and minutes directly against your objectives."
         stats={[
-          { label: "linked daily tasks", value: categories.filter((category) => category.phase_id || category.project_id).length },
+          { label: "daily tasks", value: categories.length },
           { label: "week done", value: `${weekDoneMinutes} min` }
         ]}
       />
@@ -432,25 +419,6 @@ export default async function HabitsPage({
             <Badge variant="secondary" className="bg-[var(--app-chip-bg)] text-[var(--app-chip-fg)]">Month done: {monthDoneMinutes} min</Badge>
             <Badge variant="secondary" className="bg-[var(--app-chip-bg)] text-[var(--app-chip-fg)]">Completion: {weekCompletion}%</Badge>
             {compensationMinutes > 0 ? <Badge variant="warning">Compensation: +{compensationMinutes} min</Badge> : null}
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            {objectives.slice(0, 4).map((objective) => {
-              const linkedCategories = categories.filter((category) => category.objective_id === objective.id);
-              const phaseId = objective.phase_id ?? linkedCategories.find((category) => category.phase_id)?.phase_id ?? null;
-              const projectId = objective.project_id ?? linkedCategories.find((category) => category.project_id)?.project_id ?? null;
-              return (
-                <LifeContext
-                  key={objective.id}
-                  phases={lifeOptions.phases}
-                  projects={lifeOptions.projects}
-                  activePhaseId={phaseId}
-                  activeProjectId={projectId}
-                  stats={[{ label: "objective", value: objective.title }, { label: "tasks", value: linkedCategories.length }]}
-                  emptyLabel={`${objective.title}: no phase/project`}
-                />
-              );
-            })}
           </div>
 
         </CardContent>

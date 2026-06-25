@@ -3,15 +3,13 @@ import type { Supabase } from "./types";
 export type FinancePageData = {
   categories: Array<{ id: string; name: string; monthly_limit: string | null; image_url: string | null }>;
   categoryUsage: Array<{ category_id: string | null }>;
-  periodExpenses: Array<{ id: string; amount: string; category_id: string | null; phase_id: string | null; project_id: string | null; occurred_on: string }>;
-  recentExpenses: Array<{ id: string; amount: string; category_id: string | null; phase_id: string | null; project_id: string | null; occurred_on: string; notes: string | null }>;
-  periodIncome: Array<{ id: string; amount: string; phase_id: string | null; project_id: string | null; occurred_on: string; notes: string | null }>;
+  periodExpenses: Array<{ id: string; amount: string; category_id: string | null; occurred_on: string }>;
+  recentExpenses: Array<{ id: string; amount: string; category_id: string | null; occurred_on: string; notes: string | null }>;
+  periodIncome: Array<{ id: string; amount: string; occurred_on: string; notes: string | null }>;
   subscriptions: Array<{
     id: string;
     name: string;
     amount: string;
-    phase_id: string | null;
-    project_id: string | null;
     recurrence: "monthly" | "yearly";
     next_due_date: string | null;
     end_date: string | null;
@@ -26,8 +24,6 @@ export type FinancePageData = {
     remaining_balance: string | null;
     status: string;
     due_date: string | null;
-    phase_id: string | null;
-    project_id: string | null;
   }>;
   payments: Array<{ id: string; debt_id: string; amount: string; paid_at: string; method: string | null; notes: string | null }>;
 };
@@ -54,14 +50,14 @@ export async function getFinancePageData(
       .not("category_id", "is", null),
     supabase
       .from("ledger_entries")
-      .select("id, amount, category_id, phase_id, project_id, occurred_on")
+      .select("id, amount, category_id, occurred_on")
       .eq("account_id", accountId)
       .eq("entry_type", "expense")
       .gte("occurred_on", rangeStart)
       .lte("occurred_on", rangeEnd),
     supabase
       .from("ledger_entries")
-      .select("id, amount, category_id, phase_id, project_id, occurred_on, notes")
+      .select("id, amount, category_id, occurred_on, notes")
       .eq("account_id", accountId)
       .eq("entry_type", "expense")
       .gte("occurred_on", rangeStart)
@@ -70,7 +66,7 @@ export async function getFinancePageData(
       .limit(period === "week" ? 200 : 50),
     supabase
       .from("ledger_entries")
-      .select("id, amount, phase_id, project_id, occurred_on, notes")
+      .select("id, amount, occurred_on, notes")
       .eq("account_id", accountId)
       .eq("entry_type", "income")
       .gte("occurred_on", rangeStart)
@@ -79,14 +75,14 @@ export async function getFinancePageData(
       .limit(period === "week" ? 200 : 50),
     supabase
       .from("subscriptions")
-      .select("id, name, amount, phase_id, project_id, recurrence, next_due_date, end_date, notes, is_active")
+      .select("id, name, amount, recurrence, next_due_date, end_date, notes, is_active")
       .eq("account_id", accountId)
       .order("is_active", { ascending: false })
       .order("next_due_date", { ascending: true, nullsFirst: false })
       .order("name"),
     supabase
       .from("debts")
-      .select("id, name, type, principal, remaining_balance, status, due_date, phase_id, project_id")
+      .select("id, name, type, principal, remaining_balance, status, due_date")
       .eq("account_id", accountId)
       .order("created_at", { ascending: false }),
     supabase

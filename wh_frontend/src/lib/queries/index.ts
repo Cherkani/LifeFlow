@@ -4,7 +4,6 @@ export * from "./events";
 export * from "./finance";
 export * from "./habits";
 export * from "./knowledge";
-export * from "./life";
 export * from "./planning";
 export * from "./profiles";
 export * from "./tasks";

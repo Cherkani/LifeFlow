@@ -1,9 +1,7 @@
-import { getFinancePageData, getLifeOptions } from "@/lib/queries";
-import { cookies } from "next/headers";
+import { getFinancePageData } from "@/lib/queries";
 import { LifeSummaryBand } from "@/components/life/life-context";
 import { requireAppContext } from "@/lib/server-context";
 import { endOfIsoWeek, startOfIsoWeek } from "@/lib/utils";
-import { matchesLifeFilter, resolveLifeFilter } from "@/lib/life-filter";
 
 import { FinanceModals } from "./finance-modals";
 
@@ -21,16 +19,12 @@ type DebtRow = {
   remaining_balance: number | null;
   status: "open" | "closed";
   due_date: string | null;
-  phase_id: string | null;
-  project_id: string | null;
 };
 
 type SubscriptionRow = {
   id: string;
   name: string;
   amount: number;
-  phase_id: string | null;
-  project_id: string | null;
   recurrence: "monthly" | "yearly";
   next_due_date: string | null;
   end_date: string | null;
@@ -113,31 +107,26 @@ export default async function FinancePage({
     rangeEnd,
     period
   );
-  const lifeOptions = await getLifeOptions(supabase, account.accountId);
-  const lifeFilter = resolveLifeFilter(await cookies(), account.accountId, lifeOptions);
   const categories = financeData.categories;
   const categoryUsageCounts = new Map<string, number>();
   for (const row of financeData.categoryUsage) {
     if (!row.category_id) continue;
     categoryUsageCounts.set(row.category_id, (categoryUsageCounts.get(row.category_id) ?? 0) + 1);
   }
-  const periodExpenses = financeData.periodExpenses.filter((item) => matchesLifeFilter(item, lifeFilter));
-  const recentExpenses = financeData.recentExpenses.filter((item) => matchesLifeFilter(item, lifeFilter));
-  const periodIncome = financeData.periodIncome.filter((item) => matchesLifeFilter(item, lifeFilter));
+  const periodExpenses = financeData.periodExpenses;
+  const recentExpenses = financeData.recentExpenses;
+  const periodIncome = financeData.periodIncome;
   const subscriptions = financeData.subscriptions.map((subscription) => ({
     id: subscription.id,
     name: subscription.name,
     amount: Number(subscription.amount),
-    phase_id: subscription.phase_id,
-    project_id: subscription.project_id,
     recurrence: subscription.recurrence,
     next_due_date: subscription.next_due_date,
     end_date: subscription.end_date,
     notes: subscription.notes,
     is_active: subscription.is_active
   })) as SubscriptionRow[];
-  const subscriptionsInContext = subscriptions.filter((subscription) => matchesLifeFilter(subscription, lifeFilter));
-  const debts = (financeData.debts as unknown as DebtRow[]).filter((debt) => matchesLifeFilter(debt, lifeFilter));
+  const debts = financeData.debts as unknown as DebtRow[];
   const debtIdsInContext = new Set(debts.map((debt) => debt.id));
   const payments = financeData.payments.filter((payment) => debtIdsInContext.has(payment.debt_id));
 
@@ -252,8 +241,8 @@ export default async function FinancePage({
     };
   });
 
-  const activeSubscriptions = subscriptionsInContext.filter((subscription) => subscription.is_active);
-  const visibleSubscriptions = subscriptionsInContext.filter((subscription) =>
+  const activeSubscriptions = subscriptions.filter((subscription) => subscription.is_active);
+  const visibleSubscriptions = subscriptions.filter((subscription) =>
     isSubscriptionVisibleInRange(subscription, rangeStart)
   );
   const dueSubscriptions = activeSubscriptions.filter((subscription) => {
@@ -311,8 +300,6 @@ export default async function FinancePage({
   const recentExpensesForClient = recentExpenses.map((e) => ({
     id: e.id,
     category_id: e.category_id,
-    phase_id: e.phase_id,
-    project_id: e.project_id,
     amount: Number(e.amount),
     occurred_on: e.occurred_on,
     notes: e.notes
@@ -335,8 +322,6 @@ export default async function FinancePage({
   const periodExpensesForClient = periodExpenses.map((e) => ({
     id: e.id,
     category_id: e.category_id,
-    phase_id: e.phase_id,
-    project_id: e.project_id,
     amount: Number(e.amount),
     occurred_on: e.occurred_on
   }));
@@ -344,13 +329,11 @@ export default async function FinancePage({
   return (
     <div className="finance-theme space-y-6">
       <LifeSummaryBand
-        title="Money attached to life chapters"
-        description="Expenses and income become part of the story when they connect to a phase or project."
-        phases={lifeOptions.phases}
-        projects={lifeOptions.projects}
+        title="Finance"
+        description="Track spending, income, subscriptions, debts, and payments by period."
         stats={[
-          { label: "linked entries", value: periodExpenses.filter((entry) => entry.phase_id || entry.project_id).length },
-          { label: "unlinked spend", value: periodExpenses.filter((entry) => !entry.phase_id && !entry.project_id).length }
+          { label: "expenses", value: periodExpenses.length },
+          { label: "income", value: periodIncome.length }
         ]}
       />
 
@@ -378,7 +361,7 @@ export default async function FinancePage({
         dailyChartData={dailyChartData}
         categoryChartData={categoryChartData}
         cashFlowData={cashFlowData}
-        subscriptions={subscriptionsInContext}
+        subscriptions={subscriptions}
         subscriptionDueChartData={subscriptionDueChartData}
         totalSpent={totalSpent}
         averageDaySpend={averageDaySpend}
@@ -397,8 +380,6 @@ export default async function FinancePage({
         netAfterCommittedOutput={netAfterCommittedOutput}
         rangeStartIso={rangeStart}
         rangeEndIso={rangeEnd}
-        lifePhases={lifeOptions.phases}
-        lifeProjects={lifeOptions.projects}
         previousAnchorIso={toIsoDate(previousAnchorDate)}
         nextAnchorIso={toIsoDate(nextAnchorDate)}
       />

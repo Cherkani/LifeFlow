@@ -1,9 +1,9 @@
 import type { Supabase } from "./types";
 
 export type HabitsPageData = {
-  objectives: Array<{ id: string; title: string; image_url: string | null; phase_id: string | null; project_id: string | null }>;
-  categories: Array<{ id: string; title: string; objective_id: string | null; phase_id: string | null; project_id: string | null }>;
-  templates: Array<{ id: string; name: string; phase_id: string | null; project_id: string | null }>;
+  objectives: Array<{ id: string; title: string; image_url: string | null }>;
+  categories: Array<{ id: string; title: string; objective_id: string | null }>;
+  templates: Array<{ id: string; name: string }>;
   currentWeek: { id: string; template_id: string } | null;
 };
 
@@ -13,9 +13,9 @@ export async function getHabitsPageData(
   weekStartIso: string
 ): Promise<HabitsPageData> {
   const [objectivesRes, categoriesRes, templatesRes, currentWeekRes] = await Promise.all([
-    supabase.from("habit_objectives").select("id, title, image_url, phase_id, project_id").eq("account_id", accountId),
-    supabase.from("habits").select("id, title, objective_id, phase_id, project_id").eq("account_id", accountId).eq("is_active", true),
-    supabase.from("templates").select("id, name, phase_id, project_id").eq("account_id", accountId).order("created_at", { ascending: false }),
+    supabase.from("habit_objectives").select("id, title, image_url").eq("account_id", accountId),
+    supabase.from("habits").select("id, title, objective_id").eq("account_id", accountId).eq("is_active", true),
+    supabase.from("templates").select("id, name").eq("account_id", accountId).order("created_at", { ascending: false }),
     supabase
       .from("weeks")
       .select("id, template_id")
@@ -23,18 +23,9 @@ export async function getHabitsPageData(
       .eq("week_start_date", weekStartIso)
       .maybeSingle()
   ]);
-  const objectives = (objectivesRes.data ?? []) as HabitsPageData["objectives"];
-  const objectiveById = new Map(objectives.map((objective) => [objective.id, objective]));
-  const categories = ((categoriesRes.data ?? []) as HabitsPageData["categories"]).map((task) => {
-    const objective = task.objective_id ? objectiveById.get(task.objective_id) : null;
-    const hasOverride = task.phase_id !== null || task.project_id !== null;
-    return hasOverride
-      ? task
-      : { ...task, phase_id: objective?.phase_id ?? null, project_id: objective?.project_id ?? null };
-  });
   return {
-    objectives,
-    categories,
+    objectives: (objectivesRes.data ?? []) as HabitsPageData["objectives"],
+    categories: (categoriesRes.data ?? []) as HabitsPageData["categories"],
     templates: (templatesRes.data ?? []) as HabitsPageData["templates"],
     currentWeek: currentWeekRes.data as HabitsPageData["currentWeek"]
   };

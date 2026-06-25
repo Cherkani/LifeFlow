@@ -7,8 +7,6 @@ export type CalendarEventRow = {
   event_date: string | null;
   event_time: string | null;
   event_type: string;
-  phase_id: string | null;
-  project_id: string | null;
 };
 
 export type CalendarEventTypeRow = {
@@ -28,7 +26,7 @@ export async function getCalendarEvents(
 ): Promise<CalendarEventRow[]> {
   const { data } = await supabase
     .from("calendar_events")
-    .select("id, title, details, event_date, event_time, event_type, phase_id, project_id")
+    .select("id, title, details, event_date, event_time, event_type")
     .eq("account_id", accountId)
     .gte("event_date", monthStart)
     .lte("event_date", monthEnd)
@@ -42,7 +40,7 @@ export async function getCalendarUndatedEvents(
 ): Promise<CalendarEventRow[]> {
   const { data } = await supabase
     .from("calendar_events")
-    .select("id, title, details, event_date, event_time, event_type, phase_id, project_id")
+    .select("id, title, details, event_date, event_time, event_type")
     .eq("account_id", accountId)
     .is("event_date", null)
     .order("created_at", { ascending: true });

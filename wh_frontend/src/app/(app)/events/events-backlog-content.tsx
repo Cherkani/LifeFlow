@@ -13,8 +13,6 @@ type CalendarEvent = {
   event_date: string | null;
   event_time: string | null;
   event_type: string;
-  phase_id: string | null;
-  project_id: string | null;
 };
 
 type EventsBacklogContentProps = {
@@ -22,17 +20,13 @@ type EventsBacklogContentProps = {
   monthKey: string;
   selectedIso: string;
   eventTypes: string[];
-  lifePhases?: Array<{ id: string; title: string }>;
-  lifeProjects?: Array<{ id: string; name: string }>;
 };
 
 export function EventsBacklogContent({
   backlogEvents,
   monthKey,
   selectedIso,
-  eventTypes,
-  lifePhases = [],
-  lifeProjects = []
+  eventTypes
 }: EventsBacklogContentProps) {
   const uniqueTypes = useMemo(() => Array.from(new Set(eventTypes.map((type) => type.trim()).filter(Boolean))), [eventTypes]);
   const groupedBacklogEvents = useMemo(() => {
@@ -90,8 +84,6 @@ export function EventsBacklogContent({
                 selectedIso={selectedIso}
                 view="backlog"
                 eventTypes={uniqueTypes}
-                lifePhases={lifePhases}
-                lifeProjects={lifeProjects}
               />
             </section>
           ))}
@@ -103,8 +95,6 @@ export function EventsBacklogContent({
           selectedIso={selectedIso}
           view="backlog"
           eventTypes={uniqueTypes}
-          lifePhases={lifePhases}
-          lifeProjects={lifeProjects}
           emptyMessage="No backlog to-dos yet."
         />
       )}

@@ -13,8 +13,6 @@ type CalendarEvent = {
   event_date: string | null;
   event_time: string | null;
   event_type: string;
-  phase_id: string | null;
-  project_id: string | null;
 };
 
 type EventsSidePanelProps = {
@@ -23,8 +21,6 @@ type EventsSidePanelProps = {
   monthKey: string;
   selectedIso: string;
   selectedDateLabel: string;
-  lifePhases?: Array<{ id: string; title: string }>;
-  lifeProjects?: Array<{ id: string; name: string }>;
 };
 
 export function EventsSidePanel({
@@ -32,9 +28,7 @@ export function EventsSidePanel({
   backlogEvents,
   monthKey,
   selectedIso,
-  selectedDateLabel,
-  lifePhases = [],
-  lifeProjects = []
+  selectedDateLabel
 }: EventsSidePanelProps) {
   const [tab, setTab] = useState<"scheduled" | "backlog">("scheduled");
   const isBacklog = tab === "backlog";
@@ -114,8 +108,6 @@ export function EventsSidePanel({
           monthKey={monthKey}
           selectedIso={selectedIso}
           emptyMessage="No backlog to-dos yet."
-          lifePhases={lifePhases}
-          lifeProjects={lifeProjects}
         />
       ) : (
         <EventsList
@@ -123,8 +115,6 @@ export function EventsSidePanel({
           monthKey={monthKey}
           selectedIso={selectedIso}
           emptyMessage="No events scheduled for this day."
-          lifePhases={lifePhases}
-          lifeProjects={lifeProjects}
         />
       )}
     </div>

@@ -4,8 +4,6 @@ export type KnowledgeSpaceRow = {
   id: string;
   title: string;
   image_url: string | null;
-  phase_id: string | null;
-  project_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -13,7 +11,7 @@ export type KnowledgeSpaceRow = {
 export async function getKnowledgeSpaces(supabase: Supabase, accountId: string): Promise<KnowledgeSpaceRow[]> {
   const { data } = await supabase
     .from("knowledge_spaces")
-    .select("id, title, image_url, phase_id, project_id, created_at, updated_at")
+    .select("id, title, image_url, created_at, updated_at")
     .eq("account_id", accountId)
     .order("updated_at", { ascending: false });
   return (data ?? []) as KnowledgeSpaceRow[];
@@ -44,7 +42,7 @@ export async function getKnowledgeSpaceById(
 ): Promise<KnowledgeSpaceRow | null> {
   const { data } = await supabase
     .from("knowledge_spaces")
-    .select("id, title, image_url, phase_id, project_id, created_at, updated_at")
+    .select("id, title, image_url, created_at, updated_at")
     .eq("id", spaceId)
     .eq("account_id", accountId)
     .maybeSingle();

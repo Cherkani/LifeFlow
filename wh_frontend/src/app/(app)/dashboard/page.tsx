@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import type { LucideIcon } from "lucide-react";
-import { ArrowRight, CalendarDays, ChartNoAxesCombined, GitBranch, NotebookPen, Repeat, WalletCards } from "lucide-react";
+import { ArrowRight, CalendarDays, ChartNoAxesCombined, NotebookPen, Repeat, WalletCards } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDashboardCounts } from "@/lib/queries";
@@ -10,20 +10,12 @@ type QuickAction = {
   title: string;
   description: string;
   button: string;
-  href: "/life-map" | "/planning" | "/habits" | "/events" | "/analytics" | "/finance";
+  href: "/planning" | "/habits" | "/events" | "/analytics" | "/finance";
   icon: LucideIcon;
   tone: string;
 };
 
 const quickActions: QuickAction[] = [
-  {
-    title: "Map Your Life",
-    description: "Connect phases, projects, money, notes, events, objectives, and daily tasks.",
-    button: "Open Life Map",
-    href: "/life-map",
-    icon: GitBranch,
-    tone: "from-[#d2e3db]/45 to-[#eef6f1]/25"
-  },
   {
     title: "Plan Your Week",
     description: "Create objectives and templates in a structured planner flow.",
@@ -60,7 +52,7 @@ const quickActions: QuickAction[] = [
 
 export default async function DashboardPage() {
   const { supabase, account } = await requireAppContext();
-  const { phasesCount, projectsCount, objectivesCount, templatesCount } = await getDashboardCounts(supabase, account.accountId);
+  const { objectivesCount, templatesCount } = await getDashboardCounts(supabase, account.accountId);
 
   return (
     <div className="space-y-6">
@@ -70,17 +62,9 @@ export default async function DashboardPage() {
           <div className="absolute bottom-0 left-0 h-20 w-20 rounded-tr-full bg-[#5b87cb]/18" />
           <h1 className="relative text-4xl font-bold tracking-tight text-[var(--app-text-strong)]">Welcome back to LifeFlow</h1>
           <p className="relative max-w-3xl text-base text-[var(--app-text-muted)]">
-            Map your life phases, connect projects to money and tasks, and keep your progress visible from one command center.
+            Plan your week, execute daily tasks, track money, and keep progress visible from one command center.
           </p>
           <div className="relative grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-lg border border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg-soft)] p-3">
-              <p className="text-xs uppercase tracking-wide text-[var(--app-text-muted)]">Life phases</p>
-              <p className="mt-1 text-xl font-semibold text-[var(--app-text-strong)]">{phasesCount}</p>
-            </div>
-            <div className="rounded-lg border border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg-soft)] p-3">
-              <p className="text-xs uppercase tracking-wide text-[var(--app-text-muted)]">Projects</p>
-              <p className="mt-1 text-xl font-semibold text-[var(--app-text-strong)]">{projectsCount}</p>
-            </div>
             <div className="rounded-lg border border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg-soft)] p-3">
               <p className="text-xs uppercase tracking-wide text-[var(--app-text-muted)]">Objectives</p>
               <p className="mt-1 text-xl font-semibold text-[var(--app-text-strong)]">{objectivesCount}</p>
@@ -124,15 +108,6 @@ export default async function DashboardPage() {
           <CardTitle className="text-[var(--app-text-strong)]">Quick Access</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Link
-            href={"/life-map" as Route}
-            className="rounded-lg border border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg-soft)] p-3 text-sm font-semibold text-[var(--app-text-strong)] transition hover:bg-[var(--app-btn-secondary-bg)]"
-          >
-            <div className="mb-2 inline-flex size-9 items-center justify-center rounded-lg bg-[var(--app-chip-bg)]">
-              <GitBranch size={18} className="text-[var(--app-chip-fg)]" />
-            </div>
-            Life map
-          </Link>
           <Link
             href="/events"
             className="rounded-lg border border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg-soft)] p-3 text-sm font-semibold text-[var(--app-text-strong)] transition hover:bg-[var(--app-btn-secondary-bg)]"

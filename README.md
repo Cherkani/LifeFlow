@@ -14,7 +14,6 @@ life_flow/
 ## Main Modules
 
 - Dashboard
-- Life Map
 - Planner
 - Weekly Tracker
 - Events

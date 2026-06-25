@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/ui/modal-shell";
+import { Progress } from "@/components/ui/progress";
 import { Select } from "@/components/ui/select";
 
 type Session = {
@@ -100,12 +101,9 @@ export function ExecutionBoard({
               const daySessions = sessionsByDate[dateKey] ?? [];
               const dayPlannedMinutes = daySessions.reduce((sum, s) => sum + s.planned_minutes, 0);
               const dayDoneMinutes = daySessions.reduce((sum, s) => sum + (s.actual_minutes ?? 0), 0);
-              const dayProgress =
-                dayPlannedMinutes > 0
-                  ? Math.round((Math.min(dayDoneMinutes, dayPlannedMinutes) / dayPlannedMinutes) * 100)
-                  : dayDoneMinutes > 0
-                    ? 100
-                    : 0;
+              const completedTasks = daySessions.filter((session) => session.completed).length;
+              const totalTasks = daySessions.length;
+              const dayProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
               const weekDay = weekdayName(dateKey);
               const weekDayIndex = isoWeekdayIndex(dateKey);
               const templateOrderForDay = templateDayOrder[weekDayIndex];
@@ -150,16 +148,21 @@ export function ExecutionBoard({
                       ) : null}
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-1">
+                      <Badge variant={dayProgress >= 100 ? "default" : "warning"} className="px-2 py-0 text-[10px]">
+                        {completedTasks}/{totalTasks} tasks
+                      </Badge>
                       <Badge variant="secondary" className="bg-[var(--app-chip-bg)] px-2 py-0 text-[10px] text-[var(--app-chip-fg)]">
                         {formatMinutesLabel(dayDoneMinutes)} done
                       </Badge>
                       <Badge variant="secondary" className="bg-[var(--app-chip-bg)] px-2 py-0 text-[10px] text-[var(--app-chip-fg)]">
                         {formatMinutesLabel(dayPlannedMinutes)} planned
                       </Badge>
-                      <Badge variant={dayProgress >= 100 ? "default" : "warning"} className="px-2 py-0 text-[10px]">
-                        {dayProgress}%
-                      </Badge>
                     </div>
+                    <Progress
+                      value={dayProgress}
+                      className="mt-2 h-1.5 bg-[var(--app-panel-bg-soft)]"
+                      barClassName={dayProgress >= 100 ? "bg-emerald-600" : "bg-[#23406d]"}
+                    />
                   </div>
 
                   <div className="mt-2 flex flex-1 flex-col gap-2">

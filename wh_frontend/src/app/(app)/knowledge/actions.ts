@@ -6,34 +6,17 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { RedirectResult } from "@/lib/action-with-state";
-import { resolveOwnedLifeContext } from "@/lib/life-context-server";
 import { requireAppContext } from "@/lib/server-context";
 
 const createSpaceSchema = z.object({
   title: z.string().trim().min(2, "Space title is required").max(140),
-  imageUrl: z.string().trim().optional(),
-  phaseId: z.preprocess(
-    (value) => (typeof value === "string" ? value.trim() : ""),
-    z.union([z.literal(""), z.string().uuid()]).transform((value) => (value === "" ? null : value))
-  ),
-  projectId: z.preprocess(
-    (value) => (typeof value === "string" ? value.trim() : ""),
-    z.union([z.literal(""), z.string().uuid()]).transform((value) => (value === "" ? null : value))
-  )
+  imageUrl: z.string().trim().optional()
 });
 
 const updateSpaceSchema = z.object({
   spaceId: z.string().uuid(),
   title: z.string().trim().min(2, "Space title is required").max(140),
-  imageUrl: z.string().trim().optional(),
-  phaseId: z.preprocess(
-    (value) => (typeof value === "string" ? value.trim() : ""),
-    z.union([z.literal(""), z.string().uuid()]).transform((value) => (value === "" ? null : value))
-  ),
-  projectId: z.preprocess(
-    (value) => (typeof value === "string" ? value.trim() : ""),
-    z.union([z.literal(""), z.string().uuid()]).transform((value) => (value === "" ? null : value))
-  )
+  imageUrl: z.string().trim().optional()
 });
 
 const deleteSpaceSchema = z.object({
@@ -171,9 +154,7 @@ export async function createKnowledgeSpaceAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"), "/knowledge");
   const payload = createSpaceSchema.safeParse({
     title: formData.get("title"),
-    imageUrl: formData.get("imageUrl"),
-    phaseId: formData.get("phaseId"),
-    projectId: formData.get("projectId")
+    imageUrl: formData.get("imageUrl")
   });
 
   if (!payload.success) {
@@ -181,8 +162,6 @@ export async function createKnowledgeSpaceAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
-  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
-  if (!context) return redirectTarget(returnPath, "error", "That life context is unavailable.");
   const imageUrl = normalizeOptional(payload.data.imageUrl);
   const safeImageUrl = imageUrl && URL.canParse(imageUrl) ? imageUrl : null;
 
@@ -191,9 +170,7 @@ export async function createKnowledgeSpaceAction(formData: FormData) {
     .insert({
       account_id: account.accountId,
       title: payload.data.title,
-      image_url: safeImageUrl,
-      phase_id: context.phaseId,
-      project_id: context.projectId
+      image_url: safeImageUrl
     })
     .select("id")
     .single();
@@ -216,9 +193,7 @@ export async function updateKnowledgeSpaceAction(formData: FormData) {
   const payload = updateSpaceSchema.safeParse({
     spaceId: formData.get("spaceId"),
     title: formData.get("title"),
-    imageUrl: formData.get("imageUrl"),
-    phaseId: formData.get("phaseId"),
-    projectId: formData.get("projectId")
+    imageUrl: formData.get("imageUrl")
   });
 
   if (!payload.success) {
@@ -226,8 +201,6 @@ export async function updateKnowledgeSpaceAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
-  const context = await resolveOwnedLifeContext(supabase, account.accountId, payload.data.phaseId, payload.data.projectId);
-  if (!context) return redirectTarget(returnPath, "error", "That life context is unavailable.");
   const imageUrl = normalizeOptional(payload.data.imageUrl);
   const safeImageUrl = imageUrl && URL.canParse(imageUrl) ? imageUrl : null;
 
@@ -235,9 +208,7 @@ export async function updateKnowledgeSpaceAction(formData: FormData) {
     .from("knowledge_spaces")
     .update({
       title: payload.data.title,
-      image_url: safeImageUrl,
-      phase_id: context.phaseId,
-      project_id: context.projectId
+      image_url: safeImageUrl
     })
     .eq("id", payload.data.spaceId)
     .eq("account_id", account.accountId)

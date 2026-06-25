@@ -1,9 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cookies } from "next/headers";
 import { LifeSummaryBand } from "@/components/life/life-context";
-import { getLifeOptions, getPlanningData, getPlanningSessions, getPlanningTemplateEntries } from "@/lib/queries";
+import { getPlanningData, getPlanningSessions, getPlanningTemplateEntries } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
-import { matchesLifeFilter, resolveLifeFilter } from "@/lib/life-filter";
 import { startOfIsoWeek, toDateInputValue } from "@/lib/utils";
 
 import { GeneratedWeeksCalendar } from "./generated-weeks-calendar";
@@ -14,8 +12,6 @@ type Objective = {
   title: string;
   description: string | null;
   image_url: string | null;
-  phase_id: string | null;
-  project_id: string | null;
 };
 
 type Task = {
@@ -23,16 +19,12 @@ type Task = {
   title: string;
   objective_id: string | null;
   metadata: unknown;
-  phase_id: string | null;
-  project_id: string | null;
 };
 
 type Template = {
   id: string;
   name: string;
   objective_id: string | null;
-  phase_id: string | null;
-  project_id: string | null;
 };
 
 type TemplateEntry = {
@@ -52,11 +44,9 @@ export default async function PlanningPage() {
     supabase,
     account.accountId
   );
-  const lifeOptions = await getLifeOptions(supabase, account.accountId);
-  const lifeFilter = resolveLifeFilter(await cookies(), account.accountId, lifeOptions);
-  const objectives = (objectivesRaw as Objective[]).filter((item) => matchesLifeFilter(item, lifeFilter));
-  const tasks = (tasksRaw as Task[]).filter((item) => matchesLifeFilter(item, lifeFilter));
-  const templates = (templatesRaw as Template[]).filter((item) => matchesLifeFilter(item, lifeFilter));
+  const objectives = objectivesRaw as Objective[];
+  const tasks = tasksRaw as Task[];
+  const templates = templatesRaw as Template[];
   const visibleTemplateIds = new Set(templates.map((template) => template.id));
   const weeks = weeksRaw.filter((week) => visibleTemplateIds.has(week.template_id));
 
@@ -151,13 +141,11 @@ export default async function PlanningPage() {
   return (
     <div className="space-y-6">
       <LifeSummaryBand
-        title="Plan by life chapter"
-        description="Objectives and templates are strongest when they point to a real phase or project, not just a loose checklist."
-        phases={lifeOptions.phases}
-        projects={lifeOptions.projects}
+        title="Planner"
+        description="Objectives and templates keep weekly planning structured without extra mapping overhead."
         stats={[
-          { label: "linked objectives", value: objectives.filter((objective) => objective.phase_id || objective.project_id).length },
-          { label: "linked tasks", value: tasks.filter((task) => task.phase_id || task.project_id).length }
+          { label: "objectives", value: objectives.length },
+          { label: "tasks", value: tasks.length }
         ]}
       />
 
@@ -176,8 +164,6 @@ export default async function PlanningPage() {
           totalTemplateEntries,
           assignedWeeksCount
         }}
-        lifePhases={lifeOptions.phases}
-        lifeProjects={lifeOptions.projects}
       />
 
       <Card>

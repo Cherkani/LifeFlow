@@ -5,7 +5,7 @@ import "@/app/globals.css";
 
 export const metadata: Metadata = {
   title: "LifeFlow",
-  description: "A connected life map for phases, projects, money, objectives, notes, and daily execution."
+  description: "A connected workspace for planning, projects, money, notes, and daily execution."
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
