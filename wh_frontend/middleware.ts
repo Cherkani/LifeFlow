@@ -5,6 +5,16 @@ import { updateSession } from "@/lib/supabase/middleware";
 
 const PUBLIC_ROUTES = ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/auth/callback"];
 
+function redirectWithCookies(url: URL, response: NextResponse) {
+  const redirectResponse = NextResponse.redirect(url);
+
+  for (const cookie of response.cookies.getAll()) {
+    redirectResponse.cookies.set(cookie);
+  }
+
+  return redirectResponse;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
   const isDocumentNavigation = request.headers.get("sec-fetch-dest") === "document";
@@ -39,13 +49,13 @@ export async function middleware(request: NextRequest) {
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    return redirectWithCookies(url, response);
   }
 
   if (user && isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+    return redirectWithCookies(url, response);
   }
 
   return response;
