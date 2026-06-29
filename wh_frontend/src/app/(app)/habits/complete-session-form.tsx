@@ -27,11 +27,13 @@ export function CompleteSessionForm({
   session,
   returnPath,
   habitTitle,
+  requiresMinutes,
   onClose
 }: {
   session: SessionSummary;
   returnPath: string;
   habitTitle: string;
+  requiresMinutes: boolean;
   onClose?: () => void;
 }) {
   const [checked, setChecked] = useState(session.completed);
@@ -45,15 +47,19 @@ export function CompleteSessionForm({
         <input type="hidden" name="returnPath" value={returnPath} />
         <div className="rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-3">
           <p className="text-sm font-semibold text-[var(--app-text-strong)]">{habitTitle}</p>
-          <p className="text-xs text-[var(--app-text-muted)]">
-            Planned {session.planned_minutes} min · Minimum {session.minimum_minutes} min
-          </p>
+          {requiresMinutes ? (
+            <p className="text-xs text-[var(--app-text-muted)]">
+              Planned {session.planned_minutes} min · Minimum {session.minimum_minutes} min
+            </p>
+          ) : (
+            <p className="text-xs text-[var(--app-text-muted)]">This task does not require time tracking.</p>
+          )}
         </div>
         <label className="inline-flex items-center gap-2 text-sm text-[var(--app-text-strong)]">
           <Checkbox name="completed" checked={checked} onChange={(event) => setChecked(event.target.checked)} />
           Mark completed
         </label>
-        {checked ? (
+        {checked && requiresMinutes ? (
           <div className="space-y-2">
             <p className="text-xs font-medium text-[var(--app-text-muted)]">Minutes done</p>
             <Input

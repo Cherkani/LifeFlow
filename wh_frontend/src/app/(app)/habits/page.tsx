@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import {
+  getCalendarEvents,
   getHabitsPageData,
   getMonthSessions,
   getTemplateEntriesOrder,
@@ -37,6 +38,7 @@ type Category = {
   id: string;
   title: string;
   objective_id: string | null;
+  type: "time_tracking" | "fixed_protocol" | "count" | "custom";
 };
 
 type Objective = {
@@ -58,6 +60,15 @@ type Session = {
   minimum_minutes: number;
   actual_minutes: number | null;
   completed: boolean;
+};
+
+type CalendarEvent = {
+  id: string;
+  title: string | null;
+  details: string | null;
+  event_date: string | null;
+  event_time: string | null;
+  event_type: string;
 };
 
 function parseWeekStart(raw: string | undefined) {
@@ -133,14 +144,16 @@ export default async function HabitsPage({
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
   const categoryIds = categories.map((category) => category.id);
 
-  const [templateEntriesOrderRes, weekSessionsRes, monthSessionsRes] = await Promise.all([
+  const [templateEntriesOrderRes, weekSessionsRes, monthSessionsRes, weekCalendarEventsRes] = await Promise.all([
     selectedTemplateId ? getTemplateEntriesOrder(supabase, selectedTemplateId) : Promise.resolve({ data: [] as Array<{ habit_id: string; day_of_week: number }> }),
     getWeekSessions(supabase, categoryIds, weekStartIso, weekEndIso),
-    getMonthSessions(supabase, categoryIds, monthStart, monthEnd)
+    getMonthSessions(supabase, categoryIds, monthStart, monthEnd),
+    getCalendarEvents(supabase, account.accountId, weekStartIso, weekEndIso)
   ]);
 
   const sessions = (weekSessionsRes.data ?? []) as Session[];
   const monthSessions = (monthSessionsRes.data ?? []) as Array<{ actual_minutes: number | null; planned_minutes: number; completed: boolean }>;
+  const weekCalendarEvents = weekCalendarEventsRes as CalendarEvent[];
 
   const templateDayOrder = new Map<number, Map<string, number>>();
   for (const entry of templateEntriesOrderRes.data ?? []) {
@@ -161,9 +174,10 @@ export default async function HabitsPage({
           return category?.objective_id === selectedObjectiveId;
         })
       : sessions;
+  const timedSessions = filteredSessions.filter((session) => categoryById.get(session.habit_id)?.type === "time_tracking");
 
-  const weekPlannedMinutes = filteredSessions.reduce((sum, session) => sum + session.planned_minutes, 0);
-  const weekDoneMinutes = filteredSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
+  const weekPlannedMinutes = timedSessions.reduce((sum, session) => sum + session.planned_minutes, 0);
+  const weekDoneMinutes = timedSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
   const monthDoneMinutes = monthSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
   const plannedSessions = filteredSessions.filter((session) => session.planned_minutes > 0);
   const weekCompletion =
@@ -177,6 +191,13 @@ export default async function HabitsPage({
     const list = sessionsByDate.get(session.session_date) ?? [];
     list.push(session);
     sessionsByDate.set(session.session_date, list);
+  }
+  const calendarEventsByDate = new Map<string, CalendarEvent[]>();
+  for (const event of weekCalendarEvents) {
+    if (!event.event_date) continue;
+    const list = calendarEventsByDate.get(event.event_date) ?? [];
+    list.push(event);
+    calendarEventsByDate.set(event.event_date, list);
   }
 
   const weekDates = Array.from({ length: 7 }, (_, index) => {
@@ -427,6 +448,7 @@ export default async function HabitsPage({
       <ExecutionBoard
         weekDates={weekDates}
         sessionsByDate={Object.fromEntries(sessionsByDate)}
+        calendarEventsByDate={Object.fromEntries(calendarEventsByDate)}
         templateDayOrder={Object.fromEntries(
           Array.from(templateDayOrder.entries()).map(([k, v]) => [k, Object.fromEntries(v)] as const)
         )}

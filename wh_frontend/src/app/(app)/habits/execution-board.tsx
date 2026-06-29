@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { CheckSquare, Square } from "lucide-react";
+import { CalendarDays, CheckSquare, Clock3, ListTodo, Square } from "lucide-react";
 
 import { addCompensationSessionFormAction } from "@/app/(app)/habits/actions";
 import { CompleteSessionForm } from "@/app/(app)/habits/complete-session-form";
@@ -25,8 +25,22 @@ type Session = {
   completed: boolean;
 };
 
+type CalendarEvent = {
+  id: string;
+  title: string | null;
+  details: string | null;
+  event_date: string | null;
+  event_time: string | null;
+  event_type: string;
+};
+
 type Objective = { id: string; title: string; image_url: string | null };
-type Category = { id: string; title: string; objective_id: string | null };
+type Category = {
+  id: string;
+  title: string;
+  objective_id: string | null;
+  type: "time_tracking" | "fixed_protocol" | "count" | "custom";
+};
 
 function weekdayName(value: string) {
   return new Date(`${value}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" });
@@ -58,9 +72,27 @@ function isoWeekdayIndex(value: string) {
   return day === 0 ? 7 : day;
 }
 
+function renderTaskThumb(habitTitle: string, objectiveImageUrl: string | null) {
+  const fallbackInitial = habitTitle.slice(0, 1).toUpperCase();
+  if (objectiveImageUrl) {
+    return (
+      <div className="relative size-10 shrink-0 overflow-hidden rounded-md border border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg)]">
+        <Image src={objectiveImageUrl} alt={habitTitle} fill sizes="40px" className="object-cover" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-dashed border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg-soft)] text-xs font-semibold uppercase text-[var(--app-btn-secondary-fg)]">
+      {fallbackInitial}
+    </div>
+  );
+}
+
 type ExecutionBoardProps = {
   weekDates: string[];
   sessionsByDate: Record<string, Session[]>;
+  calendarEventsByDate: Record<string, CalendarEvent[]>;
   templateDayOrder: Record<number, Record<string, number>>;
   categoryById: Record<string, Category>;
   objectiveById: Record<string, Objective>;
@@ -73,6 +105,7 @@ type ExecutionBoardProps = {
 export function ExecutionBoard({
   weekDates,
   sessionsByDate,
+  calendarEventsByDate,
   templateDayOrder,
   categoryById,
   objectiveById,
@@ -99,8 +132,11 @@ export function ExecutionBoard({
           <div className="grid gap-3 md:grid-cols-7">
             {weekDates.map((dateKey) => {
               const daySessions = sessionsByDate[dateKey] ?? [];
-              const dayPlannedMinutes = daySessions.reduce((sum, s) => sum + s.planned_minutes, 0);
-              const dayDoneMinutes = daySessions.reduce((sum, s) => sum + (s.actual_minutes ?? 0), 0);
+              const timedDaySessions = daySessions.filter((session) => categoryById[session.habit_id]?.type === "time_tracking");
+              const nonTimedDaySessions = daySessions.filter((session) => categoryById[session.habit_id]?.type !== "time_tracking");
+              const dayCalendarEvents = calendarEventsByDate[dateKey] ?? [];
+              const dayPlannedMinutes = timedDaySessions.reduce((sum, s) => sum + s.planned_minutes, 0);
+              const dayDoneMinutes = timedDaySessions.reduce((sum, s) => sum + (s.actual_minutes ?? 0), 0);
               const completedTasks = daySessions.filter((session) => session.completed).length;
               const totalTasks = daySessions.length;
               const dayProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
@@ -118,6 +154,8 @@ export function ExecutionBoard({
                       return titleA.localeCompare(titleB);
                     })
                   : daySessions;
+              const orderedTimedSessions = orderedDaySessions.filter((session) => categoryById[session.habit_id]?.type === "time_tracking");
+              const orderedNonTimedSessions = orderedDaySessions.filter((session) => categoryById[session.habit_id]?.type !== "time_tracking");
               const isCurrentDay = dateKey === todayKey;
 
               return (
@@ -125,7 +163,7 @@ export function ExecutionBoard({
                   key={dateKey}
                   className={[
                     dateKey === mobileFocusDate ? "flex" : "hidden md:flex",
-                    "min-h-[340px] flex-col rounded-xl border p-2",
+                    "min-h-[380px] flex-col rounded-xl border p-2",
                     isCurrentDay
                       ? "border-[#c6ba86] bg-[color-mix(in_srgb,var(--app-panel-bg-soft)_78%,#eedf9c_22%)]"
                       : "border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg-soft)]"
@@ -151,6 +189,16 @@ export function ExecutionBoard({
                       <Badge variant={dayProgress >= 100 ? "default" : "warning"} className="px-2 py-0 text-[10px]">
                         {completedTasks}/{totalTasks} tasks
                       </Badge>
+                      {nonTimedDaySessions.length > 0 ? (
+                        <Badge variant="secondary" className="bg-[var(--app-chip-bg)] px-2 py-0 text-[10px] text-[var(--app-chip-fg)]">
+                          {nonTimedDaySessions.length} no-time
+                        </Badge>
+                      ) : null}
+                      {dayCalendarEvents.length > 0 ? (
+                        <Badge variant="secondary" className="bg-[var(--app-chip-bg)] px-2 py-0 text-[10px] text-[var(--app-chip-fg)]">
+                          {dayCalendarEvents.length} calendar
+                        </Badge>
+                      ) : null}
                       <Badge variant="secondary" className="bg-[var(--app-chip-bg)] px-2 py-0 text-[10px] text-[var(--app-chip-fg)]">
                         {formatMinutesLabel(dayDoneMinutes)} done
                       </Badge>
@@ -166,45 +214,105 @@ export function ExecutionBoard({
                   </div>
 
                   <div className="mt-2 flex flex-1 flex-col gap-2">
-                    {orderedDaySessions.length > 0 ? (
-                      orderedDaySessions.map((session) => {
-                        const habit = categoryById[session.habit_id];
-                        const objective = objectiveById[habit?.objective_id ?? ""];
-                        const habitTitle = habit?.title ?? "Task";
-                        const objectiveImageUrl = objective?.image_url;
-                        const fallbackInitial = habitTitle.slice(0, 1).toUpperCase();
-                        return (
-                          <button
-                            key={session.id}
-                            type="button"
-                            onClick={() => setSelectedSessionId(session.id)}
-                            className="flex w-full items-center justify-between gap-2 rounded-md border border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg)] px-2 py-2 text-left transition hover:bg-[var(--app-panel-bg-soft)]"
-                          >
-                            <div className="flex flex-1 items-center gap-2 overflow-hidden">
-                              {objectiveImageUrl ? (
-                                <div className="relative size-10 shrink-0 overflow-hidden rounded-md border border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg)]">
-                                  <Image src={objectiveImageUrl} alt={habitTitle} fill sizes="40px" className="object-cover" />
+                    {orderedTimedSessions.length > 0 ? (
+                      <>
+                        <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--app-text-muted)]">
+                          <Clock3 size={12} />
+                          Timed
+                        </p>
+                        {orderedTimedSessions.map((session) => {
+                          const habit = categoryById[session.habit_id];
+                          const objective = objectiveById[habit?.objective_id ?? ""];
+                          const habitTitle = habit?.title ?? "Task";
+                          return (
+                            <button
+                              key={session.id}
+                              type="button"
+                              onClick={() => setSelectedSessionId(session.id)}
+                              className="flex w-full items-center justify-between gap-2 rounded-md border border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg)] px-2 py-2 text-left transition hover:bg-[var(--app-panel-bg-soft)]"
+                            >
+                              <div className="flex flex-1 items-center gap-2 overflow-hidden">
+                                {renderTaskThumb(habitTitle, objective?.image_url ?? null)}
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-xs font-semibold text-[var(--app-text-strong)]">{habitTitle}</p>
+                                  <p className="text-[10px] text-[var(--app-text-muted)]">
+                                    {formatMinutesLabel(session.actual_minutes ?? 0)} / {formatMinutesLabel(session.planned_minutes)}
+                                  </p>
                                 </div>
+                              </div>
+                              {session.completed ? (
+                                <CheckSquare size={16} className="shrink-0 text-emerald-600" />
                               ) : (
-                                <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-dashed border-[var(--app-panel-border-strong)] bg-[var(--app-panel-bg-soft)] text-xs font-semibold uppercase text-[var(--app-btn-secondary-fg)]">
-                                  {fallbackInitial}
-                                </div>
+                                <Square size={16} className="shrink-0 text-[var(--app-text-muted)]" />
                               )}
-                              <p className="min-w-0 flex-1 truncate text-xs font-semibold text-[var(--app-text-strong)]">{habitTitle}</p>
-                            </div>
-                            {session.completed ? (
-                              <CheckSquare size={16} className="shrink-0 text-emerald-600" />
-                            ) : (
-                              <Square size={16} className="shrink-0 text-[var(--app-text-muted)]" />
-                            )}
-                          </button>
-                        );
-                      })
-                    ) : (
+                            </button>
+                          );
+                        })}
+                      </>
+                    ) : null}
+
+                    {orderedNonTimedSessions.length > 0 ? (
+                      <>
+                        <p className="mt-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--app-text-muted)]">
+                          <ListTodo size={12} />
+                          No-Time Tasks
+                        </p>
+                        {orderedNonTimedSessions.map((session) => {
+                          const habit = categoryById[session.habit_id];
+                          const objective = objectiveById[habit?.objective_id ?? ""];
+                          const habitTitle = habit?.title ?? "Task";
+                          return (
+                            <button
+                              key={session.id}
+                              type="button"
+                              onClick={() => setSelectedSessionId(session.id)}
+                              className="flex w-full items-center justify-between gap-2 rounded-md border border-[var(--app-panel-border-strong)] bg-[color-mix(in_srgb,var(--app-panel-bg)_88%,#f1f5f9_12%)] px-2 py-2 text-left transition hover:bg-[var(--app-panel-bg-soft)]"
+                            >
+                              <div className="flex flex-1 items-center gap-2 overflow-hidden">
+                                {renderTaskThumb(habitTitle, objective?.image_url ?? null)}
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-xs font-semibold text-[var(--app-text-strong)]">{habitTitle}</p>
+                                  <p className="text-[10px] capitalize text-[var(--app-text-muted)]">{habit?.type.replace("_", " ")}</p>
+                                </div>
+                              </div>
+                              {session.completed ? (
+                                <CheckSquare size={16} className="shrink-0 text-emerald-600" />
+                              ) : (
+                                <Square size={16} className="shrink-0 text-[var(--app-text-muted)]" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </>
+                    ) : null}
+
+                    {dayCalendarEvents.length > 0 ? (
+                      <>
+                        <p className="mt-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--app-text-muted)]">
+                          <CalendarDays size={12} />
+                          Calendar
+                        </p>
+                        {dayCalendarEvents.map((event) => (
+                          <div
+                            key={event.id}
+                            className="rounded-md border border-[var(--app-panel-border-strong)] bg-[color-mix(in_srgb,var(--app-panel-bg)_82%,#dbeafe_18%)] px-2 py-2"
+                          >
+                            <p className="truncate text-xs font-semibold text-[var(--app-text-strong)]">{event.title || "Calendar item"}</p>
+                            <p className="text-[10px] uppercase tracking-wide text-[var(--app-text-muted)]">
+                              {event.event_type}
+                              {event.event_time ? ` · ${event.event_time}` : ""}
+                            </p>
+                            {event.details ? <p className="mt-1 text-[10px] text-[var(--app-text-muted)]">{event.details}</p> : null}
+                          </div>
+                        ))}
+                      </>
+                    ) : null}
+
+                    {orderedTimedSessions.length === 0 && orderedNonTimedSessions.length === 0 && dayCalendarEvents.length === 0 ? (
                       <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-[var(--app-panel-border-strong)] text-center">
                         <p className="text-xs italic text-[var(--app-text-muted)]">No tasks assigned</p>
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               );
@@ -216,12 +324,17 @@ export function ExecutionBoard({
       {selectedSession ? (
         <ModalShell
           title="Update Task"
-          description="Check/uncheck and set minutes done for this day."
+          description={
+            categoryById[selectedSession.habit_id]?.type === "time_tracking"
+              ? "Check/uncheck and set minutes done for this day."
+              : "Mark this task complete without tracking time."
+          }
           onClose={() => setSelectedSessionId(null)}
         >
           <CompleteSessionForm
             session={selectedSession}
             habitTitle={categoryById[selectedSession.habit_id]?.title ?? "Task"}
+            requiresMinutes={categoryById[selectedSession.habit_id]?.type === "time_tracking"}
             returnPath={weekHref}
             onClose={() => setSelectedSessionId(null)}
           />

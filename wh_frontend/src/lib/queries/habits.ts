@@ -2,7 +2,7 @@ import type { Supabase } from "./types";
 
 export type HabitsPageData = {
   objectives: Array<{ id: string; title: string; image_url: string | null }>;
-  categories: Array<{ id: string; title: string; objective_id: string | null }>;
+  categories: Array<{ id: string; title: string; objective_id: string | null; type: "time_tracking" | "fixed_protocol" | "count" | "custom" }>;
   templates: Array<{ id: string; name: string }>;
   currentWeek: { id: string; template_id: string } | null;
 };
@@ -14,7 +14,7 @@ export async function getHabitsPageData(
 ): Promise<HabitsPageData> {
   const [objectivesRes, categoriesRes, templatesRes, currentWeekRes] = await Promise.all([
     supabase.from("habit_objectives").select("id, title, image_url").eq("account_id", accountId),
-    supabase.from("habits").select("id, title, objective_id").eq("account_id", accountId).eq("is_active", true),
+    supabase.from("habits").select("id, title, objective_id, type").eq("account_id", accountId).eq("is_active", true),
     supabase.from("templates").select("id, name").eq("account_id", accountId).order("created_at", { ascending: false }),
     supabase
       .from("weeks")

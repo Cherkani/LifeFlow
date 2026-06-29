@@ -362,7 +362,7 @@ export async function completeSessionWithHoursAction(formData: FormData) {
   const { supabase } = await requireAppContext();
   const { data: session } = await supabase
     .from("habit_sessions")
-    .select("id, minimum_minutes, actual_minutes")
+    .select("id, minimum_minutes, actual_minutes, habits(type)")
     .eq("id", payload.data.sessionId)
     .maybeSingle();
 
@@ -370,12 +370,16 @@ export async function completeSessionWithHoursAction(formData: FormData) {
     return { redirectTo: returnPath };
   }
 
-  if (completed && (minutes === null || minutes <= 0)) {
+  const relatedHabit = (session as { habits?: { type?: "time_tracking" | "fixed_protocol" | "count" | "custom" } | Array<{ type?: "time_tracking" | "fixed_protocol" | "count" | "custom" }> } | null)?.habits;
+  const habitType = Array.isArray(relatedHabit) ? relatedHabit[0]?.type : relatedHabit?.type;
+  const requiresMinutes = habitType === "time_tracking";
+
+  if (completed && requiresMinutes && (minutes === null || minutes <= 0)) {
     return { redirectTo: returnPath };
   }
 
   const actualMinutes = completed
-    ? (minutes ?? session.minimum_minutes)
+    ? (requiresMinutes ? (minutes ?? session.minimum_minutes) : (minutes ?? 0))
     : (minutes ?? null);
 
   await supabase
