@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDownRight, ArrowUpRight, Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
@@ -16,14 +16,18 @@ import {
   createExpenseCategoryFormAction,
   createExpenseFormAction,
   createIncomeFormAction,
+  createIncomeSourceFormAction,
   createSubscriptionFormAction,
   deleteExpenseCategoryFormAction,
   deleteDebtFormAction,
   deleteExpenseFormAction,
+  deleteIncomeSourceFormAction,
   deleteSubscriptionFormAction,
+  toggleIncomeSourceActiveFormAction,
   toggleSubscriptionActiveFormAction,
   updateExpenseCategoryFormAction,
   updateExpenseFormAction,
+  updateIncomeSourceFormAction,
   updateSubscriptionFormAction
 } from "@/app/(app)/finance/actions";
 import { ActionForm } from "@/components/forms/action-form";
@@ -34,6 +38,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ModalShell } from "@/components/ui/modal-shell";
+import { Progress } from "@/components/ui/progress";
 import { SectionHeader } from "@/components/ui/section-header";
 import { Select } from "@/components/ui/select";
 import { formatMoneyDhs } from "@/lib/utils";
@@ -74,6 +79,16 @@ type ExpenseRow = {
 };
 
 type IncomeRow = { id: string; amount: number; occurred_on: string; notes: string | null };
+type IncomeSourceRow = {
+  id: string;
+  name: string;
+  amount: number;
+  recurrence: "monthly" | "yearly";
+  start_date: string;
+  end_date: string | null;
+  notes: string | null;
+  is_active: boolean;
+};
 
 type PeriodExpenseRow = {
   id: string;
@@ -136,7 +151,7 @@ function buildFinanceHref(options?: {
 }
 
 type FinanceModalsProps = {
-  tab: "expenses" | "subscriptions" | "debts";
+  tab: "expenses" | "income" | "subscriptions" | "debts";
   period: "day" | "week" | "month";
   anchorIso: string;
   categories: CategoryRow[];
@@ -146,6 +161,15 @@ type FinanceModalsProps = {
   debtNameById: Record<string, string>;
   recentExpenses: ExpenseRow[];
   periodIncome: IncomeRow[];
+  incomeSources: IncomeSourceRow[];
+  sourceIncomeOccurrences: Array<{ sourceId: string; name: string; amount: number; occurred_on: string; notes: string | null }>;
+  sourceIncomeTotal: number;
+  recurringIncomeMonthly: number;
+  activeIncomeSourceCount: number;
+  expiredIncomeSourceCount: number;
+  nextIncomeSource:
+    | { sourceId: string; name: string; amount: number; occurred_on: string; notes: string | null }
+    | undefined;
   periodIncomeTotal: number;
   netCashFlow: number;
   savingsRate: number | null;
@@ -166,6 +190,7 @@ type FinanceModalsProps = {
   topDay: [string, number] | undefined;
   overLimitCount: number;
   activeSubscriptionCount: number;
+  expiredSubscriptionCount: number;
   recurringMonthlyCost: number;
   dueSubscriptionsTotal: number;
   subscriptionBudgetPressure: number | null;
@@ -196,11 +221,11 @@ type FinanceModalsProps = {
 function DebtPayRow({
   debt,
   baseHref,
-  todayIso
+  selectedDateIso
 }: {
   debt: DebtRow;
   baseHref: string;
-  todayIso: string;
+  selectedDateIso: string;
 }) {
   const balance = Number(debt.remaining_balance ?? debt.principal ?? 0);
   const principal = Number(debt.principal ?? balance);
@@ -211,6 +236,7 @@ function DebtPayRow({
 
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState(balance.toFixed(2));
+  const [paidAt, setPaidAt] = useState(selectedDateIso);
   const [state, formAction] = useActionState(createDebtPaymentFormAction, null);
   const [closeState, closeFormAction] = useActionState(closeDebtAction, null);
   const router = useRouter();
@@ -218,9 +244,10 @@ function DebtPayRow({
   useEffect(() => {
     if (state?.redirectTo || closeState?.redirectTo) {
       setOpen(false);
+      setPaidAt(selectedDateIso);
       router.refresh();
     }
-  }, [state, closeState, router]);
+  }, [state, closeState, router, selectedDateIso]);
 
   return (
     <div className={[
@@ -268,7 +295,11 @@ function DebtPayRow({
           {!isClosed && !alreadyZero && !open && (
             <button
               type="button"
-              onClick={() => { setAmount(balance.toFixed(2)); setOpen(true); }}
+              onClick={() => {
+                setAmount(balance.toFixed(2));
+                setPaidAt(selectedDateIso);
+                setOpen(true);
+              }}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 transition hover:bg-emerald-100"
               title="Record payment"
             >
@@ -315,10 +346,9 @@ function DebtPayRow({
 
       {/* Payment form */}
       {open && (
-        <form action={formAction} className="mt-3 flex items-center gap-2 border-t pt-3" style={{ borderColor: "var(--app-panel-border)" }}>
+        <form action={formAction} className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3" style={{ borderColor: "var(--app-panel-border)" }}>
           <input type="hidden" name="returnPath" value={baseHref} />
           <input type="hidden" name="debtId" value={debt.id} />
-          <input type="hidden" name="paidAt" value={todayIso} />
           <div className="relative flex-1">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--app-text-muted)" }}>Dhs</span>
             <input
@@ -332,6 +362,14 @@ function DebtPayRow({
               className="h-9 w-full rounded-lg border border-[#c7d3e8] bg-white pl-10 pr-3 text-sm font-semibold text-[#0c1d3c] focus:outline-none focus:ring-2 focus:ring-emerald-400"
             />
           </div>
+          <input
+            name="paidAt"
+            type="date"
+            required
+            value={paidAt}
+            onChange={(e) => setPaidAt(e.target.value)}
+            className="h-9 rounded-lg border border-[#c7d3e8] bg-white px-3 text-sm text-[#0c1d3c] focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          />
           <button
             type="submit"
             className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-xs font-semibold text-white transition hover:bg-emerald-700"
@@ -362,6 +400,13 @@ export function FinanceModals({
   debtNameById,
   recentExpenses,
   periodIncome,
+  incomeSources,
+  sourceIncomeOccurrences,
+  sourceIncomeTotal,
+  recurringIncomeMonthly,
+  activeIncomeSourceCount,
+  expiredIncomeSourceCount,
+  nextIncomeSource,
   periodIncomeTotal,
   netCashFlow,
   savingsRate,
@@ -382,6 +427,7 @@ export function FinanceModals({
   topDay,
   overLimitCount,
   activeSubscriptionCount,
+  expiredSubscriptionCount,
   recurringMonthlyCost,
   dueSubscriptionsTotal,
   subscriptionBudgetPressure,
@@ -399,10 +445,11 @@ export function FinanceModals({
 }: FinanceModalsProps) {
   const todayIso = toDateInputValue(new Date());
   const [activeModal, setActiveModal] = useState<
-    "expense" | "income" | "edit-expense" | "debt-entry" | "expense-category" | "edit-category" | "subscription" | "edit-subscription" | null
+    "expense" | "income" | "income-source" | "edit-income-source" | "edit-expense" | "debt-entry" | "expense-category" | "edit-category" | "subscription" | "edit-subscription" | null
   >(null);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingIncomeSourceId, setEditingIncomeSourceId] = useState<string | null>(null);
   const [editingSubscriptionId, setEditingSubscriptionId] = useState<string | null>(null);
   const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
@@ -412,6 +459,9 @@ export function FinanceModals({
 
   const baseHref = buildFinanceHref({ tab, period, anchor: anchorIso });
   const editingCategory = editingCategoryId ? categories.find((c) => c.id === editingCategoryId) : null;
+  const editingIncomeSource = editingIncomeSourceId
+    ? incomeSources.find((source) => source.id === editingIncomeSourceId) ?? null
+    : null;
   const editingSubscription = editingSubscriptionId
     ? subscriptions.find((subscription) => subscription.id === editingSubscriptionId) ?? null
     : null;
@@ -473,9 +523,69 @@ export function FinanceModals({
     setActiveModal(null);
     setEditingCategoryId(null);
     setEditingExpenseId(null);
+    setEditingIncomeSourceId(null);
     setEditingSubscriptionId(null);
     setActiveCategoryId(null);
   };
+
+  const tabActions =
+    tab === "expenses" ? (
+      <>
+        <button
+          type="button"
+          onClick={() => setActiveModal("expense")}
+          className="inline-flex items-center gap-2 rounded-lg bg-[#0b1f3b] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#102a52]"
+        >
+          <Plus size={16} />
+          Add Expense
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveModal("expense-category")}
+          className="inline-flex items-center gap-2 rounded-lg border border-[#c7d3e8] bg-[#edf3ff] px-3 py-2 text-sm font-semibold text-[#23406d] transition hover:bg-[#e3ebf9]"
+        >
+          <Plus size={16} />
+          Category
+        </button>
+      </>
+    ) : tab === "income" ? (
+      <>
+        <button
+          type="button"
+          onClick={() => setActiveModal("income")}
+          className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800"
+        >
+          <Plus size={16} />
+          Add Income
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveModal("income-source")}
+          className="inline-flex items-center gap-2 rounded-lg bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-200"
+        >
+          <Plus size={16} />
+          Income Source
+        </button>
+      </>
+    ) : tab === "subscriptions" ? (
+      <button
+        type="button"
+        onClick={() => setActiveModal("subscription")}
+        className="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#1d4ed8]"
+      >
+        <Plus size={16} />
+        Subscription
+      </button>
+    ) : (
+      <button
+        type="button"
+        onClick={() => setActiveModal("debt-entry")}
+        className="inline-flex items-center gap-2 rounded-lg bg-[#1e3a6d] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#274881]"
+      >
+        <Plus size={16} />
+        Debt Entry
+      </button>
+    );
 
   return (
     <>
@@ -484,46 +594,7 @@ export function FinanceModals({
         description="Track monthly spending with rich charts and manage debt operations in one place."
         action={
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveModal("expense")}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#0b1f3b] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#102a52]"
-            >
-              <Plus size={16} />
-              Add Expense
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveModal("income")}
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800"
-            >
-              <Plus size={16} />
-              Add Income
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveModal("debt-entry")}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#1e3a6d] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#274881]"
-            >
-              <Plus size={16} />
-              Debt Entry
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveModal("subscription")}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#1d4ed8]"
-            >
-              <Plus size={16} />
-              Subscription
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveModal("expense-category")}
-              className="inline-flex items-center gap-2 rounded-lg border border-[#c7d3e8] bg-[#edf3ff] px-3 py-2 text-sm font-semibold text-[#23406d] transition hover:bg-[#e3ebf9]"
-            >
-              <Plus size={16} />
-              Category
-            </button>
+            {tabActions}
           </div>
         }
       />
@@ -541,6 +612,17 @@ export function FinanceModals({
               ].join(" ")}
             >
               Expenses
+            </Link>
+            <Link
+              href={buildFinanceHref({ tab: "income", period, anchor: anchorIso }) as Route}
+              className={[
+                "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
+                tab === "income"
+                  ? "bg-[var(--app-btn-primary-bg)] text-[var(--app-btn-primary-fg)] shadow-sm"
+                  : "text-[var(--app-btn-secondary-fg)] hover:bg-[var(--app-btn-secondary-bg)]"
+              ].join(" ")}
+            >
+              Income
             </Link>
             <Link
               href={buildFinanceHref({ tab: "subscriptions", period, anchor: anchorIso }) as Route}
@@ -626,42 +708,12 @@ export function FinanceModals({
       {tab === "expenses" ? (
         <>
           <FinanceReport
-            income={periodIncomeTotal}
             expenses={totalSpent}
-            net={netCashFlow}
-            periodBudget={periodBudget}
-            budgetRemaining={budgetRemaining}
-            budgetUtilization={budgetUtilization}
-            savingsRate={savingsRate}
-            unbudgetedSpend={unbudgetedSpend}
-            debtPayments={periodPaymentsTotal}
-            actualOutput={actualOutputTotal}
-            committedOutput={committedOutputTotal}
-            netAfterDebtPayments={netAfterDebtPayments}
-            netAfterCommittedOutput={netAfterCommittedOutput}
-            dueSubscriptions={dueSubscriptionsTotal}
+            averageDaySpend={averageDaySpend}
+            topSpendDayLabel={topDay ? `${topDay[0]} · ${formatMoneyDhs(topDay[1])}` : "No data"}
             recurringMonthlyCost={recurringMonthlyCost}
-            openDebtTotal={openDebtTotal}
-            categories={categoryMetrics.map((category) => ({
-              id: category.id,
-              name: category.name,
-              spent: category.spent,
-              periodLimit: category.periodLimit,
-              remaining: category.remaining,
-              utilization: category.utilization,
-              over: category.over
-            }))}
-            cashFlow={cashFlowData}
-            dailyExpenses={filteredDailyChartData}
-            categoryChart={filteredCategoryChartData}
-            subscriptions={subscriptionDueChartData}
+            dueSubscriptionsTotal={dueSubscriptionsTotal}
           />
-
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <Card><CardHeader><CardTitle className="text-sm uppercase tracking-wide text-slate-500">Average / day</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold text-[#0c1d3c]">{formatMoneyDhs(averageDaySpend)}</p></CardContent></Card>
-            <Card><CardHeader><CardTitle className="text-sm uppercase tracking-wide text-slate-500">Top spend day</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold text-[#0c1d3c]">{topDay ? `${topDay[0]} · ${formatMoneyDhs(topDay[1])}` : "No data"}</p></CardContent></Card>
-            <Card><CardHeader><CardTitle className="text-sm uppercase tracking-wide text-slate-500">Over-limit categories</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold text-amber-700">{overLimitCount}</p></CardContent></Card>
-          </div>
 
           {categories.length > 0 && (
             <Card>
@@ -706,20 +758,6 @@ export function FinanceModals({
               </CardContent>
             </Card>
           )}
-
-          {periodIncome.length > 0 ? (
-            <Card>
-              <CardHeader><CardTitle>Income in this period</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {periodIncome.map((entry) => (
-                  <div key={entry.id} className="flex items-center justify-between gap-3 rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2">
-                    <div><p className="text-sm font-medium text-[#0c1d3c]">{entry.notes || "Income"}</p><p className="text-xs text-slate-500">{entry.occurred_on}</p></div>
-                    <Badge variant="secondary">+{formatMoneyDhs(entry.amount)}</Badge>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          ) : null}
 
           <Card>
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -871,6 +909,294 @@ export function FinanceModals({
               )}
             </CardContent>
           </Card>
+
+          <FinanceCharts
+            dailyExpenses={filteredDailyChartData}
+            categories={filteredCategoryChartData}
+            subscriptions={subscriptionDueChartData}
+            cashFlow={cashFlowData}
+            mode="expenses"
+          />
+
+          <Card className={periodBudget > 0 && budgetRemaining < 0 ? "border-rose-200" : "border-emerald-200"}>
+            <CardHeader>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle>Budget health</CardTitle>
+                  <p className="mt-1 text-sm text-[var(--app-text-muted)]">Monthly category limits are prorated to the selected dates.</p>
+                </div>
+                <Badge variant={periodBudget <= 0 ? "warning" : budgetRemaining < 0 ? "danger" : "secondary"}>
+                  {periodBudget <= 0 ? "No budget configured" : budgetRemaining < 0 ? "Over budget" : "Within budget"}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-lg bg-[var(--app-panel-bg-soft)] p-3">
+                  <p className="text-xs uppercase text-[var(--app-text-muted)]">Period allowance</p>
+                  <p className="mt-1 text-lg font-semibold text-[var(--app-text-strong)]">{formatMoneyDhs(periodBudget)}</p>
+                </div>
+                <div className="rounded-lg bg-[var(--app-panel-bg-soft)] p-3">
+                  <p className="text-xs uppercase text-[var(--app-text-muted)]">{budgetRemaining < 0 ? "Over by" : "Remaining"}</p>
+                  <p className={`mt-1 text-lg font-semibold ${budgetRemaining < 0 ? "text-rose-700" : "text-[var(--app-text-strong)]"}`}>{formatMoneyDhs(Math.abs(budgetRemaining))}</p>
+                </div>
+                <div className="rounded-lg bg-[var(--app-panel-bg-soft)] p-3">
+                  <p className="text-xs uppercase text-[var(--app-text-muted)]">Budget used</p>
+                  <p className={`mt-1 text-lg font-semibold ${budgetRemaining < 0 ? "text-rose-700" : "text-[var(--app-text-strong)]"}`}>
+                    {periodBudget > 0 ? `${budgetUtilization.toFixed(1)}%` : "—"}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-[var(--app-panel-bg-soft)] p-3">
+                  <p className="text-xs uppercase text-[var(--app-text-muted)]">Unbudgeted spend</p>
+                  <p className={`mt-1 text-lg font-semibold ${unbudgetedSpend > 0 ? "text-rose-700" : "text-[var(--app-text-strong)]"}`}>{formatMoneyDhs(unbudgetedSpend)}</p>
+                </div>
+              </div>
+              {periodBudget > 0 ? <Progress value={Math.min(Math.max(budgetUtilization, 0), 100)} /> : null}
+              {unbudgetedSpend > 0 ? (
+                <p className="flex items-center gap-2 text-sm text-amber-700">
+                  <AlertTriangle size={15} />
+                  Some spending belongs to categories without a monthly limit.
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Budget variance by category</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {categoryMetrics.filter((category) => category.periodLimit > 0 && category.name.trim().toLowerCase() !== "subscriptions").length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[620px] text-left text-sm">
+                    <thead className="border-b border-[var(--app-panel-border)] text-xs uppercase text-[var(--app-text-muted)]">
+                      <tr>
+                        <th className="py-2 pr-3">Category</th>
+                        <th className="px-3 py-2">Spent</th>
+                        <th className="px-3 py-2">Allowance</th>
+                        <th className="px-3 py-2">Variance</th>
+                        <th className="pl-3 py-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...categoryMetrics]
+                        .filter((category) => category.periodLimit > 0 && category.name.trim().toLowerCase() !== "subscriptions")
+                        .sort((a, b) => b.utilization - a.utilization)
+                        .map((category) => (
+                          <tr key={category.id} className="border-b border-[var(--app-panel-border)] last:border-0">
+                            <td className="py-3 pr-3 font-medium text-[var(--app-text-strong)]">{category.name}</td>
+                            <td className="px-3 py-3">{formatMoneyDhs(category.spent)}</td>
+                            <td className="px-3 py-3">{formatMoneyDhs(category.periodLimit)}</td>
+                            <td className={`px-3 py-3 font-medium ${category.remaining < 0 ? "text-rose-700" : "text-emerald-700"}`}>
+                              {category.remaining < 0 ? "−" : "+"}
+                              {formatMoneyDhs(Math.abs(category.remaining))}
+                            </td>
+                            <td className="py-3 pl-3">
+                              <Badge variant={category.over ? "danger" : category.utilization >= 80 ? "warning" : "secondary"}>
+                                {category.utilization.toFixed(0)}%
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-sm text-[var(--app-text-muted)]">Set monthly category limits to unlock budget variance reporting.</p>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      ) : tab === "income" ? (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <Card>
+              <CardContent className="py-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--app-text-muted)]">Income</p>
+                <p className="mt-1 text-2xl font-semibold text-emerald-700">{formatMoneyDhs(periodIncomeTotal)}</p>
+                <p className="mt-1 text-xs text-[var(--app-text-muted)]">Money received in this period</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="py-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--app-text-muted)]">Recurring / month</p>
+                <p className="mt-1 text-2xl font-semibold text-emerald-700">{formatMoneyDhs(recurringIncomeMonthly)}</p>
+                <p className="mt-1 text-xs text-[var(--app-text-muted)]">Recurring income sources active in this period</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="py-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--app-text-muted)]">Scheduled in range</p>
+                <p className="mt-1 text-2xl font-semibold text-emerald-700">{formatMoneyDhs(sourceIncomeTotal)}</p>
+                <p className="mt-1 text-xs text-[var(--app-text-muted)]">Calculated from recurring income sources in this period</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="py-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--app-text-muted)]">Active sources</p>
+                <p className="mt-1 text-2xl font-semibold text-[#0c1d3c]">{activeIncomeSourceCount}</p>
+                <p className="mt-1 text-xs text-[var(--app-text-muted)]">
+                  {expiredIncomeSourceCount > 0
+                    ? `${expiredIncomeSourceCount} ended source${expiredIncomeSourceCount === 1 ? "" : "s"} excluded`
+                    : "No ended sources hidden in this range"}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <Card>
+              <CardContent className="py-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--app-text-muted)]">Next payout</p>
+                <p className="mt-1 text-2xl font-semibold text-[#0c1d3c]">
+                  {nextIncomeSource ? `${nextIncomeSource.name} · ${nextIncomeSource.occurred_on}` : "No payout"}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="py-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--app-text-muted)]">Net cash flow</p>
+                <p className={`mt-1 text-2xl font-semibold ${netCashFlow >= 0 ? "text-emerald-700" : "text-rose-700"}`}>{formatMoneyDhs(netCashFlow)}</p>
+                <p className="mt-1 text-xs text-[var(--app-text-muted)]">Income minus expenses in this period</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="py-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--app-text-muted)]">Savings rate</p>
+                <p className={`mt-1 text-2xl font-semibold ${savingsRate !== null && savingsRate >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                  {savingsRate === null ? "No income" : `${savingsRate.toFixed(1)}%`}
+                </p>
+                <p className="mt-1 text-xs text-[var(--app-text-muted)]">Based on income versus expenses</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader><CardTitle>Income sources</CardTitle></CardHeader>
+            <CardContent>
+              {incomeSources.length > 0 ? (
+                <div className="space-y-3">
+                  {[...incomeSources]
+                    .sort((a, b) => {
+                      const aCurrent = a.is_active && (!a.end_date || a.end_date >= rangeStartIso) ? 1 : 0;
+                      const bCurrent = b.is_active && (!b.end_date || b.end_date >= rangeStartIso) ? 1 : 0;
+                      if (aCurrent !== bCurrent) return bCurrent - aCurrent;
+                      return a.start_date.localeCompare(b.start_date);
+                    })
+                    .map((source) => (
+                      <div
+                        key={source.id}
+                        className={[
+                          "flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3",
+                          source.is_active && (!source.end_date || source.end_date >= rangeStartIso)
+                            ? "border-emerald-200 bg-emerald-50/40"
+                            : "border-[#e2e8f0] bg-[#f8fafc] opacity-70"
+                        ].join(" ")}
+                      >
+                        <div>
+                          <p className="text-sm font-semibold text-[#0c1d3c]">{source.name}</p>
+                          <p className="text-xs text-[#4a5f83]">
+                            {formatMoneyDhs(source.amount)} / {source.recurrence}
+                            {` · starts ${source.start_date}`}
+                            {source.end_date ? ` · ends ${source.end_date}` : ""}
+                            {source.notes ? ` · ${source.notes}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={source.is_active && (!source.end_date || source.end_date >= rangeStartIso) ? "secondary" : "default"}>
+                            {source.is_active
+                              ? source.end_date && source.end_date < rangeStartIso
+                                ? "Ended"
+                                : "Active"
+                              : "Inactive"}
+                          </Badge>
+                          <ActionForm action={toggleIncomeSourceActiveFormAction} className="inline" refreshOnly>
+                            <input type="hidden" name="returnPath" value={baseHref} />
+                            <input type="hidden" name="incomeSourceId" value={source.id} />
+                            <button
+                              type="submit"
+                              className="inline-flex h-8 items-center justify-center rounded-md border border-[#c7d3e8] bg-white px-3 text-xs font-semibold text-[#23406d] transition hover:bg-[#edf3ff]"
+                            >
+                              {source.is_active ? "Pause" : "Activate"}
+                            </button>
+                          </ActionForm>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingIncomeSourceId(source.id);
+                              setActiveModal("edit-income-source");
+                            }}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#c7d3e8] bg-white text-[#23406d] transition hover:bg-[#edf3ff]"
+                            aria-label="Edit income source"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <ActionForm action={deleteIncomeSourceFormAction} className="inline" refreshOnly>
+                            <input type="hidden" name="returnPath" value={baseHref} />
+                            <input type="hidden" name="incomeSourceId" value={source.id} />
+                            <button
+                              type="submit"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#fecaca] bg-[#fef2f2] text-[#b91c1c] transition hover:bg-[#fee2e2]"
+                              aria-label="Delete income source"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </ActionForm>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <p className="text-sm text-[#4a5f83]">No recurring income sources yet.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Calculated source income in this period</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              {sourceIncomeOccurrences.length > 0 ? (
+                sourceIncomeOccurrences
+                  .slice()
+                  .sort((a, b) => b.occurred_on.localeCompare(a.occurred_on))
+                  .map((entry) => (
+                    <div key={`${entry.sourceId}-${entry.occurred_on}`} className="flex items-center justify-between gap-3 rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+                      <div>
+                        <p className="text-sm font-medium text-[#0c1d3c]">{entry.name}</p>
+                        <p className="text-xs text-slate-500">
+                          {entry.occurred_on}
+                          {entry.notes ? ` · ${entry.notes}` : ""}
+                        </p>
+                      </div>
+                      <Badge variant="secondary">+{formatMoneyDhs(entry.amount)}</Badge>
+                    </div>
+                  ))
+              ) : (
+                <p className="text-sm text-[#4a5f83]">No recurring income falls inside this selection.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Manual income entries in this period</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              {periodIncome.length > 0 ? (
+                periodIncome.map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between gap-3 rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+                    <div>
+                      <p className="text-sm font-medium text-[#0c1d3c]">{entry.notes || "Income"}</p>
+                      <p className="text-xs text-slate-500">{entry.occurred_on}</p>
+                    </div>
+                    <Badge variant="secondary">+{formatMoneyDhs(entry.amount)}</Badge>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-[#4a5f83]">No income recorded in this selection.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <FinanceCharts cashFlow={cashFlowData} mode="income" />
         </>
       ) : tab === "subscriptions" ? (
         <>
@@ -896,7 +1222,7 @@ export function FinanceModals({
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Visible subscriptions</CardTitle>
+                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Active in period</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-semibold text-[#0c1d3c]">{activeSubscriptionCount}</p>
@@ -904,14 +1230,17 @@ export function FinanceModals({
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Next due</CardTitle>
+                <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Next visible due</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-semibold text-[#0c1d3c]">
                   {nextSubscription?.next_due_date
                     ? `${nextSubscription.name} · ${nextSubscription.next_due_date}`
-                    : "No due date"}
+                    : "No current due date"}
                 </p>
+                {expiredSubscriptionCount > 0 ? (
+                  <p className="mt-1 text-xs text-[#4a5f83]">{expiredSubscriptionCount} expired subscription{expiredSubscriptionCount === 1 ? "" : "s"} hidden from current totals.</p>
+                ) : null}
               </CardContent>
             </Card>
           </div>
@@ -938,12 +1267,21 @@ export function FinanceModals({
             <CardContent>
               {subscriptions.length > 0 ? (
                 <div className="space-y-3">
-                  {subscriptions.map((subscription) => (
+                  {[...subscriptions]
+                    .sort((a, b) => {
+                      const aCurrent = a.is_active && (!a.end_date || a.end_date >= rangeStartIso) ? 1 : 0;
+                      const bCurrent = b.is_active && (!b.end_date || b.end_date >= rangeStartIso) ? 1 : 0;
+                      if (aCurrent !== bCurrent) return bCurrent - aCurrent;
+                      return (a.next_due_date ?? "").localeCompare(b.next_due_date ?? "");
+                    })
+                    .map((subscription) => (
                     <div
                       key={subscription.id}
                       className={[
                         "flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3",
-                        subscription.is_active ? "border-[#c7d3e8] bg-[#f8fbff]" : "border-[#e2e8f0] bg-[#f8fafc] opacity-70"
+                        subscription.is_active && (!subscription.end_date || subscription.end_date >= rangeStartIso)
+                          ? "border-[#c7d3e8] bg-[#f8fbff]"
+                          : "border-[#e2e8f0] bg-[#f8fafc] opacity-70"
                       ].join(" ")}
                     >
                       <div>
@@ -956,8 +1294,12 @@ export function FinanceModals({
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant={subscription.is_active ? "secondary" : "default"}>
-                          {subscription.is_active ? "Active" : "Inactive"}
+                        <Badge variant={subscription.is_active && (!subscription.end_date || subscription.end_date >= rangeStartIso) ? "secondary" : "default"}>
+                          {subscription.is_active
+                            ? subscription.end_date && subscription.end_date < rangeStartIso
+                              ? "Expired"
+                              : "Active"
+                            : "Inactive"}
                         </Badge>
                         <ActionForm action={toggleSubscriptionActiveFormAction} className="inline" refreshOnly>
                           <input type="hidden" name="returnPath" value={baseHref} />
@@ -1023,7 +1365,7 @@ export function FinanceModals({
           {debts.length > 0 ? (
             <div className="space-y-2">
               {debts.map((debt) => (
-                <DebtPayRow key={debt.id} debt={debt} baseHref={baseHref} todayIso={todayIso} />
+                <DebtPayRow key={debt.id} debt={debt} baseHref={baseHref} selectedDateIso={anchorIso} />
               ))}
             </div>
           ) : (
@@ -1142,6 +1484,48 @@ export function FinanceModals({
         </ModalShell>
       ) : null}
 
+      {activeModal === "income-source" ? (
+        <ModalShell title="Add income source" description="Create a recurring income stream with a start date and optional end date." onClose={closeModal}>
+          <ActionForm action={createIncomeSourceFormAction} className="space-y-4" onSuccess={closeModal}>
+            <input type="hidden" name="returnPath" value={baseHref} />
+            <input type="hidden" name="isActive" value="true" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="incomeSourceName">Source name</Label>
+                <Input id="incomeSourceName" name="name" required placeholder="Salary, client retainer, stipend..." />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="incomeSourceAmount">Amount</Label>
+                <Input id="incomeSourceAmount" name="amount" type="number" min={0.01} step="0.01" required placeholder="0.00" />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="incomeSourceRecurrence">Recurrence</Label>
+                <Select id="incomeSourceRecurrence" name="recurrence" defaultValue="monthly">
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="incomeSourceStartDate">Start date</Label>
+                <Input id="incomeSourceStartDate" name="startDate" type="date" required defaultValue={anchorIso} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="incomeSourceEndDate">End date (optional)</Label>
+                <Input id="incomeSourceEndDate" name="endDate" type="date" />
+                <p className="text-xs text-[#4a5f83]">Leave blank if this income source continues indefinitely.</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="incomeSourceNotes">Notes</Label>
+              <Input id="incomeSourceNotes" name="notes" placeholder="Optional note" />
+            </div>
+            <SubmitButton label="Save income source" pendingLabel="Saving..." className="w-full sm:w-auto" />
+          </ActionForm>
+        </ModalShell>
+      ) : null}
+
       {deletingExpenseId ? (
         <ModalShell
           title="Delete this expense?"
@@ -1217,6 +1601,49 @@ export function FinanceModals({
               <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
             </ActionForm>
           )}
+        </ModalShell>
+      ) : null}
+
+      {activeModal === "edit-income-source" && editingIncomeSource ? (
+        <ModalShell title="Edit income source" description="Update amount, recurrence, and the active date range for this source." onClose={closeModal}>
+          <ActionForm action={updateIncomeSourceFormAction} className="space-y-4" onSuccess={closeModal}>
+            <input type="hidden" name="returnPath" value={baseHref} />
+            <input type="hidden" name="incomeSourceId" value={editingIncomeSource.id} />
+            <input type="hidden" name="isActive" value={editingIncomeSource.is_active ? "true" : "false"} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="editIncomeSourceName">Source name</Label>
+                <Input id="editIncomeSourceName" name="name" defaultValue={editingIncomeSource.name} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editIncomeSourceAmount">Amount</Label>
+                <Input id="editIncomeSourceAmount" name="amount" type="number" min={0.01} step="0.01" required defaultValue={editingIncomeSource.amount} />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="editIncomeSourceRecurrence">Recurrence</Label>
+                <Select id="editIncomeSourceRecurrence" name="recurrence" defaultValue={editingIncomeSource.recurrence}>
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editIncomeSourceStartDate">Start date</Label>
+                <Input id="editIncomeSourceStartDate" name="startDate" type="date" required defaultValue={editingIncomeSource.start_date} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editIncomeSourceEndDate">End date (optional)</Label>
+                <Input id="editIncomeSourceEndDate" name="endDate" type="date" defaultValue={editingIncomeSource.end_date ?? ""} />
+                <p className="text-xs text-[#4a5f83]">Leave blank if this income source continues indefinitely.</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editIncomeSourceNotes">Notes</Label>
+              <Input id="editIncomeSourceNotes" name="notes" defaultValue={editingIncomeSource.notes ?? ""} />
+            </div>
+            <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
+          </ActionForm>
         </ModalShell>
       ) : null}
 
@@ -1303,7 +1730,7 @@ export function FinanceModals({
       ) : null}
 
       {activeModal === "subscription" ? (
-        <ModalShell title="Add subscription" description="Track recurring monthly or yearly bills." onClose={closeModal}>
+        <ModalShell title="Add subscription" description="Track recurring monthly or yearly bills. End date is optional for subscriptions that keep going." onClose={closeModal}>
           <ActionForm action={createSubscriptionFormAction} className="space-y-4" onSuccess={closeModal}>
             <input type="hidden" name="returnPath" value={baseHref} />
             <input type="hidden" name="isActive" value="true" />
@@ -1330,8 +1757,9 @@ export function FinanceModals({
                 <Input id="subscriptionNextDueDate" name="nextDueDate" type="date" defaultValue={anchorIso} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="subscriptionEndDate">Expiration date</Label>
+                <Label htmlFor="subscriptionEndDate">End date (optional)</Label>
                 <Input id="subscriptionEndDate" name="endDate" type="date" />
+                <p className="text-xs text-[#4a5f83]">Leave blank if this subscription does not expire.</p>
               </div>
             </div>
             <div className="space-y-2">
@@ -1344,7 +1772,7 @@ export function FinanceModals({
       ) : null}
 
       {activeModal === "edit-subscription" && editingSubscription ? (
-        <ModalShell title="Edit subscription" description="Update recurring bill details and expiration." onClose={closeModal}>
+        <ModalShell title="Edit subscription" description="Update recurring bill details. End date is optional for subscriptions that continue indefinitely." onClose={closeModal}>
           <ActionForm action={updateSubscriptionFormAction} className="space-y-4" onSuccess={closeModal}>
             <input type="hidden" name="returnPath" value={baseHref} />
             <input type="hidden" name="subscriptionId" value={editingSubscription.id} />
@@ -1385,13 +1813,14 @@ export function FinanceModals({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="editSubscriptionEndDate">Expiration date</Label>
+                <Label htmlFor="editSubscriptionEndDate">End date (optional)</Label>
                 <Input
                   id="editSubscriptionEndDate"
                   name="endDate"
                   type="date"
                   defaultValue={editingSubscription.end_date ?? ""}
                 />
+                <p className="text-xs text-[#4a5f83]">Leave blank if this subscription does not expire.</p>
               </div>
             </div>
             <div className="space-y-2">

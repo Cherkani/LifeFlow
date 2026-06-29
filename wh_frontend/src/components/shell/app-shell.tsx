@@ -16,7 +16,7 @@ import {
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { signOutAction } from "@/app/(app)/actions";
+import { signOutAction } from "@/app/(app)/sign-out-action";
 import { Button } from "@/components/ui/button";
 import { appNavigation } from "@/lib/constants/navigation";
 import { cn } from "@/lib/utils";

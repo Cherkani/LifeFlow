@@ -32,6 +32,17 @@ type SubscriptionRow = {
   is_active: boolean;
 };
 
+type IncomeSourceRow = {
+  id: string;
+  name: string;
+  amount: number;
+  recurrence: "monthly" | "yearly";
+  start_date: string;
+  end_date: string | null;
+  notes: string | null;
+  is_active: boolean;
+};
+
 function getMonthlyEquivalent(amount: number, recurrence: "monthly" | "yearly") {
   return recurrence === "yearly" ? amount / 12 : amount;
 }
@@ -42,11 +53,79 @@ function isSubscriptionVisibleInRange(subscription: SubscriptionRow, rangeStart:
   return true;
 }
 
+function isIncomeSourceVisibleInRange(source: IncomeSourceRow, rangeStart: string, rangeEnd: string) {
+  if (!source.is_active) return false;
+  if (source.start_date > rangeEnd) return false;
+  if (source.end_date && source.end_date < rangeStart) return false;
+  return true;
+}
+
+function isSubscriptionExpired(subscription: SubscriptionRow, rangeStart: string) {
+  return Boolean(subscription.end_date && subscription.end_date < rangeStart);
+}
+
 function toIsoDate(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function daysInMonth(year: number, monthIndex: number) {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
+function addMonthlyOccurrence(anchorIso: string, offset: number) {
+  const [yearRaw, monthRaw, dayRaw] = anchorIso.split("-").map(Number);
+  const totalMonths = (monthRaw - 1) + offset;
+  const year = yearRaw + Math.floor(totalMonths / 12);
+  const monthIndex = ((totalMonths % 12) + 12) % 12;
+  const day = Math.min(dayRaw, daysInMonth(year, monthIndex));
+  return toIsoDate(new Date(year, monthIndex, day));
+}
+
+function addYearlyOccurrence(anchorIso: string, offset: number) {
+  const [yearRaw, monthRaw, dayRaw] = anchorIso.split("-").map(Number);
+  const year = yearRaw + offset;
+  const monthIndex = monthRaw - 1;
+  const day = Math.min(dayRaw, daysInMonth(year, monthIndex));
+  return toIsoDate(new Date(year, monthIndex, day));
+}
+
+function getIncomeSourceOccurrences(source: IncomeSourceRow, rangeStart: string, rangeEnd: string) {
+  const occurrences: Array<{ sourceId: string; name: string; amount: number; occurred_on: string; notes: string | null }> = [];
+
+  if (!source.is_active || source.start_date > rangeEnd) {
+    return occurrences;
+  }
+
+  const maxIterations = source.recurrence === "yearly" ? 200 : 1200;
+  for (let index = 0; index < maxIterations; index += 1) {
+    const occurred_on =
+      source.recurrence === "monthly"
+        ? addMonthlyOccurrence(source.start_date, index)
+        : addYearlyOccurrence(source.start_date, index);
+
+    if (occurred_on > rangeEnd) {
+      break;
+    }
+
+    if (source.end_date && occurred_on > source.end_date) {
+      break;
+    }
+
+    if (occurred_on >= rangeStart) {
+      occurrences.push({
+        sourceId: source.id,
+        name: source.name,
+        amount: source.amount,
+        occurred_on,
+        notes: source.notes
+      });
+    }
+  }
+
+  return occurrences;
 }
 
 function parseAnchorDate(raw: string | undefined) {
@@ -64,7 +143,8 @@ function parsePeriod(raw: string | undefined): "day" | "week" | "month" {
   return "day";
 }
 
-function parseTab(raw: string | undefined): "expenses" | "subscriptions" | "debts" {
+function parseTab(raw: string | undefined): "expenses" | "income" | "subscriptions" | "debts" {
+  if (raw === "income") return "income";
   if (raw === "subscriptions") return "subscriptions";
   if (raw === "debts") return "debts";
   return "expenses";
@@ -116,6 +196,16 @@ export default async function FinancePage({
   const periodExpenses = financeData.periodExpenses;
   const recentExpenses = financeData.recentExpenses;
   const periodIncome = financeData.periodIncome;
+  const incomeSources = financeData.incomeSources.map((source) => ({
+    id: source.id,
+    name: source.name,
+    amount: Number(source.amount),
+    recurrence: source.recurrence,
+    start_date: source.start_date,
+    end_date: source.end_date,
+    notes: source.notes,
+    is_active: source.is_active
+  })) as IncomeSourceRow[];
   const subscriptions = financeData.subscriptions.map((subscription) => ({
     id: subscription.id,
     name: subscription.name,
@@ -161,7 +251,11 @@ export default async function FinancePage({
   }
 
   const totalSpent = periodExpenses.reduce((sum, entry) => sum + Number(entry.amount), 0);
-  const periodIncomeTotal = periodIncome.reduce((sum, entry) => sum + Number(entry.amount), 0);
+  const visibleIncomeSources = incomeSources.filter((source) => isIncomeSourceVisibleInRange(source, rangeStart, rangeEnd));
+  const sourceIncomeOccurrences = visibleIncomeSources.flatMap((source) => getIncomeSourceOccurrences(source, rangeStart, rangeEnd));
+  const sourceIncomeTotal = sourceIncomeOccurrences.reduce((sum, entry) => sum + entry.amount, 0);
+  const manualIncomeTotal = periodIncome.reduce((sum, entry) => sum + Number(entry.amount), 0);
+  const periodIncomeTotal = manualIncomeTotal + sourceIncomeTotal;
   const netCashFlow = periodIncomeTotal - totalSpent;
   const savingsRate = periodIncomeTotal > 0 ? (netCashFlow / periodIncomeTotal) * 100 : null;
   const averageDaySpend = periodDays > 0 ? totalSpent / periodDays : 0;
@@ -218,6 +312,9 @@ export default async function FinancePage({
   for (const income of periodIncome) {
     incomeByDay.set(income.occurred_on, (incomeByDay.get(income.occurred_on) ?? 0) + Number(income.amount));
   }
+  for (const occurrence of sourceIncomeOccurrences) {
+    incomeByDay.set(occurrence.occurred_on, (incomeByDay.get(occurrence.occurred_on) ?? 0) + occurrence.amount);
+  }
   const debtPaymentByDay = new Map<string, number>();
   for (const payment of payments) {
     debtPaymentByDay.set(payment.paid_at, (debtPaymentByDay.get(payment.paid_at) ?? 0) + Number(payment.amount));
@@ -258,9 +355,10 @@ export default async function FinancePage({
     0
   );
   const dueSubscriptionsTotal = dueSubscriptions.reduce((sum, subscription) => sum + subscription.amount, 0);
-  const nextSubscription = [...activeSubscriptions]
+  const nextSubscription = [...visibleSubscriptions]
     .filter((subscription) => Boolean(subscription.next_due_date))
     .sort((a, b) => (a.next_due_date ?? "").localeCompare(b.next_due_date ?? ""))[0];
+  const expiredSubscriptionCount = subscriptions.filter((subscription) => isSubscriptionExpired(subscription, rangeStart)).length;
   const subscriptionDueChartData = timelineDates.map((date) => {
     const key = toIsoDate(date);
     const dueAmount = dueSubscriptions
@@ -319,6 +417,20 @@ export default async function FinancePage({
     method: p.method,
     notes: p.notes
   }));
+  const incomeSourcesForClient = incomeSources.map((source) => ({
+    id: source.id,
+    name: source.name,
+    amount: source.amount,
+    recurrence: source.recurrence,
+    start_date: source.start_date,
+    end_date: source.end_date,
+    notes: source.notes,
+    is_active: source.is_active
+  }));
+  const nextIncomeSource = sourceIncomeOccurrences
+    .slice()
+    .sort((a, b) => a.occurred_on.localeCompare(b.occurred_on))[0];
+  const expiredIncomeSourceCount = incomeSources.filter((source) => Boolean(source.end_date && source.end_date < rangeStart)).length;
   const periodExpensesForClient = periodExpenses.map((e) => ({
     id: e.id,
     category_id: e.category_id,
@@ -348,6 +460,13 @@ export default async function FinancePage({
         debtNameById={debtNameById}
         recentExpenses={recentExpensesForClient}
         periodIncome={periodIncomeForClient}
+        incomeSources={incomeSourcesForClient}
+        sourceIncomeOccurrences={sourceIncomeOccurrences}
+        sourceIncomeTotal={sourceIncomeTotal}
+        recurringIncomeMonthly={visibleIncomeSources.reduce((sum, source) => sum + getMonthlyEquivalent(source.amount, source.recurrence), 0)}
+        activeIncomeSourceCount={visibleIncomeSources.length}
+        expiredIncomeSourceCount={expiredIncomeSourceCount}
+        nextIncomeSource={nextIncomeSource}
         periodIncomeTotal={periodIncomeTotal}
         netCashFlow={netCashFlow}
         savingsRate={savingsRate}
@@ -368,6 +487,7 @@ export default async function FinancePage({
         topDay={topDay}
         overLimitCount={overLimitCount}
         activeSubscriptionCount={visibleSubscriptions.length}
+        expiredSubscriptionCount={expiredSubscriptionCount}
         recurringMonthlyCost={recurringMonthlyCost}
         dueSubscriptionsTotal={dueSubscriptionsTotal}
         subscriptionBudgetPressure={subscriptionBudgetPressure}

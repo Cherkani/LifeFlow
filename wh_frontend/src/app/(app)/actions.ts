@@ -44,12 +44,6 @@ function readAccountSettings(settings: unknown) {
   return settings as Record<string, unknown>;
 }
 
-export async function signOutAction() {
-  const supabase = await createServerSupabaseClient();
-  await supabase.auth.signOut({ scope: "global" });
-  redirect("/login");
-}
-
 export async function updateProfileAction(formData: FormData) {
   const payload = profileSchema.safeParse({
     fullName: formData.get("fullName"),

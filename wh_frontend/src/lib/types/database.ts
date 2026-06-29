@@ -700,6 +700,50 @@ export type Database = {
           created_at?: string;
         };
       };
+      income_sources: {
+        Row: {
+          id: string;
+          account_id: string;
+          name: string;
+          amount: string;
+          currency_code: string;
+          recurrence: "monthly" | "yearly";
+          start_date: string;
+          end_date: string | null;
+          notes: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_id: string;
+          name: string;
+          amount: string;
+          currency_code?: string;
+          recurrence: "monthly" | "yearly";
+          start_date: string;
+          end_date?: string | null;
+          notes?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          account_id?: string;
+          name?: string;
+          amount?: string;
+          currency_code?: string;
+          recurrence?: "monthly" | "yearly";
+          start_date?: string;
+          end_date?: string | null;
+          notes?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       debts: {
         Row: {
           id: string;

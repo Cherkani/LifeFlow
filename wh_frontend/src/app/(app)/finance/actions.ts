@@ -38,6 +38,24 @@ const createIncomeSchema = z.object({
   notes: z.string().max(1000).optional()
 });
 
+const incomeSourceSchema = z.object({
+  name: z.string().trim().min(2).max(140),
+  amount: z.coerce.number().positive().max(100000000),
+  recurrence: z.enum(["monthly", "yearly"]),
+  startDate: dateInputSchema,
+  endDate: z.union([z.literal(""), dateInputSchema]).optional(),
+  notes: z.preprocess((v) => (v === null || v === "" ? undefined : v), z.string().max(1000).optional()),
+  isActive: z.union([z.literal("true"), z.literal("false")]).optional()
+});
+
+const updateIncomeSourceSchema = incomeSourceSchema.extend({
+  incomeSourceId: z.string().uuid()
+});
+
+const incomeSourceIdSchema = z.object({
+  incomeSourceId: z.string().uuid()
+});
+
 const subscriptionSchema = z.object({
   name: z.string().trim().min(2).max(140),
   amount: z.coerce.number().positive().max(100000000),
@@ -205,6 +223,126 @@ export async function updateExpenseAction(formData: FormData) {
     .eq("account_id", account.accountId)
     .eq("id", payload.data.expenseId)
     .eq("entry_type", "expense");
+
+  revalidatePath("/finance", "layout");
+  return { redirectTo: returnPath };
+}
+
+export async function createIncomeSourceAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = incomeSourceSchema.safeParse({
+    name: formData.get("name"),
+    amount: formData.get("amount"),
+    recurrence: formData.get("recurrence"),
+    startDate: formData.get("startDate"),
+    endDate: formData.get("endDate"),
+    notes: formData.get("notes"),
+    isActive: formData.get("isActive")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  await supabase.from("income_sources").insert({
+    account_id: account.accountId,
+    name: payload.data.name,
+    amount: payload.data.amount.toFixed(2),
+    currency_code: account.currencyCode,
+    recurrence: payload.data.recurrence,
+    start_date: payload.data.startDate,
+    end_date: payload.data.endDate === "" ? null : payload.data.endDate,
+    notes: payload.data.notes?.trim() || null,
+    is_active: payload.data.isActive !== "false"
+  });
+
+  revalidatePath("/finance", "layout");
+  return { redirectTo: returnPath };
+}
+
+export async function updateIncomeSourceAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = updateIncomeSourceSchema.safeParse({
+    incomeSourceId: formData.get("incomeSourceId"),
+    name: formData.get("name"),
+    amount: formData.get("amount"),
+    recurrence: formData.get("recurrence"),
+    startDate: formData.get("startDate"),
+    endDate: formData.get("endDate"),
+    notes: formData.get("notes"),
+    isActive: formData.get("isActive")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  await supabase
+    .from("income_sources")
+    .update({
+      name: payload.data.name,
+      amount: payload.data.amount.toFixed(2),
+      recurrence: payload.data.recurrence,
+      start_date: payload.data.startDate,
+      end_date: payload.data.endDate === "" ? null : payload.data.endDate,
+      notes: payload.data.notes?.trim() || null,
+      is_active: payload.data.isActive !== "false"
+    })
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.incomeSourceId);
+
+  revalidatePath("/finance", "layout");
+  return { redirectTo: returnPath };
+}
+
+export async function deleteIncomeSourceAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = incomeSourceIdSchema.safeParse({
+    incomeSourceId: formData.get("incomeSourceId")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  await supabase
+    .from("income_sources")
+    .delete()
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.incomeSourceId);
+
+  revalidatePath("/finance", "layout");
+  return { redirectTo: returnPath };
+}
+
+export async function toggleIncomeSourceActiveAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = incomeSourceIdSchema.safeParse({
+    incomeSourceId: formData.get("incomeSourceId")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  const { data: source } = await supabase
+    .from("income_sources")
+    .select("is_active")
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.incomeSourceId)
+    .maybeSingle();
+
+  if (source) {
+    await supabase
+      .from("income_sources")
+      .update({ is_active: !source.is_active })
+      .eq("account_id", account.accountId)
+      .eq("id", payload.data.incomeSourceId);
+  }
 
   revalidatePath("/finance", "layout");
   return { redirectTo: returnPath };
@@ -527,6 +665,13 @@ export async function createIncomeFormAction(
   return createIncomeAction(formData);
 }
 
+export async function createIncomeSourceFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return createIncomeSourceAction(formData);
+}
+
 export async function createSubscriptionFormAction(
   _prevState: RedirectResult | null,
   formData: FormData
@@ -548,6 +693,13 @@ export async function updateSubscriptionFormAction(
   return updateSubscriptionAction(formData);
 }
 
+export async function updateIncomeSourceFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return updateIncomeSourceAction(formData);
+}
+
 export async function deleteExpenseFormAction(
   _prevState: RedirectResult | null,
   formData: FormData
@@ -562,11 +714,25 @@ export async function deleteSubscriptionFormAction(
   return deleteSubscriptionAction(formData);
 }
 
+export async function deleteIncomeSourceFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return deleteIncomeSourceAction(formData);
+}
+
 export async function toggleSubscriptionActiveFormAction(
   _prevState: RedirectResult | null,
   formData: FormData
 ): Promise<RedirectResult | null> {
   return toggleSubscriptionActiveAction(formData);
+}
+
+export async function toggleIncomeSourceActiveFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return toggleIncomeSourceActiveAction(formData);
 }
 
 export async function deleteDebtAction(formData: FormData) {

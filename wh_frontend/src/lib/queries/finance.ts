@@ -6,6 +6,16 @@ export type FinancePageData = {
   periodExpenses: Array<{ id: string; amount: string; category_id: string | null; occurred_on: string }>;
   recentExpenses: Array<{ id: string; amount: string; category_id: string | null; occurred_on: string; notes: string | null }>;
   periodIncome: Array<{ id: string; amount: string; occurred_on: string; notes: string | null }>;
+  incomeSources: Array<{
+    id: string;
+    name: string;
+    amount: string;
+    recurrence: "monthly" | "yearly";
+    start_date: string;
+    end_date: string | null;
+    notes: string | null;
+    is_active: boolean;
+  }>;
   subscriptions: Array<{
     id: string;
     name: string;
@@ -35,7 +45,7 @@ export async function getFinancePageData(
   rangeEnd: string,
   period: "day" | "week" | "month"
 ): Promise<FinancePageData> {
-  const [categoriesRes, categoryUsageRes, monthExpensesRes, recentExpensesRes, periodIncomeRes, subscriptionsRes, debtsRes, paymentsRes] = await Promise.all([
+  const [categoriesRes, categoryUsageRes, monthExpensesRes, recentExpensesRes, periodIncomeRes, incomeSourcesRes, subscriptionsRes, debtsRes, paymentsRes] = await Promise.all([
     supabase
       .from("finance_categories")
       .select("id, name, monthly_limit, image_url")
@@ -74,6 +84,13 @@ export async function getFinancePageData(
       .order("occurred_on", { ascending: false })
       .limit(period === "week" ? 200 : 50),
     supabase
+      .from("income_sources")
+      .select("id, name, amount, recurrence, start_date, end_date, notes, is_active")
+      .eq("account_id", accountId)
+      .order("is_active", { ascending: false })
+      .order("start_date", { ascending: true })
+      .order("name"),
+    supabase
       .from("subscriptions")
       .select("id, name, amount, recurrence, next_due_date, end_date, notes, is_active")
       .eq("account_id", accountId)
@@ -100,6 +117,7 @@ export async function getFinancePageData(
     periodExpenses: (monthExpensesRes.data ?? []) as FinancePageData["periodExpenses"],
     recentExpenses: (recentExpensesRes.data ?? []) as FinancePageData["recentExpenses"],
     periodIncome: (periodIncomeRes.data ?? []) as FinancePageData["periodIncome"],
+    incomeSources: (incomeSourcesRes.data ?? []) as FinancePageData["incomeSources"],
     subscriptions: (subscriptionsRes.data ?? []) as FinancePageData["subscriptions"],
     debts: (debtsRes.data ?? []) as FinancePageData["debts"],
     payments: (paymentsRes.data ?? []) as FinancePageData["payments"]
