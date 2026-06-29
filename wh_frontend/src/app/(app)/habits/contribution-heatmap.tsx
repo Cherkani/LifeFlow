@@ -78,7 +78,10 @@ export function ContributionHeatmap({ title, subtitle, days }: ContributionHeatm
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-[var(--app-panel-border-strong)] bg-[var(--app-btn-secondary-bg)] p-3">
-          <div className="flex min-w-max flex-col flex-wrap gap-1" style={{ maxHeight: "108px" }}>
+          <div
+            className="ml-auto grid min-w-max grid-flow-col grid-rows-7 gap-1"
+            style={{ gridAutoColumns: "12px" }}
+          >
             {days.map((day) => {
               const level = getLevel(day.score, maxScore);
               return (

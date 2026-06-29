@@ -147,6 +147,16 @@ function getDateKeysBetween(startIso: string, endIso: string) {
   return keys;
 }
 
+function shiftIsoDate(value: string, days: number) {
+  const date = new Date(`${value}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return formatWeekKey(date);
+}
+
+function getInclusiveDayCount(startIso: string, endIso: string) {
+  return getDateKeysBetween(startIso, endIso).length;
+}
+
 function parsePerformanceRange(raw: string | undefined): PerformanceRange {
   return raw === "month" || raw === "quarter" ? raw : "week";
 }
@@ -197,6 +207,11 @@ export default async function HabitsPage({
   const analyticsView = parseAnalyticsView(params.analytics);
   const performanceStartIso = performanceRange === "quarter" ? quarterStart : performanceRange === "month" ? monthStart : weekStartIso;
   const performanceEndIso = performanceRange === "quarter" ? quarterEnd : performanceRange === "month" ? monthEnd : weekEndIso;
+  const todayKey = formatWeekKey(new Date());
+  const contributionWindowDays = getInclusiveDayCount(performanceStartIso, performanceEndIso);
+  const contributionEndIso = performanceEndIso > todayKey ? todayKey : performanceEndIso;
+  const contributionStartIso = shiftIsoDate(contributionEndIso, -(contributionWindowDays - 1));
+  const performanceQueryStartIso = contributionStartIso < performanceStartIso ? contributionStartIso : performanceStartIso;
   const performanceTitle = performanceRange === "quarter" ? "Quarter performance" : performanceRange === "month" ? "Month performance" : "Week performance";
   const performanceSubtitle =
     performanceRange === "quarter"
@@ -204,6 +219,7 @@ export default async function HabitsPage({
       : performanceRange === "month"
         ? formatDateLabel(performanceStartIso, { month: "long", year: "numeric" })
         : `${formatDateLabel(weekStartIso)} - ${formatDateLabel(weekEndIso, { month: "short", day: "numeric", year: "numeric" })}`;
+  const contributionSubtitle = `${formatDateLabel(contributionStartIso, { month: "short", day: "numeric" })} - ${formatDateLabel(contributionEndIso, { month: "short", day: "numeric", year: "numeric" })}`;
 
   const previousWeek = new Date(selectedWeekStart);
   previousWeek.setDate(previousWeek.getDate() - 7);
@@ -225,13 +241,16 @@ export default async function HabitsPage({
   const [templateEntriesOrderRes, weekSessionsRes, performanceSessionsRes, weekCalendarEventsRes, performanceCalendarEventsRes] = await Promise.all([
     selectedTemplateId ? getTemplateEntriesOrder(supabase, selectedTemplateId) : Promise.resolve({ data: [] as Array<{ habit_id: string; day_of_week: number }> }),
     getWeekSessions(supabase, categoryIds, weekStartIso, weekEndIso),
-    getWeekSessions(supabase, categoryIds, performanceStartIso, performanceEndIso),
+    getWeekSessions(supabase, categoryIds, performanceQueryStartIso, performanceEndIso),
     getCalendarEvents(supabase, account.accountId, weekStartIso, weekEndIso),
     getCalendarEvents(supabase, account.accountId, performanceStartIso, performanceEndIso)
   ]);
 
   const sessions = (weekSessionsRes.data ?? []) as Session[];
-  const performanceSessions = (performanceSessionsRes.data ?? []) as Session[];
+  const analyticsSessions = (performanceSessionsRes.data ?? []) as Session[];
+  const performanceSessions = analyticsSessions.filter(
+    (session) => session.session_date >= performanceStartIso && session.session_date <= performanceEndIso
+  );
   const weekCalendarEvents = weekCalendarEventsRes as CalendarEvent[];
   const performanceCalendarEvents = performanceCalendarEventsRes as CalendarEvent[];
 
@@ -301,7 +320,6 @@ export default async function HabitsPage({
     calendarEventsByDate.set(event.event_date, list);
   }
 
-  const todayKey = formatWeekKey(new Date());
   const qualitativeSessions = performanceFilteredSessions.filter((session) => categoryById.get(session.habit_id)?.type !== "time_tracking");
   const performanceCalendarEventsByDate = new Map<string, CalendarEvent[]>();
   for (const event of performanceCalendarEvents) {
@@ -311,9 +329,9 @@ export default async function HabitsPage({
     performanceCalendarEventsByDate.set(event.event_date, list);
   }
   const performanceDayKeys = Array.from(new Set([...performanceFilteredSessions.map((session) => session.session_date), ...performanceCalendarEvents.map((event) => event.event_date).filter((date): date is string => Boolean(date))])).sort();
-  const contributionDayKeys = getDateKeysBetween(performanceStartIso, performanceEndIso);
+  const contributionDayKeys = getDateKeysBetween(contributionStartIso, contributionEndIso);
   const contributionData = contributionDayKeys.map((dateKey) => {
-    const daySessions = performanceFilteredSessions.filter((session) => session.session_date === dateKey);
+    const daySessions = analyticsSessions.filter((session) => session.session_date === dateKey);
     const completedTasks = daySessions.filter((session) => session.completed).length;
     const doneMinutes = daySessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
 
@@ -696,7 +714,7 @@ export default async function HabitsPage({
 
       <ContributionHeatmap
         title="Contribution Heatmap"
-        subtitle={`${performanceTitle} · ${performanceSubtitle}`}
+        subtitle={`${performanceTitle} · ${contributionSubtitle}`}
         days={contributionData}
       />
 
