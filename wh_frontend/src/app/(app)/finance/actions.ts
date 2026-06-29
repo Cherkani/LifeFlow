@@ -972,6 +972,44 @@ export async function deleteDebtAction(formData: FormData) {
   return { redirectTo: returnPath };
 }
 
+export async function createDebtShareAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const { supabase, user, account } = await requireAppContext();
+
+  const { data: existing } = await supabase
+    .from("finance_public_shares")
+    .select("token")
+    .eq("account_id", account.accountId)
+    .eq("scope", "debts")
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existing?.token) {
+    return { redirectTo: `/share/finance/${existing.token}` };
+  }
+
+  const { data: share } = await supabase
+    .from("finance_public_shares")
+    .insert({
+      account_id: account.accountId,
+      scope: "debts",
+      created_by: user.id
+    })
+    .select("token")
+    .single();
+
+  return { redirectTo: share?.token ? `/share/finance/${share.token}` : returnPath };
+}
+
+export async function createDebtShareFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return createDebtShareAction(formData);
+}
+
 export async function closeDebtAction(
   _prevState: RedirectResult | null,
   formData: FormData

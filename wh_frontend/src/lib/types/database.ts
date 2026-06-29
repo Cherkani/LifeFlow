@@ -906,6 +906,35 @@ export type Database = {
           updated_at?: string;
         };
       };
+      finance_public_shares: {
+        Row: {
+          id: string;
+          account_id: string;
+          token: string;
+          scope: "debts";
+          is_active: boolean;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_id: string;
+          token?: string;
+          scope?: "debts";
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          account_id?: string;
+          token?: string;
+          scope?: "debts";
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;
@@ -916,6 +945,12 @@ export type Database = {
           p_account_id: string;
           p_template_id: string;
           p_week_start_date: string;
+        };
+        Returns: Json;
+      };
+      get_public_finance_debts: {
+        Args: {
+          p_token: string;
         };
         Returns: Json;
       };

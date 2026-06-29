@@ -1,12 +1,37 @@
 import type { Supabase } from "./types";
 
 export type AnalyticsCategoryRow = { id: string; name: string; monthly_limit: string | null };
-export type AnalyticsExpenseRow = { id: string; category_id: string | null; amount: string; occurred_on: string };
+export type AnalyticsExpenseRow = { id: string; category_id: string | null; project_id: string | null; amount: string; occurred_on: string };
+export type AnalyticsIncomeRow = { id: string; project_id: string | null; amount: string; occurred_on: string };
+export type AnalyticsHabitRow = {
+  id: string;
+  title: string;
+  objective_id: string | null;
+  type: "time_tracking" | "fixed_protocol" | "count" | "custom";
+};
+export type AnalyticsObjectiveRow = {
+  id: string;
+  title: string;
+  measurement_mode: "quantitative" | "qualitative";
+  project_id: string | null;
+};
+export type AnalyticsProjectRow = { id: string; name: string; status: string };
+export type AnalyticsCalendarDoneRow = {
+  id: string;
+  event_date: string | null;
+  completed_on: string | null;
+  objective_id: string | null;
+  habit_session_id: string | null;
+};
 
 export type AnalyticsInitialData = {
-  habitIds: string[];
+  habits: AnalyticsHabitRow[];
+  objectives: AnalyticsObjectiveRow[];
+  projects: AnalyticsProjectRow[];
   categories: AnalyticsCategoryRow[];
   monthExpenses: AnalyticsExpenseRow[];
+  monthIncome: AnalyticsIncomeRow[];
+  monthCalendarDone: AnalyticsCalendarDoneRow[];
 };
 
 export async function getAnalyticsInitialData(
@@ -15,8 +40,14 @@ export async function getAnalyticsInitialData(
   monthStartIso: string,
   monthEndIso: string
 ): Promise<AnalyticsInitialData> {
-  const [habitsRes, categoriesRes, monthExpensesRes] = await Promise.all([
-    supabase.from("habits").select("id").eq("account_id", accountId).eq("is_active", true),
+  const [habitsRes, objectivesRes, projectsRes, categoriesRes, monthExpensesRes, monthIncomeRes, monthCalendarDoneRes] = await Promise.all([
+    supabase.from("habits").select("id, title, objective_id, type").eq("account_id", accountId).eq("is_active", true),
+    supabase
+      .from("habit_objectives")
+      .select("id, title, measurement_mode, project_id")
+      .eq("account_id", accountId)
+      .order("title"),
+    supabase.from("life_projects").select("id, name, status").eq("account_id", accountId).order("name"),
     supabase
       .from("finance_categories")
       .select("id, name, monthly_limit")
@@ -25,17 +56,37 @@ export async function getAnalyticsInitialData(
       .order("name"),
     supabase
       .from("ledger_entries")
-      .select("id, category_id, amount, occurred_on")
+      .select("id, category_id, project_id, amount, occurred_on")
       .eq("account_id", accountId)
       .eq("entry_type", "expense")
       .gte("occurred_on", monthStartIso)
-      .lte("occurred_on", monthEndIso)
+      .lte("occurred_on", monthEndIso),
+    supabase
+      .from("ledger_entries")
+      .select("id, project_id, amount, occurred_on")
+      .eq("account_id", accountId)
+      .eq("entry_type", "income")
+      .gte("occurred_on", monthStartIso)
+      .lte("occurred_on", monthEndIso),
+    supabase
+      .from("calendar_events")
+      .select("id, event_date, completed_on, objective_id, habit_session_id")
+      .eq("account_id", accountId)
+      .not("completed_at", "is", null)
+      .gte("completed_on", monthStartIso)
+      .lte("completed_on", monthEndIso)
   ]);
-  const habitIds = ((habitsRes.data ?? []) as Array<{ id: string }>).map((h) => h.id);
   return {
-    habitIds,
+    habits: (habitsRes.data ?? []) as AnalyticsHabitRow[],
+    objectives: ((objectivesRes.data ?? []) as Array<AnalyticsObjectiveRow & { measurement_mode?: "quantitative" | "qualitative" | null }>).map((objective) => ({
+      ...objective,
+      measurement_mode: objective.measurement_mode ?? "quantitative"
+    })),
+    projects: (projectsRes.data ?? []) as AnalyticsProjectRow[],
     categories: (categoriesRes.data ?? []) as AnalyticsCategoryRow[],
-    monthExpenses: (monthExpensesRes.data ?? []) as AnalyticsExpenseRow[]
+    monthExpenses: (monthExpensesRes.data ?? []) as AnalyticsExpenseRow[],
+    monthIncome: (monthIncomeRes.data ?? []) as AnalyticsIncomeRow[],
+    monthCalendarDone: (monthCalendarDoneRes.data ?? []) as AnalyticsCalendarDoneRow[]
   };
 }
 

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { updateSession } from "@/lib/supabase/middleware";
 
-const PUBLIC_ROUTES = ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/auth/callback"];
+const PUBLIC_ROUTES = ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/auth/callback", "/share"];
 
 function redirectWithCookies(url: URL, response: NextResponse) {
   const redirectResponse = NextResponse.redirect(url);
@@ -45,6 +45,7 @@ export async function middleware(request: NextRequest) {
   const { response, user } = await updateSession(request);
 
   const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+  const isShareRoute = pathname === "/share" || pathname.startsWith("/share/");
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
@@ -52,7 +53,7 @@ export async function middleware(request: NextRequest) {
     return redirectWithCookies(url, response);
   }
 
-  if (user && isPublicRoute) {
+  if (user && isPublicRoute && !isShareRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return redirectWithCookies(url, response);

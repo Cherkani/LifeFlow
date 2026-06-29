@@ -4,6 +4,7 @@ import { AnalyticsCharts } from "@/app/(app)/analytics/analytics-charts";
 import { LifeSummaryBand } from "@/components/life/life-context";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
 import {
   getAnalyticsInitialData,
   getAnalyticsSessions
@@ -14,6 +15,9 @@ import { endOfIsoWeek, formatMoneyDhs, startOfIsoWeek } from "@/lib/utils";
 type AnalyticsSearchParams = Promise<{
   week?: string;
   month?: string;
+  objective?: string;
+  mode?: string;
+  project?: string;
 }>;
 
 type HabitSession = {
@@ -24,6 +28,8 @@ type HabitSession = {
   actual_minutes: number | null;
   completed: boolean;
 };
+
+type AnalyticsMode = "all" | "quantitative" | "qualitative";
 
 function percent(value: number, total: number) {
   if (total <= 0) return 0;
@@ -62,11 +68,22 @@ function formatWeekRange(start: Date, end: Date) {
   return `${start.toLocaleDateString("en-US")} - ${end.toLocaleDateString("en-US")}`;
 }
 
-function analyticsHref(weekStart: Date, monthStart: Date) {
+function analyticsHref(
+  weekStart: Date,
+  monthStart: Date,
+  filters?: { objectiveId?: string; mode?: AnalyticsMode; projectId?: string }
+) {
   const query = new URLSearchParams();
   query.set("week", toIsoDate(startOfIsoWeek(weekStart)));
   query.set("month", toMonthKey(monthStart));
+  if (filters?.objectiveId) query.set("objective", filters.objectiveId);
+  if (filters?.mode && filters.mode !== "all") query.set("mode", filters.mode);
+  if (filters?.projectId) query.set("project", filters.projectId);
   return `/analytics?${query.toString()}`;
+}
+
+function parseAnalyticsMode(raw: string | undefined): AnalyticsMode {
+  return raw === "quantitative" || raw === "qualitative" ? raw : "all";
 }
 
 export default async function AnalyticsPage({
@@ -78,6 +95,9 @@ export default async function AnalyticsPage({
   const weekStart = parseWeekStart(params.week);
   const weekEnd = endOfIsoWeek(weekStart);
   const monthStart = parseMonthStart(params.month);
+  const selectedMode = parseAnalyticsMode(params.mode);
+  const selectedObjectiveId = typeof params.objective === "string" ? params.objective : "";
+  const selectedProjectId = typeof params.project === "string" ? params.project : "";
   const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
 
   const previousWeekStart = new Date(weekStart);
@@ -104,9 +124,28 @@ export default async function AnalyticsPage({
     monthStartIso,
     monthEndIso
   );
-  const habitIds = initialData.habitIds;
+  const objectiveById = new Map(initialData.objectives.map((objective) => [objective.id, objective]));
+  const projectById = new Map(initialData.projects.map((project) => [project.id, project]));
+  const filteredHabits = initialData.habits.filter((habit) => {
+    const objective = habit.objective_id ? objectiveById.get(habit.objective_id) : null;
+    if (selectedObjectiveId && habit.objective_id !== selectedObjectiveId) return false;
+    if (selectedMode !== "all" && objective?.measurement_mode !== selectedMode) return false;
+    if (selectedProjectId && objective?.project_id !== selectedProjectId) return false;
+    return true;
+  });
+  const habitIds = filteredHabits.map((habit) => habit.id);
+  const habitById = new Map(filteredHabits.map((habit) => [habit.id, habit]));
   const categories = initialData.categories as Array<{ id: string; name: string; monthly_limit: string | null }>;
-  const monthExpenses = initialData.monthExpenses as Array<{ amount: string; category_id: string | null; occurred_on: string }>;
+  const monthExpenses = initialData.monthExpenses.filter((expense) => !selectedProjectId || expense.project_id === selectedProjectId);
+  const monthIncome = initialData.monthIncome.filter((income) => !selectedProjectId || income.project_id === selectedProjectId);
+  const monthCalendarDone = initialData.monthCalendarDone.filter((event) => {
+    if (selectedObjectiveId && event.objective_id !== selectedObjectiveId) return false;
+    const objective = event.objective_id ? objectiveById.get(event.objective_id) : null;
+    if (selectedMode !== "all" && objective?.measurement_mode !== selectedMode) return false;
+    if (selectedProjectId && objective?.project_id !== selectedProjectId) return false;
+    return true;
+  });
+  const activeFilters = { objectiveId: selectedObjectiveId, mode: selectedMode, projectId: selectedProjectId };
 
   const sessionsResult = await getAnalyticsSessions(
     supabase,
@@ -122,16 +161,21 @@ export default async function AnalyticsPage({
   const weekSessions = (sessionsResult.weekSessions ?? []) as HabitSession[];
   const previousWeekSessions = (sessionsResult.previousWeekSessions ?? []) as HabitSession[];
   const monthSessions = (sessionsResult.monthSessions ?? []) as HabitSession[];
+  const timedWeekSessions = weekSessions.filter((session) => habitById.get(session.habit_id)?.type === "time_tracking");
+  const noTimeWeekSessions = weekSessions.filter((session) => habitById.get(session.habit_id)?.type !== "time_tracking");
+  const timedMonthSessions = monthSessions.filter((session) => habitById.get(session.habit_id)?.type === "time_tracking");
 
-  const weekPlannedHours = weekSessions.reduce((sum, session) => sum + session.planned_minutes, 0) / 60;
-  const weekDoneHours = weekSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;
+  const weekPlannedHours = timedWeekSessions.reduce((sum, session) => sum + session.planned_minutes, 0) / 60;
+  const weekDoneHours = timedWeekSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;
   const weekCompletion = percent(weekSessions.filter((session) => session.completed).length, weekSessions.length);
-  const previousWeekDoneHours = previousWeekSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;
+  const previousWeekDoneHours = previousWeekSessions
+    .filter((session) => habitById.get(session.habit_id)?.type === "time_tracking")
+    .reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;
   const trendDeltaHours = weekDoneHours - previousWeekDoneHours;
   const trendText = trendDeltaHours >= 0 ? `+${trendDeltaHours.toFixed(1)}h vs previous week` : `${trendDeltaHours.toFixed(1)}h vs previous week`;
 
-  const monthPlannedHours = monthSessions.reduce((sum, session) => sum + session.planned_minutes, 0) / 60;
-  const monthDoneHours = monthSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;
+  const monthPlannedHours = timedMonthSessions.reduce((sum, session) => sum + session.planned_minutes, 0) / 60;
+  const monthDoneHours = timedMonthSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;
   const monthCompletion = percent(monthSessions.filter((session) => session.completed).length, monthSessions.length);
 
   const weekDates = Array.from({ length: 7 }, (_, index) => {
@@ -142,8 +186,9 @@ export default async function AnalyticsPage({
 
   const weeklyChartData = weekDates.map((dateKey) => {
     const sessions = weekSessions.filter((session) => session.session_date === dateKey);
-    const plannedHours = sessions.reduce((sum, session) => sum + session.planned_minutes, 0) / 60;
-    const doneHours = sessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;
+    const timedSessions = sessions.filter((session) => habitById.get(session.habit_id)?.type === "time_tracking");
+    const plannedHours = timedSessions.reduce((sum, session) => sum + session.planned_minutes, 0) / 60;
+    const doneHours = timedSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;
     return {
       day: new Date(`${dateKey}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" }),
       plannedHours: Number(plannedHours.toFixed(1)),
@@ -170,8 +215,9 @@ export default async function AnalyticsPage({
 
   const monthlyChartData = monthDates.map((dateKey) => {
     const sessions = monthSessions.filter((session) => session.session_date === dateKey);
-    const plannedHours = sessions.reduce((sum, session) => sum + session.planned_minutes, 0) / 60;
-    const doneHours = sessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;
+    const timedSessions = sessions.filter((session) => habitById.get(session.habit_id)?.type === "time_tracking");
+    const plannedHours = timedSessions.reduce((sum, session) => sum + session.planned_minutes, 0) / 60;
+    const doneHours = timedSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0) / 60;
     return {
       day: new Date(`${dateKey}T00:00:00`).toLocaleDateString("en-US", { day: "2-digit" }),
       plannedHours: Number(plannedHours.toFixed(1)),
@@ -203,10 +249,34 @@ export default async function AnalyticsPage({
     }));
 
   const monthSpent = monthExpenses.reduce((sum, entry) => sum + Number(entry.amount), 0);
+  const monthRevenue = monthIncome.reduce((sum, entry) => sum + Number(entry.amount), 0);
+  const monthProfit = monthRevenue - monthSpent;
   const monthLimit = categoriesWithMetrics.reduce((sum, category) => sum + (category.limit ?? 0), 0);
   const overLimitCount = categoriesWithMetrics.filter((category) => category.overBy > 0).length;
   const monthPace = monthLimit > 0 ? Math.round((monthSpent / monthLimit) * 100) : 0;
   const activeDays = weeklyChartData.filter((row) => row.doneHours > 0).length;
+  const calendarOnlyDone = monthCalendarDone.filter((event) => !event.habit_session_id).length;
+  const noTimeDoneWeek = noTimeWeekSessions.filter((session) => session.completed).length;
+  const projectsWithMetrics = initialData.projects
+    .map((project) => {
+      const revenue = initialData.monthIncome
+        .filter((income) => income.project_id === project.id)
+        .reduce((sum, income) => sum + Number(income.amount), 0);
+      const cost = initialData.monthExpenses
+        .filter((expense) => expense.project_id === project.id)
+        .reduce((sum, expense) => sum + Number(expense.amount), 0);
+      const projectObjectiveIds = new Set(initialData.objectives.filter((objective) => objective.project_id === project.id).map((objective) => objective.id));
+      const projectHabitIds = new Set(initialData.habits.filter((habit) => habit.objective_id && projectObjectiveIds.has(habit.objective_id)).map((habit) => habit.id));
+      const minutes = monthSessions
+        .filter((session) => projectHabitIds.has(session.habit_id))
+        .reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
+      return { ...project, revenue, cost, profit: revenue - cost, hours: minutes / 60 };
+    })
+    .filter((project) => project.revenue > 0 || project.cost > 0 || project.hours > 0)
+    .sort((a, b) => b.profit - a.profit)
+    .slice(0, 5);
+  const selectedObjective = selectedObjectiveId ? objectiveById.get(selectedObjectiveId) : null;
+  const selectedProject = selectedProjectId ? projectById.get(selectedProjectId) : null;
 
   return (
     <div className="space-y-6">
@@ -226,6 +296,67 @@ export default async function AnalyticsPage({
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Insight Filters</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action="/analytics" className="grid gap-3 md:grid-cols-5">
+            <input type="hidden" name="week" value={weekStartIso} />
+            <input type="hidden" name="month" value={toMonthKey(monthStart)} />
+            <div className="space-y-2 md:col-span-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-[#4a5f83]">Objective</p>
+              <Select name="objective" defaultValue={selectedObjectiveId}>
+                <option value="">All objectives</option>
+                {initialData.objectives.map((objective) => (
+                  <option key={objective.id} value={objective.id}>
+                    {objective.title} · {objective.measurement_mode}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-[#4a5f83]">Mode</p>
+              <Select name="mode" defaultValue={selectedMode}>
+                <option value="all">All modes</option>
+                <option value="quantitative">Quantitative</option>
+                <option value="qualitative">Qualitative</option>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-[#4a5f83]">Project</p>
+              <Select name="project" defaultValue={selectedProjectId}>
+                <option value="">All projects</option>
+                {initialData.projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex items-end gap-2">
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0b1f3b] px-4 text-sm font-semibold text-white transition hover:bg-[#102a52]"
+              >
+                Apply
+              </button>
+              <a
+                href={analyticsHref(weekStart, monthStart)}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] px-4 text-sm font-semibold text-[#23406d]"
+              >
+                Reset
+              </a>
+            </div>
+          </form>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Badge variant="secondary">{selectedObjective ? `Objective: ${selectedObjective.title}` : "All objectives"}</Badge>
+            <Badge variant="secondary">Mode: {selectedMode}</Badge>
+            <Badge variant="secondary">{selectedProject ? `Project: ${selectedProject.name}` : "All projects"}</Badge>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader>
@@ -234,14 +365,14 @@ export default async function AnalyticsPage({
           <CardContent className="space-y-3">
             <div className="flex items-center gap-2">
               <a
-                href={analyticsHref(previousWeekStart, monthStart)}
+                href={analyticsHref(previousWeekStart, monthStart, activeFilters)}
                 className="inline-flex size-9 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] text-[#23406d]"
               >
                 <ChevronLeft size={16} />
               </a>
               <p className="text-sm font-semibold text-[#0c1d3c]">{formatWeekRange(weekStart, weekEnd)}</p>
               <a
-                href={analyticsHref(nextWeekStart, monthStart)}
+                href={analyticsHref(nextWeekStart, monthStart, activeFilters)}
                 className="inline-flex size-9 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] text-[#23406d]"
               >
                 <ChevronRight size={16} />
@@ -262,7 +393,7 @@ export default async function AnalyticsPage({
           <CardContent className="space-y-3">
             <div className="flex items-center gap-2">
               <a
-                href={analyticsHref(weekStart, previousMonthStart)}
+                href={analyticsHref(weekStart, previousMonthStart, activeFilters)}
                 className="inline-flex size-9 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] text-[#23406d]"
               >
                 <ChevronLeft size={16} />
@@ -271,7 +402,7 @@ export default async function AnalyticsPage({
                 {monthStart.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
               </p>
               <a
-                href={analyticsHref(weekStart, nextMonthStart)}
+                href={analyticsHref(weekStart, nextMonthStart, activeFilters)}
                 className="inline-flex size-9 items-center justify-center rounded-lg border border-[#c7d3e8] bg-[#edf3ff] text-[#23406d]"
               >
                 <ChevronRight size={16} />
@@ -296,6 +427,38 @@ export default async function AnalyticsPage({
             <p className="text-xs text-[#4a5f83]">{activeDays}/7 active days</p>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm uppercase tracking-wide text-[#4a5f83]">No-time progress</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold text-[#0c1d3c]">{noTimeDoneWeek}/{noTimeWeekSessions.length}</p>
+            <p className="text-xs text-[#4a5f83]">Week qualitative/checklist done</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm uppercase tracking-wide text-[#4a5f83]">Calendar done</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold text-emerald-700">{monthCalendarDone.length}</p>
+            <p className="text-xs text-[#4a5f83]">{calendarOnlyDone} calendar-only, rest synced to Execution</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm uppercase tracking-wide text-[#4a5f83]">Project profit</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className={`text-2xl font-semibold ${monthProfit >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+              {formatMoneyDhs(monthProfit)}
+            </p>
+            <p className="text-xs text-[#4a5f83]">{formatMoneyDhs(monthRevenue)} revenue · {formatMoneyDhs(monthSpent)} cost</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader>
             <CardTitle className="text-sm uppercase tracking-wide text-[#4a5f83]">Month spent</CardTitle>
@@ -325,11 +488,68 @@ export default async function AnalyticsPage({
         </Card>
       </div>
 
+      <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Objective Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {initialData.objectives.length > 0 ? (
+              initialData.objectives
+                .filter((objective) => !selectedMode || selectedMode === "all" || objective.measurement_mode === selectedMode)
+                .filter((objective) => !selectedProjectId || objective.project_id === selectedProjectId)
+                .map((objective) => {
+                  const objectiveHabitIds = new Set(initialData.habits.filter((habit) => habit.objective_id === objective.id).map((habit) => habit.id));
+                  const objectiveSessions = monthSessions.filter((session) => objectiveHabitIds.has(session.habit_id));
+                  const minutes = objectiveSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
+                  const done = objectiveSessions.filter((session) => session.completed).length;
+                  return (
+                    <div key={objective.id} className="rounded-xl border border-[#d7e0f1] bg-[#f8fafc] p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-[#0c1d3c]">{objective.title}</p>
+                          <p className="text-xs capitalize text-[#4a5f83]">{objective.measurement_mode}</p>
+                        </div>
+                        <Badge variant="secondary">{done}/{objectiveSessions.length} done</Badge>
+                      </div>
+                      <p className="mt-2 text-sm text-[#4a5f83]">{(minutes / 60).toFixed(1)}h logged this month</p>
+                    </div>
+                  );
+                })
+            ) : (
+              <p className="text-sm text-[#4a5f83]">No objectives yet.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Project Overview</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {projectsWithMetrics.length > 0 ? (
+              projectsWithMetrics.map((project) => (
+                <div key={project.id} className="rounded-xl border border-[#d7e0f1] bg-[#f8fafc] p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold text-[#0c1d3c]">{project.name}</p>
+                    <Badge variant={project.profit >= 0 ? "secondary" : "warning"}>{formatMoneyDhs(project.profit)}</Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-[#4a5f83]">
+                    {project.hours.toFixed(1)}h · {formatMoneyDhs(project.revenue)} revenue · {formatMoneyDhs(project.cost)} cost
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-[#4a5f83]">No project-linked time or money in this month.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <AnalyticsCharts
         weekly={weeklyChartData}
         monthly={monthlyChartData}
         expenseCategories={expensePieData}
-        currencyCode={account.currencyCode}
       />
     </div>
   );

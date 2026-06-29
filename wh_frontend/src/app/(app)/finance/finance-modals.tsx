@@ -12,6 +12,7 @@ import { FinanceReport } from "@/app/(app)/finance/finance-report";
 import {
   closeDebtAction,
   createDebtFormAction,
+  createDebtShareFormAction,
   createDebtPaymentFormAction,
   createExpenseCategoryFormAction,
   createExpenseFormAction,
@@ -456,6 +457,11 @@ function ProjectSelect({
   );
 }
 
+function getDebtGroupKey(name: string) {
+  const firstWord = name.trim().split(/\s+/)[0];
+  return firstWord ? firstWord.toLowerCase() : "ungrouped";
+}
+
 export function FinanceModals({
   tab,
   period,
@@ -533,6 +539,24 @@ export function FinanceModals({
     : null;
   const editingProject = editingProjectId ? projectMetrics.find((project) => project.id === editingProjectId) ?? null : null;
   const activeCategoryName = activeCategoryId ? categoryNameById[activeCategoryId] ?? null : null;
+  const debtGroups = useMemo(() => {
+    const groups = new Map<string, DebtRow[]>();
+    for (const debt of debts) {
+      const key = getDebtGroupKey(debt.name);
+      const list = groups.get(key) ?? [];
+      list.push(debt);
+      groups.set(key, list);
+    }
+
+    return Array.from(groups.entries())
+      .map(([key, rows]) => ({
+        key,
+        label: key === "ungrouped" ? "Ungrouped" : key,
+        rows,
+        total: rows.reduce((sum, debt) => sum + Number(debt.remaining_balance ?? debt.principal ?? 0), 0)
+      }))
+      .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
+  }, [debts]);
 
   const timelineDates = useMemo(() => enumerateIsoDates(rangeStartIso, rangeEndIso), [rangeStartIso, rangeEndIso]);
   const filteredDailyChartData = useMemo(() => {
@@ -645,14 +669,25 @@ export function FinanceModals({
         Subscription
       </button>
     ) : tab === "debts" ? (
-      <button
-        type="button"
-        onClick={() => setActiveModal("debt-entry")}
-        className="inline-flex items-center gap-2 rounded-lg bg-[#1e3a6d] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#274881]"
-      >
-        <Plus size={16} />
-        Debt Entry
-      </button>
+      <>
+        <button
+          type="button"
+          onClick={() => setActiveModal("debt-entry")}
+          className="inline-flex items-center gap-2 rounded-lg bg-[#1e3a6d] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#274881]"
+        >
+          <Plus size={16} />
+          Debt Entry
+        </button>
+        <ActionForm action={createDebtShareFormAction}>
+          <input type="hidden" name="returnPath" value={baseHref} />
+          <button
+            type="submit"
+            className="inline-flex items-center gap-2 rounded-lg border border-[#c7d3e8] bg-[#edf3ff] px-3 py-2 text-sm font-semibold text-[#23406d] transition hover:bg-[#e3ebf9]"
+          >
+            Public link
+          </button>
+        </ActionForm>
+      </>
     ) : (
       <button
         type="button"
@@ -1575,9 +1610,22 @@ export function FinanceModals({
 
           {/* Debt list */}
           {debts.length > 0 ? (
-            <div className="space-y-2">
-              {debts.map((debt) => (
-                <DebtPayRow key={debt.id} debt={debt} baseHref={baseHref} selectedDateIso={anchorIso} />
+            <div className="space-y-4">
+              {debtGroups.map((group) => (
+                <section key={group.key} className="space-y-2 rounded-2xl border border-[#d7e0f1] bg-[#f8fafc] p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                    <div>
+                      <p className="text-sm font-bold capitalize text-[#0c1d3c]">{group.label}</p>
+                      <p className="text-xs text-[#4a5f83]">
+                        {group.rows.length} line{group.rows.length === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <p className="text-sm font-semibold text-rose-600">{formatMoneyDhs(group.total)}</p>
+                  </div>
+                  {group.rows.map((debt) => (
+                    <DebtPayRow key={debt.id} debt={debt} baseHref={baseHref} selectedDateIso={anchorIso} />
+                  ))}
+                </section>
               ))}
             </div>
           ) : (

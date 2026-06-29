@@ -43,12 +43,11 @@ type AnalyticsChartsProps = {
   weekly: WeeklyPoint[];
   monthly: MonthlyPoint[];
   expenseCategories: ExpenseCategoryPoint[];
-  currencyCode: string;
 };
 
 const pieColors = ["#4f8cff", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#14b8a6", "#f97316", "#eab308"];
 
-export function AnalyticsCharts({ weekly, monthly, expenseCategories, currencyCode }: AnalyticsChartsProps) {
+export function AnalyticsCharts({ weekly, monthly, expenseCategories }: AnalyticsChartsProps) {
   return (
     <div className="space-y-4">
       <div className="grid gap-4 xl:grid-cols-2">
