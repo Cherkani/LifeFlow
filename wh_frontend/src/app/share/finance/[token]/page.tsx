@@ -96,11 +96,11 @@ export default async function PublicFinanceDebtSharePage({
             <span className="h-3 w-3 rounded-full bg-[#ff5f56]" />
             <span className="h-3 w-3 rounded-full bg-[#ffbd2e]" />
             <span className="h-3 w-3 rounded-full bg-[#27c93f]" />
-            <span className="ml-3 text-xs text-[#6d8b77]">finance-share/{payload.debtGroupKey ?? "group"}</span>
+            <span className="ml-3 text-xs text-[#6d8b77]">bash - finance-share/{payload.debtGroupKey ?? "group"}</span>
           </div>
-          <div className="relative overflow-hidden p-5 sm:p-7">
+          <div className="terminal-surface relative overflow-hidden p-5 sm:p-7">
             <div className="absolute -right-20 -top-20 h-56 w-56 rounded-full bg-[#25d366]/10 blur-3xl" />
-            <div className="relative flex flex-wrap items-start justify-between gap-4 border-b border-dashed border-[#1d3b2a] pb-5">
+            <div className="relative flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-sm leading-7 text-[#89a693]">
                   <span className="text-[#67e889]">{payload.accountName ?? "user"}@life-flow</span>
@@ -117,68 +117,71 @@ export default async function PublicFinanceDebtSharePage({
               </div>
               <CopyShareLinkButton />
             </div>
-            <div className="relative mt-5 space-y-2">
-              <p className="text-sm text-[#89a693]"><span className="text-[#67e889]">$</span> debtctl balance --open</p>
-              <pre className="overflow-x-auto rounded-lg border border-[#17291f] bg-[#020506] p-4 text-sm leading-7 text-[#d6f7dd]">
-{`OPEN_BALANCE  ${formatMoneyDhs(openTotal)}
-OPEN_LINES    ${openDebts.length}`}
-              </pre>
+
+            <div className="relative mt-7 space-y-6">
+              <div>
+                <p className="text-sm text-[#89a693]"><span className="text-[#67e889]">$</span> debtctl summary --open</p>
+                <div className="mt-2 overflow-hidden rounded border border-[#17291f] bg-[#020506]/90">
+                  <div className="grid grid-cols-[1fr_auto] border-b border-[#0f1d15] px-4 py-3 text-sm">
+                    <span className="text-[#6d8b77]">OPEN_BALANCE</span>
+                    <span className="font-black text-[#f7c66b]">{formatMoneyDhs(openTotal)}</span>
+                  </div>
+                  <div className="grid grid-cols-[1fr_auto] px-4 py-3 text-sm">
+                    <span className="text-[#6d8b77]">OPEN_LINES</span>
+                    <span className="font-black text-[#d6f7dd]">{openDebts.length}</span>
+                  </div>
+                </div>
+              </div>
+
+              {Object.entries(groups).length === 0 ? (
+                <div className="rounded border border-[#17291f] bg-[#020506]/90 p-4 text-sm text-[#89a693]">
+                  # empty: no debts are visible in this public snapshot yet.
+                </div>
+              ) : (
+                Object.entries(groups).map(([group, groupDebts]) => {
+                  const groupOpen = groupDebts
+                    .filter((debt) => debt.status === "open")
+                    .reduce((sum, debt) => sum + getDebtAmount(debt), 0);
+                  return (
+                    <div key={group}>
+                      <p className="text-sm text-[#89a693]">
+                        <span className="text-[#67e889]">$</span> debtctl list --group {group}
+                      </p>
+                      <p className="mt-1 text-xs text-[#6d8b77]"># rows={groupDebts.length} open={formatMoneyDhs(groupOpen)}</p>
+                      <div className="mt-3 overflow-hidden rounded border border-[#17291f] bg-[#020506]/90">
+                        <div className="grid grid-cols-[7rem_1fr_6rem] gap-3 border-b border-[#0f1d15] px-4 py-2 text-xs uppercase tracking-[0.16em] text-[#6d8b77]">
+                          <span>relation</span>
+                          <span>name</span>
+                          <span className="text-right">amount</span>
+                        </div>
+                        {groupDebts.map((debt, index) => (
+                          <div
+                            key={debt.id}
+                            className="terminal-line grid grid-cols-1 gap-1 border-b border-[#0f1d15] px-4 py-3 opacity-0 last:border-b-0 sm:grid-cols-[7rem_1fr_6rem] sm:gap-3"
+                            style={{ animationDelay: `${index * 180 + 250}ms` }}
+                          >
+                            <span className={debt.type === "owed" ? "text-sm font-black text-[#9cffb2]" : "text-sm font-black text-[#ffb199]"}>
+                              {debt.type === "owed" ? "Owes you" : "You owe"}
+                            </span>
+                            <span className="break-words text-sm font-bold leading-6 text-[#d6f7dd]">
+                              {debt.name}
+                              {formatDateLabel(debt.dueDate) ? (
+                                <span className="ml-2 text-xs font-normal text-[#89a693]">due_at={formatDateLabel(debt.dueDate)}</span>
+                              ) : null}
+                            </span>
+                            <span className="text-sm font-black text-[#f7c66b] sm:text-right">
+                              {formatMoneyDhs(getDebtAmount(debt))}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
-
-        {Object.entries(groups).length === 0 ? (
-          <div className="rounded-2xl border border-[#1d3b2a] bg-[#0a0f14] p-8 text-sm text-[#89a693]">
-            {"//"} No debts are visible in this public snapshot yet.
-          </div>
-        ) : (
-          <div className="grid gap-4">
-            {Object.entries(groups).map(([group, groupDebts]) => {
-              const groupOpen = groupDebts
-                .filter((debt) => debt.status === "open")
-                .reduce((sum, debt) => sum + getDebtAmount(debt), 0);
-              return (
-                <div
-                  key={group}
-                  className="overflow-hidden rounded-xl border border-[#183322] bg-[#05080b] shadow-[0_0_60px_rgba(28,230,120,0.08)]"
-                >
-                  <div className="border-b border-[#17291f] bg-[#0d151b] p-5">
-                    <p className="text-sm text-[#89a693]"><span className="text-[#67e889]">$</span> debtctl list --group {group} --format lines</p>
-                    <p className="mt-2 text-sm text-[#6d8b77]"># rows={groupDebts.length} open={formatMoneyDhs(groupOpen)}</p>
-                  </div>
-                  <div className="p-4">
-                    <pre className="mb-3 overflow-x-auto border-b border-dashed border-[#1d3b2a] pb-3 text-xs leading-6 text-[#6d8b77]">
-{`RELATION    NAME                                      AMOUNT
-----------  ----------------------------------------  ----------`}
-                    </pre>
-                    {groupDebts.map((debt, index) => (
-                      <div
-                        key={debt.id}
-                        className="terminal-line opacity-0"
-                        style={{ animationDelay: `${index * 180 + 250}ms` }}
-                      >
-                        <div className="grid gap-1 border-b border-[#0f1d15] py-3 sm:grid-cols-[8rem_1fr_auto] sm:gap-4">
-                          <p className={debt.type === "owed" ? "text-sm font-black text-[#9cffb2]" : "text-sm font-black text-[#ffb199]"}>
-                            {debt.type === "owed" ? "Owes you" : "You owe"}
-                          </p>
-                          <div className="min-w-0">
-                            <p className="break-words text-sm font-bold leading-6 text-[#d6f7dd]">{debt.name}</p>
-                            {formatDateLabel(debt.dueDate) ? (
-                              <p className="text-sm text-[#89a693]">due_at={formatDateLabel(debt.dueDate)}</p>
-                            ) : null}
-                          </div>
-                          <p className="text-sm font-black text-[#f7c66b] sm:text-right">
-                            {formatMoneyDhs(getDebtAmount(debt))}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </section>
       <style>{`
         @keyframes terminal-reveal {
@@ -223,6 +226,21 @@ OPEN_LINES    ${openDebts.length}`}
         .terminal-type {
           width: 14ch;
           animation: terminal-type 1.2s steps(14, end) both;
+        }
+
+        .terminal-surface::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background: repeating-linear-gradient(
+            to bottom,
+            rgba(214, 247, 221, 0.035),
+            rgba(214, 247, 221, 0.035) 1px,
+            transparent 1px,
+            transparent 5px
+          );
+          mix-blend-mode: screen;
         }
       `}</style>
     </main>
