@@ -91,16 +91,16 @@ export default async function PublicFinanceDebtSharePage({
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_20%_0%,_rgba(56,189,118,0.16),_transparent_28%),radial-gradient(circle_at_80%_10%,_rgba(245,158,11,0.12),_transparent_24%),linear-gradient(135deg,_#05080b,_#0a1016_48%,_#07100b)] px-4 py-8 font-mono text-[#d6f7dd]">
       <section className="mx-auto flex max-w-4xl flex-col gap-5">
-        <div className="overflow-hidden rounded-2xl border border-[#1d3b2a] bg-[#0a0f14] shadow-[0_0_90px_rgba(28,230,120,0.13)]">
+        <div className="overflow-hidden rounded-xl border border-[#183322] bg-[#05080b] shadow-[0_0_90px_rgba(28,230,120,0.13)]">
           <div className="flex items-center gap-2 border-b border-[#17291f] bg-[#0d151b] px-5 py-3">
             <span className="h-3 w-3 rounded-full bg-[#ff5f56]" />
             <span className="h-3 w-3 rounded-full bg-[#ffbd2e]" />
             <span className="h-3 w-3 rounded-full bg-[#27c93f]" />
             <span className="ml-3 text-xs text-[#6d8b77]">finance-share/{payload.debtGroupKey ?? "group"}</span>
           </div>
-          <div className="relative overflow-hidden p-6 sm:p-7">
+          <div className="relative overflow-hidden p-5 sm:p-7">
             <div className="absolute -right-20 -top-20 h-56 w-56 rounded-full bg-[#25d366]/10 blur-3xl" />
-            <div className="relative flex flex-wrap items-start justify-between gap-4">
+            <div className="relative flex flex-wrap items-start justify-between gap-4 border-b border-dashed border-[#1d3b2a] pb-5">
               <div>
                 <p className="text-sm leading-7 text-[#89a693]">
                   <span className="text-[#67e889]">{payload.accountName ?? "user"}@life-flow</span>
@@ -112,25 +112,17 @@ export default async function PublicFinanceDebtSharePage({
                   </span>
                   <span className="terminal-cursor ml-1 inline-block h-4 w-2 bg-[#67e889] align-[-2px]" />
                 </p>
-                <h1 className="mt-4 text-4xl font-black tracking-[-0.04em] text-[#f5fff7] sm:text-5xl">{groupName}</h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-[#89a693]">
-                  read_only=true · scope=this_group_only
-                </p>
+                <p className="mt-3 text-sm text-[#89a693]"># group: <span className="text-[#f5fff7]">{groupName}</span></p>
+                <p className="mt-1 text-sm text-[#89a693]"># read_only=true scope=this_group_only</p>
               </div>
               <CopyShareLinkButton />
             </div>
-            <div className="relative mt-8 rounded-xl border border-[#204b32] bg-[#07100b] p-5 shadow-inner">
-              <p className="text-sm text-[#89a693]">
-                <span className="text-[#67e889]">$</span> debtctl balance --open
-              </p>
-              <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
-                <p className="text-5xl font-black tracking-[-0.05em] text-[#f7c66b] sm:text-6xl">
-                  {formatMoneyDhs(openTotal)}
-                </p>
-                <p className="rounded-lg border border-[#29442f] bg-[#102117] px-4 py-2 text-sm font-black text-[#9cffb2]">
-                  {openDebts.length}_open_{openDebts.length === 1 ? "line" : "lines"}
-                </p>
-              </div>
+            <div className="relative mt-5 space-y-2">
+              <p className="text-sm text-[#89a693]"><span className="text-[#67e889]">$</span> debtctl balance --open</p>
+              <pre className="overflow-x-auto rounded-lg border border-[#17291f] bg-[#020506] p-4 text-sm leading-7 text-[#d6f7dd]">
+{`OPEN_BALANCE  ${formatMoneyDhs(openTotal)}
+OPEN_LINES    ${openDebts.length}`}
+              </pre>
             </div>
           </div>
         </div>
@@ -148,44 +140,34 @@ export default async function PublicFinanceDebtSharePage({
               return (
                 <div
                   key={group}
-                  className="overflow-hidden rounded-2xl border border-[#1d3b2a] bg-[#0a0f14] shadow-[0_0_60px_rgba(28,230,120,0.08)]"
+                  className="overflow-hidden rounded-xl border border-[#183322] bg-[#05080b] shadow-[0_0_60px_rgba(28,230,120,0.08)]"
                 >
-                  <div className="flex flex-row items-start justify-between gap-4 border-b border-[#17291f] bg-[#0d151b] p-5">
-                    <div>
-                      <p className="text-sm text-[#89a693]">
-                        <span className="text-[#67e889]">$</span> debtctl list --group {group}
-                      </p>
-                      <h2 className="mt-2 text-xl font-black tracking-[-0.03em] text-[#f5fff7]">{titleCase(group)}</h2>
-                      <p className="text-sm text-[#89a693]">
-                        rows={groupDebts.length}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#6d8b77]">open</p>
-                      <p className="text-2xl font-black tracking-[-0.04em] text-[#f7c66b]">{formatMoneyDhs(groupOpen)}</p>
-                    </div>
+                  <div className="border-b border-[#17291f] bg-[#0d151b] p-5">
+                    <p className="text-sm text-[#89a693]"><span className="text-[#67e889]">$</span> debtctl list --group {group} --format lines</p>
+                    <p className="mt-2 text-sm text-[#6d8b77]"># rows={groupDebts.length} open={formatMoneyDhs(groupOpen)}</p>
                   </div>
-                  <div className="space-y-3 p-4">
+                  <div className="p-4">
+                    <pre className="mb-3 overflow-x-auto border-b border-dashed border-[#1d3b2a] pb-3 text-xs leading-6 text-[#6d8b77]">
+{`RELATION    NAME                                      AMOUNT
+----------  ----------------------------------------  ----------`}
+                    </pre>
                     {groupDebts.map((debt, index) => (
                       <div
                         key={debt.id}
-                        className="terminal-line rounded-xl border border-[#17291f] bg-[#07100b] p-4 opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+                        className="terminal-line opacity-0"
                         style={{ animationDelay: `${index * 180 + 250}ms` }}
                       >
-                        <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
-                          <div className="min-w-0 space-y-1">
-                            <p className={debt.type === "owed" ? "text-sm font-black text-[#9cffb2]" : "text-sm font-black text-[#ffb199]"}>
-                              {debt.type === "owed" ? "Owes you" : "You owe"}
-                              {debt.status === "closed" ? " · closed" : ""}
-                            </p>
-                            <p className="break-words text-lg font-black leading-snug text-[#d6f7dd]">
-                              <span className="text-[#67e889]">&gt;</span> {debt.name}
-                            </p>
+                        <div className="grid gap-1 border-b border-[#0f1d15] py-3 sm:grid-cols-[8rem_1fr_auto] sm:gap-4">
+                          <p className={debt.type === "owed" ? "text-sm font-black text-[#9cffb2]" : "text-sm font-black text-[#ffb199]"}>
+                            {debt.type === "owed" ? "Owes you" : "You owe"}
+                          </p>
+                          <div className="min-w-0">
+                            <p className="break-words text-sm font-bold leading-6 text-[#d6f7dd]">{debt.name}</p>
                             {formatDateLabel(debt.dueDate) ? (
                               <p className="text-sm text-[#89a693]">due_at={formatDateLabel(debt.dueDate)}</p>
                             ) : null}
                           </div>
-                          <p className="text-2xl font-black tracking-[-0.04em] text-[#f7c66b] sm:text-right">
+                          <p className="text-sm font-black text-[#f7c66b] sm:text-right">
                             {formatMoneyDhs(getDebtAmount(debt))}
                           </p>
                         </div>
