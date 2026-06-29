@@ -28,9 +28,9 @@ export function CopyShareLinkButton() {
       <button
         type="button"
         onClick={copyLink}
-        className="inline-flex items-center justify-center rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow-sm transition hover:bg-[#fff4dc]"
+        className="inline-flex items-center justify-center rounded-lg border border-[#2a5b3a] bg-[#102117] px-4 py-2 font-mono text-sm font-black text-[#9cffb2] shadow-[0_0_24px_rgba(103,232,137,0.08)] transition hover:bg-[#173420]"
       >
-        {copied ? "Copied" : "Copy link"}
+        {copied ? "copied" : "copy_link"}
       </button>
       {copyFailed ? (
         <input
