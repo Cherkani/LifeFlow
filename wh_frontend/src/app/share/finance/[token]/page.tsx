@@ -86,6 +86,7 @@ export default async function PublicFinanceDebtSharePage({
   const openDebts = debts.filter((debt) => debt.status === "open" && getDebtAmount(debt) > 0);
   const openTotal = openDebts.reduce((sum, debt) => sum + getDebtAmount(debt), 0);
   const groupName = titleCase(payload.debtGroupKey ?? "group");
+  const promptPath = `~/finance/debts/${payload.debtGroupKey ?? "group"}`;
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_20%_0%,_rgba(56,189,118,0.16),_transparent_28%),radial-gradient(circle_at_80%_10%,_rgba(245,158,11,0.12),_transparent_24%),linear-gradient(135deg,_#05080b,_#0a1016_48%,_#07100b)] px-4 py-8 font-mono text-[#d6f7dd]">
@@ -101,17 +102,27 @@ export default async function PublicFinanceDebtSharePage({
             <div className="absolute -right-20 -top-20 h-56 w-56 rounded-full bg-[#25d366]/10 blur-3xl" />
             <div className="relative flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-[#67e889]">$ cat debt_group.json</p>
+                <p className="text-sm leading-7 text-[#89a693]">
+                  <span className="text-[#67e889]">{payload.accountName ?? "user"}@life-flow</span>
+                  <span className="text-[#d6f7dd]">:</span>
+                  <span className="text-[#8fc7ff]">{promptPath}</span>
+                  <span className="text-[#d6f7dd]">$</span>{" "}
+                  <span className="terminal-type inline-block max-w-full overflow-hidden whitespace-nowrap align-bottom text-[#f5fff7]">
+                    open {payload.debtGroupKey ?? "group"}
+                  </span>
+                  <span className="terminal-cursor ml-1 inline-block h-4 w-2 bg-[#67e889] align-[-2px]" />
+                </p>
                 <h1 className="mt-4 text-4xl font-black tracking-[-0.04em] text-[#f5fff7] sm:text-5xl">{groupName}</h1>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-[#89a693]">
-                  <span className="text-[#67e889]">source:</span> {payload.accountName ?? "Finance"} ·{" "}
-                  <span className="text-[#67e889]">mode:</span> read_only · <span className="text-[#67e889]">scope:</span> this_group_only
+                  read_only=true · scope=this_group_only
                 </p>
               </div>
               <CopyShareLinkButton />
             </div>
             <div className="relative mt-8 rounded-xl border border-[#204b32] bg-[#07100b] p-5 shadow-inner">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-[#6d8b77]">open_balance</p>
+              <p className="text-sm text-[#89a693]">
+                <span className="text-[#67e889]">$</span> debtctl balance --open
+              </p>
               <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
                 <p className="text-5xl font-black tracking-[-0.05em] text-[#f7c66b] sm:text-6xl">
                   {formatMoneyDhs(openTotal)}
@@ -141,8 +152,10 @@ export default async function PublicFinanceDebtSharePage({
                 >
                   <div className="flex flex-row items-start justify-between gap-4 border-b border-[#17291f] bg-[#0d151b] p-5">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#67e889]">./group</p>
-                      <h2 className="mt-1 text-xl font-black tracking-[-0.03em] text-[#f5fff7]">{titleCase(group)}</h2>
+                      <p className="text-sm text-[#89a693]">
+                        <span className="text-[#67e889]">$</span> debtctl list --group {group}
+                      </p>
+                      <h2 className="mt-2 text-xl font-black tracking-[-0.03em] text-[#f5fff7]">{titleCase(group)}</h2>
                       <p className="text-sm text-[#89a693]">
                         rows={groupDebts.length}
                       </p>
@@ -153,35 +166,26 @@ export default async function PublicFinanceDebtSharePage({
                     </div>
                   </div>
                   <div className="space-y-3 p-4">
-                    {groupDebts.map((debt) => (
+                    {groupDebts.map((debt, index) => (
                       <div
                         key={debt.id}
-                        className="rounded-xl border border-[#17291f] bg-[#07100b] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+                        className="terminal-line rounded-xl border border-[#17291f] bg-[#07100b] p-4 opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+                        style={{ animationDelay: `${index * 180 + 250}ms` }}
                       >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span
-                                className={
-                                  debt.type === "owed"
-                                    ? "rounded-md border border-[#204b32] bg-[#102117] px-2.5 py-1 text-xs font-black text-[#9cffb2]"
-                                    : "rounded-md border border-[#553226] bg-[#22130f] px-2.5 py-1 text-xs font-black text-[#ffb199]"
-                                }
-                              >
-                                {debt.type === "owed" ? "OWES_YOU" : "YOU_OWE"}
-                              </span>
-                              {debt.status === "closed" ? (
-                                <span className="rounded-md border border-[#2f3c48] bg-[#121a22] px-2.5 py-1 text-xs font-black text-[#9caeba]">CLOSED</span>
-                              ) : null}
-                            </div>
-                            <p className="mt-3 break-words font-black leading-snug text-[#d6f7dd]">
+                        <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+                          <div className="min-w-0 space-y-1">
+                            <p className={debt.type === "owed" ? "text-sm font-black text-[#9cffb2]" : "text-sm font-black text-[#ffb199]"}>
+                              {debt.type === "owed" ? "Owes you" : "You owe"}
+                              {debt.status === "closed" ? " · closed" : ""}
+                            </p>
+                            <p className="break-words text-lg font-black leading-snug text-[#d6f7dd]">
                               <span className="text-[#67e889]">&gt;</span> {debt.name}
                             </p>
                             {formatDateLabel(debt.dueDate) ? (
-                              <p className="mt-1 text-sm text-[#89a693]">due_at={formatDateLabel(debt.dueDate)}</p>
+                              <p className="text-sm text-[#89a693]">due_at={formatDateLabel(debt.dueDate)}</p>
                             ) : null}
                           </div>
-                          <p className="text-2xl font-black tracking-[-0.04em] text-[#f7c66b]">
+                          <p className="text-2xl font-black tracking-[-0.04em] text-[#f7c66b] sm:text-right">
                             {formatMoneyDhs(getDebtAmount(debt))}
                           </p>
                         </div>
@@ -194,6 +198,51 @@ export default async function PublicFinanceDebtSharePage({
           </div>
         )}
       </section>
+      <style>{`
+        @keyframes terminal-reveal {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+            filter: blur(2px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+            filter: blur(0);
+          }
+        }
+
+        @keyframes terminal-caret {
+          0%, 49% {
+            opacity: 1;
+          }
+          50%, 100% {
+            opacity: 0;
+          }
+        }
+
+        @keyframes terminal-type {
+          from {
+            width: 0;
+          }
+          to {
+            width: 14ch;
+          }
+        }
+
+        .terminal-line {
+          animation: terminal-reveal 420ms ease-out forwards;
+        }
+
+        .terminal-cursor {
+          animation: terminal-caret 900ms steps(1, end) infinite;
+        }
+
+        .terminal-type {
+          width: 14ch;
+          animation: terminal-type 1.2s steps(14, end) both;
+        }
+      `}</style>
     </main>
   );
 }
