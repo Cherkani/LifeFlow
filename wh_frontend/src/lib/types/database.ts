@@ -131,6 +131,7 @@ export type Database = {
           space_id: string;
           kind: "link" | "note" | "bullets";
           title: string | null;
+          tag: string | null;
           url: string | null;
           content: string | null;
           created_at: string;
@@ -143,6 +144,7 @@ export type Database = {
           space_id: string;
           kind: "link" | "note" | "bullets";
           title?: string | null;
+          tag?: string | null;
           url?: string | null;
           content?: string | null;
           created_at?: string;
@@ -155,6 +157,7 @@ export type Database = {
           space_id?: string;
           kind?: "link" | "note" | "bullets";
           title?: string | null;
+          tag?: string | null;
           url?: string | null;
           content?: string | null;
           created_at?: string;
@@ -170,6 +173,7 @@ export type Database = {
           title: string;
           description: string | null;
           image_url: string | null;
+          measurement_mode: "quantitative" | "qualitative";
           phase_id: string | null;
           project_id: string | null;
           created_at: string;
@@ -181,6 +185,7 @@ export type Database = {
           title: string;
           description?: string | null;
           image_url?: string | null;
+          measurement_mode?: "quantitative" | "qualitative";
           phase_id?: string | null;
           project_id?: string | null;
           created_at?: string;
@@ -192,6 +197,7 @@ export type Database = {
           title?: string;
           description?: string | null;
           image_url?: string | null;
+          measurement_mode?: "quantitative" | "qualitative";
           phase_id?: string | null;
           project_id?: string | null;
           created_at?: string;

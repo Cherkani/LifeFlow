@@ -1,7 +1,7 @@
 import type { Supabase } from "./types";
 
 export type HabitsPageData = {
-  objectives: Array<{ id: string; title: string; image_url: string | null }>;
+  objectives: Array<{ id: string; title: string; image_url: string | null; measurement_mode: "quantitative" | "qualitative" }>;
   categories: Array<{ id: string; title: string; objective_id: string | null; type: "time_tracking" | "fixed_protocol" | "count" | "custom" }>;
   templates: Array<{ id: string; name: string }>;
   currentWeek: { id: string; template_id: string } | null;
@@ -13,7 +13,7 @@ export async function getHabitsPageData(
   weekStartIso: string
 ): Promise<HabitsPageData> {
   const [objectivesRes, categoriesRes, templatesRes, currentWeekRes] = await Promise.all([
-    supabase.from("habit_objectives").select("id, title, image_url").eq("account_id", accountId),
+    supabase.from("habit_objectives").select("id, title, image_url, measurement_mode").eq("account_id", accountId),
     supabase.from("habits").select("id, title, objective_id, type").eq("account_id", accountId).eq("is_active", true),
     supabase.from("templates").select("id, name").eq("account_id", accountId).order("created_at", { ascending: false }),
     supabase
@@ -23,8 +23,20 @@ export async function getHabitsPageData(
       .eq("week_start_date", weekStartIso)
       .maybeSingle()
   ]);
+  const objectivesData =
+    objectivesRes.error && objectivesRes.error.message.includes("measurement_mode")
+      ? (
+          await supabase
+            .from("habit_objectives")
+            .select("id, title, image_url")
+            .eq("account_id", accountId)
+        ).data
+      : objectivesRes.data;
   return {
-    objectives: (objectivesRes.data ?? []) as HabitsPageData["objectives"],
+    objectives: ((objectivesData ?? []) as Array<{ id: string; title: string; image_url: string | null; measurement_mode?: "quantitative" | "qualitative" | null }>).map((objective) => ({
+      ...objective,
+      measurement_mode: objective.measurement_mode ?? "quantitative"
+    })),
     categories: (categoriesRes.data ?? []) as HabitsPageData["categories"],
     templates: (templatesRes.data ?? []) as HabitsPageData["templates"],
     currentWeek: currentWeekRes.data as HabitsPageData["currentWeek"]

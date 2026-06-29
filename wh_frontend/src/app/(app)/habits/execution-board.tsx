@@ -14,6 +14,10 @@ import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/ui/modal-shell";
 import { Progress } from "@/components/ui/progress";
 import { Select } from "@/components/ui/select";
+import {
+  getCalendarEventModeLabel,
+  parseCalendarEventDetails
+} from "@/lib/calendar-event-mode";
 
 type Session = {
   id: string;
@@ -292,19 +296,24 @@ export function ExecutionBoard({
                           <CalendarDays size={12} />
                           Calendar
                         </p>
-                        {dayCalendarEvents.map((event) => (
-                          <div
-                            key={event.id}
-                            className="rounded-md border border-[var(--app-panel-border-strong)] bg-[color-mix(in_srgb,var(--app-panel-bg)_82%,#dbeafe_18%)] px-2 py-2"
-                          >
-                            <p className="truncate text-xs font-semibold text-[var(--app-text-strong)]">{event.title || "Calendar item"}</p>
-                            <p className="text-[10px] uppercase tracking-wide text-[var(--app-text-muted)]">
-                              {event.event_type}
-                              {event.event_time ? ` · ${event.event_time}` : ""}
-                            </p>
-                            {event.details ? <p className="mt-1 text-[10px] text-[var(--app-text-muted)]">{event.details}</p> : null}
-                          </div>
-                        ))}
+                        {dayCalendarEvents.map((event) => {
+                          const parsed = parseCalendarEventDetails(event.details);
+                          return (
+                            <div
+                              key={event.id}
+                              className="rounded-md border border-[var(--app-panel-border-strong)] bg-[color-mix(in_srgb,var(--app-panel-bg)_82%,#dbeafe_18%)] px-2 py-2"
+                            >
+                              <p className="truncate text-xs font-semibold text-[var(--app-text-strong)]">{event.title || "Calendar item"}</p>
+                              <p className="text-[10px] uppercase tracking-wide text-[var(--app-text-muted)]">
+                                {getCalendarEventModeLabel(parsed.mode)}
+                                {" · "}
+                                {event.event_type}
+                                {event.event_time ? ` · ${event.event_time}` : ""}
+                              </p>
+                              {parsed.details ? <p className="mt-1 text-[10px] text-[var(--app-text-muted)]">{parsed.details}</p> : null}
+                            </div>
+                          );
+                        })}
                       </>
                     ) : null}
 

@@ -13,6 +13,7 @@ type Objective = {
   title: string;
   description: string | null;
   image_url: string | null;
+  measurement_mode: "quantitative" | "qualitative";
 };
 
 type Task = {
@@ -39,7 +40,14 @@ type TemplateEntry = {
   is_required: boolean;
 };
 
-export default async function PlanningPage() {
+export default async function PlanningPage({
+  searchParams
+}: {
+  searchParams: Promise<{ error?: string; success?: string }>;
+}) {
+  const query = await searchParams;
+  const errorMessage = query.error?.trim();
+  const successMessage = query.success?.trim();
   const { supabase, account } = await requireAppContext();
 
   const { objectives: objectivesRaw, tasks: tasksRaw, templates: templatesRaw, weeks: weeksRaw } = await getPlanningData(
@@ -166,6 +174,8 @@ export default async function PlanningPage() {
         templateIdsByObjective={templateIdsByObjective}
         taskCountByObjective={taskCountByObjective}
         weekCountByTemplate={weekCountByTemplate}
+        errorMessage={errorMessage}
+        successMessage={successMessage}
         stats={{
           objectivesCount: objectives.length,
           templatesCount: templates.length,

@@ -10,6 +10,7 @@ const dateInputSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
 
 const createObjectiveSchema = z.object({
   title: z.string().trim().min(2, "Objective title is required").max(160),
+  measurementMode: z.enum(["quantitative", "qualitative"]).default("quantitative"),
   description: z.string().trim().max(1200).optional(),
   imageUrl: z.string().trim().optional()
 });
@@ -17,6 +18,7 @@ const createObjectiveSchema = z.object({
 const updateObjectiveSchema = z.object({
   objectiveId: z.string().uuid(),
   title: z.string().trim().min(2, "Objective title is required").max(160),
+  measurementMode: z.enum(["quantitative", "qualitative"]).default("quantitative"),
   description: z.string().trim().max(1200).optional(),
   imageUrl: z.string().trim().optional()
 });
@@ -92,10 +94,22 @@ function getSafeReturnPath(raw: FormDataEntryValue | null) {
   return "/habits";
 }
 
+function redirectTarget(path: string, type: "error" | "success", message: string): { redirectTo: string } {
+  const [basePath, rawQuery = ""] = path.split("?");
+  const query = new URLSearchParams(rawQuery);
+  query.set(type, message);
+  return { redirectTo: `${basePath}?${query.toString()}` };
+}
+
+function isMissingMeasurementModeError(message: string | undefined) {
+  return Boolean(message?.includes("measurement_mode"));
+}
+
 export async function createObjectiveAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = createObjectiveSchema.safeParse({
     title: formData.get("title"),
+    measurementMode: formData.get("measurementMode"),
     description: formData.get("description"),
     imageUrl: formData.get("imageUrl")
   });
@@ -106,15 +120,24 @@ export async function createObjectiveAction(formData: FormData) {
 
   const { supabase, account } = await requireAppContext();
 
-  await supabase.from("habit_objectives").insert({
+  const objectivePayload = {
     account_id: account.accountId,
     title: payload.data.title,
+    measurement_mode: payload.data.measurementMode,
     description: payload.data.description?.trim() ? payload.data.description : null,
     image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null
-  });
+  };
+  const { error } = await supabase.from("habit_objectives").insert(objectivePayload);
+
+  if (error) {
+    if (isMissingMeasurementModeError(error.message)) {
+      return redirectTarget(returnPath, "error", "Objective mode needs the database migration. Run the objective measurement_mode migration, then save again.");
+    }
+    return redirectTarget(returnPath, "error", "Objective was not created. Please try again.");
+  }
 
   revalidatePath(returnPath.split("?")[0] || "/habits");
-  return { redirectTo: returnPath };
+  return redirectTarget(returnPath, "success", "Objective created.");
 }
 
 export async function updateObjectiveAction(formData: FormData) {
@@ -122,6 +145,7 @@ export async function updateObjectiveAction(formData: FormData) {
   const payload = updateObjectiveSchema.safeParse({
     objectiveId: formData.get("objectiveId"),
     title: formData.get("title"),
+    measurementMode: formData.get("measurementMode"),
     description: formData.get("description"),
     imageUrl: formData.get("imageUrl")
   });
@@ -132,22 +156,27 @@ export async function updateObjectiveAction(formData: FormData) {
 
   const { supabase, account } = await requireAppContext();
 
+  const objectivePayload = {
+    title: payload.data.title,
+    measurement_mode: payload.data.measurementMode,
+    description: payload.data.description?.trim() ? payload.data.description : null,
+    image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null
+  };
   const { error } = await supabase
     .from("habit_objectives")
-    .update({
-      title: payload.data.title,
-      description: payload.data.description?.trim() ? payload.data.description : null,
-      image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null
-    })
+    .update(objectivePayload)
     .eq("id", payload.data.objectiveId)
     .eq("account_id", account.accountId);
 
   if (error) {
-    return { redirectTo: returnPath };
+    if (isMissingMeasurementModeError(error.message)) {
+      return redirectTarget(returnPath, "error", "Objective mode needs the database migration. Run the objective measurement_mode migration, then save again.");
+    }
+    return redirectTarget(returnPath, "error", "Objective was not updated. Please try again.");
   }
 
   revalidatePath(returnPath.split("?")[0] || "/habits");
-  return { redirectTo: returnPath };
+  return redirectTarget(returnPath, "success", "Objective updated.");
 }
 
 export async function createObjectiveFormAction(
@@ -551,29 +580,6 @@ export async function changeWeekTemplateAction(formData: FormData) {
     return { redirectTo: returnPath };
   }
 
-  const weekStartDate = new Date(`${payload.data.weekStartDate}T00:00:00`);
-  const weekEndDate = new Date(weekStartDate);
-  weekEndDate.setDate(weekEndDate.getDate() + 6);
-  const weekEndIso = weekEndDate.toISOString().slice(0, 10);
-
-  const { data: habitsInAccount } = await supabase.from("habits").select("id").eq("account_id", account.accountId);
-  const habitIds = (habitsInAccount ?? []).map((h) => h.id);
-
-  if (habitIds.length > 0) {
-    await supabase
-      .from("habit_sessions")
-      .delete()
-      .in("habit_id", habitIds)
-      .gte("session_date", payload.data.weekStartDate)
-      .lte("session_date", weekEndIso);
-  }
-
-  await supabase
-    .from("weeks")
-    .delete()
-    .eq("account_id", account.accountId)
-    .eq("week_start_date", payload.data.weekStartDate);
-
   await supabase.rpc("create_week_from_template", {
     p_account_id: account.accountId,
     p_template_id: payload.data.templateId,
@@ -738,23 +744,6 @@ export async function syncWeekWithTemplateAction(formData: FormData) {
   if (!existingWeek?.template_id) {
     return { redirectTo: returnPath };
   }
-
-  const weekStartDate = new Date(`${payload.data.weekStartDate}T00:00:00`);
-  const weekEndDate = new Date(weekStartDate);
-  weekEndDate.setDate(weekEndDate.getDate() + 6);
-  const weekEndIso = weekEndDate.toISOString().slice(0, 10);
-
-  await supabase
-    .from("habit_sessions")
-    .delete()
-    .gte("session_date", payload.data.weekStartDate)
-    .lte("session_date", weekEndIso);
-
-  await supabase
-    .from("weeks")
-    .delete()
-    .eq("account_id", account.accountId)
-    .eq("week_start_date", payload.data.weekStartDate);
 
   await supabase.rpc("create_week_from_template", {
     p_account_id: account.accountId,

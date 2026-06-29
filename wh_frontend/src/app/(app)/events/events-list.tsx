@@ -12,7 +12,12 @@ import { SubmitButton } from "@/components/forms/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ModalShell } from "@/components/ui/modal-shell";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  getCalendarEventModeLabel,
+  parseCalendarEventDetails
+} from "@/lib/calendar-event-mode";
 import { EventsTypeField } from "./events-type-field";
 
 type CalendarEvent = {
@@ -67,46 +72,54 @@ export function EventsList({
       {events.length > 0 ? (
         <ul className="space-y-2">
           {events.map((event) => (
-            <li
-              key={event.id}
-              className="group flex items-start justify-between gap-2 rounded-lg bg-[#eef3fb] px-3 py-2 text-sm text-[#4a5f83]"
-            >
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex items-center gap-2">
-                  <Star size={14} className="shrink-0 text-[#d17035]" />
-                  <span className="font-semibold text-[#0c1d3c]">{event.title}</span>
-                  {event.event_time ? (
-                    <span className="shrink-0 text-xs text-[#4a5f83]">{formatTime(event.event_time)}</span>
-                  ) : null}
-                  <span className="shrink-0 rounded-full bg-[#edf3ff] px-2 py-0.5 text-xs font-semibold text-[#23406d]">
-                    {event.event_type}
-                  </span>
-                </div>
-                {event.details ? <p className="text-xs text-[#4a5f83]">{event.details}</p> : null}
-              </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setEditingEvent(event)}
-                  aria-label="Edit event"
-                  className="inline-flex size-7 items-center justify-center rounded-md text-[#4a5f83] hover:bg-[#e3ebf9] hover:text-[#0c1d3c]"
+            (() => {
+              const parsed = parseCalendarEventDetails(event.details);
+              return (
+                <li
+                  key={event.id}
+                  className="group flex items-start justify-between gap-2 rounded-lg bg-[#eef3fb] px-3 py-2 text-sm text-[#4a5f83]"
                 >
-                  <Pencil size={12} />
-                </button>
-                <ActionForm action={deleteCalendarEventFormAction} className="inline" refreshOnly>
-                  <input type="hidden" name="returnPath" value={returnPath} />
-                  <input type="hidden" name="eventId" value={event.id} />
-                  <button
-                    type="button"
-                    aria-label="Delete event"
-                    onClick={() => setDeletingEvent(event)}
-                    className="inline-flex size-7 items-center justify-center rounded-md text-[#b91c1c] hover:bg-[#fee2e2]"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </ActionForm>
-              </div>
-            </li>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Star size={14} className="shrink-0 text-[#d17035]" />
+                      <span className="font-semibold text-[#0c1d3c]">{event.title}</span>
+                      {event.event_time ? (
+                        <span className="shrink-0 text-xs text-[#4a5f83]">{formatTime(event.event_time)}</span>
+                      ) : null}
+                      <span className="shrink-0 rounded-full bg-[#edf3ff] px-2 py-0.5 text-xs font-semibold text-[#23406d]">
+                        {event.event_type}
+                      </span>
+                      <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#475569]">
+                        {getCalendarEventModeLabel(parsed.mode)}
+                      </span>
+                    </div>
+                    {parsed.details ? <p className="text-xs text-[#4a5f83]">{parsed.details}</p> : null}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setEditingEvent(event)}
+                      aria-label="Edit event"
+                      className="inline-flex size-7 items-center justify-center rounded-md text-[#4a5f83] hover:bg-[#e3ebf9] hover:text-[#0c1d3c]"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <ActionForm action={deleteCalendarEventFormAction} className="inline" refreshOnly>
+                      <input type="hidden" name="returnPath" value={returnPath} />
+                      <input type="hidden" name="eventId" value={event.id} />
+                      <button
+                        type="button"
+                        aria-label="Delete event"
+                        onClick={() => setDeletingEvent(event)}
+                        className="inline-flex size-7 items-center justify-center rounded-md text-[#b91c1c] hover:bg-[#fee2e2]"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </ActionForm>
+                  </div>
+                </li>
+              );
+            })()
           ))}
         </ul>
       ) : (
@@ -114,6 +127,9 @@ export function EventsList({
       )}
 
       {editingEvent ? (
+        (() => {
+          const parsed = parseCalendarEventDetails(editingEvent.details);
+          return (
         <ModalShell
           title="Edit Calendar Event"
           description="Update title, date, type, or details."
@@ -139,6 +155,14 @@ export function EventsList({
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
+                <Label htmlFor="editEventMode">Mode</Label>
+                <Select id="editEventMode" name="eventMode" defaultValue={parsed.mode}>
+                  <option value="event">Event · informational</option>
+                  <option value="todo">To-do · should be done</option>
+                  <option value="milestone">Milestone · important marker</option>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="editEventDate">Date (optional)</Label>
                 <Input
                   id="editEventDate"
@@ -163,15 +187,17 @@ export function EventsList({
             <div className="space-y-2">
               <Label htmlFor="editEventDetails">Details (optional)</Label>
               <Textarea
-                id="editEventDetails"
-                name="details"
-                defaultValue={editingEvent.details ?? ""}
-                placeholder="Add context or location."
-              />
+              id="editEventDetails"
+              name="details"
+              defaultValue={parsed.details ?? ""}
+              placeholder="Add context or location."
+            />
             </div>
             <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>
         </ModalShell>
+          );
+        })()
       ) : null}
 
       {deletingEvent ? (

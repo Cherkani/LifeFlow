@@ -11,6 +11,7 @@ import { ExecutionBoard } from "@/app/(app)/habits/execution-board";
 import { WeekResetModal } from "@/app/(app)/habits/week-reset-modal";
 import { DailyObjectiveChart } from "@/app/(app)/habits/daily-objective-chart";
 import { CategoryObjectiveChart } from "@/app/(app)/habits/category-objective-chart";
+import { QualitativeProgress } from "@/app/(app)/habits/qualitative-progress";
 import { ActionForm } from "@/components/forms/action-form";
 import { LifeSummaryBand } from "@/components/life/life-context";
 import { WorkflowNav } from "@/components/life/workflow-nav";
@@ -21,10 +22,10 @@ import { Select } from "@/components/ui/select";
 import {
   getCalendarEvents,
   getHabitsPageData,
-  getMonthSessions,
   getTemplateEntriesOrder,
   getWeekSessions
 } from "@/lib/queries";
+import { parseCalendarEventDetails } from "@/lib/calendar-event-mode";
 import { requireAppContext } from "@/lib/server-context";
 import { endOfIsoWeek, startOfIsoWeek } from "@/lib/utils";
 
@@ -33,6 +34,8 @@ type HabitsSearchParams = Promise<{
   session?: string;
   logDate?: string;
   objectiveId?: string;
+  performance?: string;
+  analytics?: string;
 }>;
 
 type Category = {
@@ -72,6 +75,9 @@ type CalendarEvent = {
   event_type: string;
 };
 
+type PerformanceRange = "week" | "month" | "quarter";
+type AnalyticsView = "all" | "qualitative" | "quantitative";
+
 function parseWeekStart(raw: string | undefined) {
   if (typeof raw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
     return new Date(`${raw}T00:00:00`);
@@ -92,10 +98,18 @@ function weekHref(
     sessionId?: string;
     logDate?: string;
     objectiveId?: string;
+    performance?: PerformanceRange;
+    analytics?: AnalyticsView;
   }
 ) {
   const query = new URLSearchParams();
   query.set("week", formatWeekKey(weekStartDate));
+  if (options?.performance) {
+    query.set("performance", options.performance);
+  }
+  if (options?.analytics) {
+    query.set("analytics", options.analytics);
+  }
   if (options?.sessionId) {
     query.set("session", options.sessionId);
   }
@@ -114,6 +128,43 @@ function weekdayName(value: string) {
   });
 }
 
+function formatDateLabel(value: string, options?: Intl.DateTimeFormatOptions) {
+  return new Date(`${value}T00:00:00`).toLocaleDateString("en-US", options ?? {
+    month: "short",
+    day: "numeric"
+  });
+}
+
+function parsePerformanceRange(raw: string | undefined): PerformanceRange {
+  return raw === "month" || raw === "quarter" ? raw : "week";
+}
+
+function parseAnalyticsView(raw: string | undefined): AnalyticsView {
+  return raw === "qualitative" || raw === "quantitative" ? raw : "all";
+}
+
+function getQuarterBounds(date: Date) {
+  const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
+  const start = new Date(date.getFullYear(), quarterStartMonth, 1);
+  const end = new Date(date.getFullYear(), quarterStartMonth + 3, 0);
+  return { start, end };
+}
+
+function analyticsHref(weekStartDate: Date, performance: PerformanceRange, analytics: AnalyticsView, objectiveId?: string) {
+  const query = new URLSearchParams();
+  query.set("week", formatWeekKey(weekStartDate));
+  query.set("performance", performance);
+  query.set("analytics", analytics);
+  if (objectiveId) {
+    query.set("objectiveId", objectiveId);
+  }
+  return `/habits?${query.toString()}` as Route;
+}
+
+function performanceHref(weekStartDate: Date, range: PerformanceRange, analytics: AnalyticsView, objectiveId?: string) {
+  return analyticsHref(weekStartDate, range, analytics, objectiveId);
+}
+
 export default async function HabitsPage({
   searchParams
 }: {
@@ -126,7 +177,21 @@ export default async function HabitsPage({
   const weekEndIso = formatWeekKey(selectedWeekEnd);
   const monthStart = new Date(selectedWeekStart.getFullYear(), selectedWeekStart.getMonth(), 1).toISOString().slice(0, 10);
   const monthEnd = new Date(selectedWeekStart.getFullYear(), selectedWeekStart.getMonth() + 1, 0).toISOString().slice(0, 10);
+  const quarterBounds = getQuarterBounds(selectedWeekStart);
+  const quarterStart = formatWeekKey(quarterBounds.start);
+  const quarterEnd = formatWeekKey(quarterBounds.end);
   const selectedObjectiveId = typeof params.objectiveId === "string" ? params.objectiveId : undefined;
+  const performanceRange = parsePerformanceRange(params.performance);
+  const analyticsView = parseAnalyticsView(params.analytics);
+  const performanceStartIso = performanceRange === "quarter" ? quarterStart : performanceRange === "month" ? monthStart : weekStartIso;
+  const performanceEndIso = performanceRange === "quarter" ? quarterEnd : performanceRange === "month" ? monthEnd : weekEndIso;
+  const performanceTitle = performanceRange === "quarter" ? "Quarter performance" : performanceRange === "month" ? "Month performance" : "Week performance";
+  const performanceSubtitle =
+    performanceRange === "quarter"
+      ? `${formatDateLabel(performanceStartIso, { month: "short", day: "numeric" })} - ${formatDateLabel(performanceEndIso, { month: "short", day: "numeric", year: "numeric" })}`
+      : performanceRange === "month"
+        ? formatDateLabel(performanceStartIso, { month: "long", year: "numeric" })
+        : `${formatDateLabel(weekStartIso)} - ${formatDateLabel(weekEndIso, { month: "short", day: "numeric", year: "numeric" })}`;
 
   const previousWeek = new Date(selectedWeekStart);
   previousWeek.setDate(previousWeek.getDate() - 7);
@@ -145,16 +210,18 @@ export default async function HabitsPage({
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
   const categoryIds = categories.map((category) => category.id);
 
-  const [templateEntriesOrderRes, weekSessionsRes, monthSessionsRes, weekCalendarEventsRes] = await Promise.all([
+  const [templateEntriesOrderRes, weekSessionsRes, performanceSessionsRes, weekCalendarEventsRes, performanceCalendarEventsRes] = await Promise.all([
     selectedTemplateId ? getTemplateEntriesOrder(supabase, selectedTemplateId) : Promise.resolve({ data: [] as Array<{ habit_id: string; day_of_week: number }> }),
     getWeekSessions(supabase, categoryIds, weekStartIso, weekEndIso),
-    getMonthSessions(supabase, categoryIds, monthStart, monthEnd),
-    getCalendarEvents(supabase, account.accountId, weekStartIso, weekEndIso)
+    getWeekSessions(supabase, categoryIds, performanceStartIso, performanceEndIso),
+    getCalendarEvents(supabase, account.accountId, weekStartIso, weekEndIso),
+    getCalendarEvents(supabase, account.accountId, performanceStartIso, performanceEndIso)
   ]);
 
   const sessions = (weekSessionsRes.data ?? []) as Session[];
-  const monthSessions = (monthSessionsRes.data ?? []) as Array<{ actual_minutes: number | null; planned_minutes: number; completed: boolean }>;
+  const performanceSessions = (performanceSessionsRes.data ?? []) as Session[];
   const weekCalendarEvents = weekCalendarEventsRes as CalendarEvent[];
+  const performanceCalendarEvents = performanceCalendarEventsRes as CalendarEvent[];
 
   const templateDayOrder = new Map<number, Map<string, number>>();
   for (const entry of templateEntriesOrderRes.data ?? []) {
@@ -167,6 +234,12 @@ export default async function HabitsPage({
     }
   }
 
+  const weekDates = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(selectedWeekStart);
+    date.setDate(selectedWeekStart.getDate() + index);
+    return formatWeekKey(date);
+  });
+
 
   const filteredSessions =
     selectedObjectiveId && selectedObjectiveId !== ""
@@ -175,43 +248,29 @@ export default async function HabitsPage({
           return category?.objective_id === selectedObjectiveId;
         })
       : sessions;
-  const fallbackNonTimedSessions: Session[] = [];
-  for (const category of categories) {
-    if (selectedObjectiveId && selectedObjectiveId !== "" && category.objective_id !== selectedObjectiveId) {
-      continue;
-    }
-    if (category.type === "time_tracking") {
-      continue;
-    }
-    for (const dateKey of Array.from({ length: 7 }, (_, index) => {
-      const date = new Date(selectedWeekStart);
-      date.setDate(selectedWeekStart.getDate() + index);
-      return formatWeekKey(date);
-    })) {
-      const alreadyExists = filteredSessions.some((session) => session.habit_id === category.id && session.session_date === dateKey);
-      if (alreadyExists) {
-        continue;
-      }
-      fallbackNonTimedSessions.push({
-        id: `virtual-${category.id}-${dateKey}`,
-        habit_id: category.id,
-        session_date: dateKey,
-        planned_minutes: 0,
-        minimum_minutes: 0,
-        actual_minutes: null,
-        completed: false
-      });
-    }
-  }
-  const executionSessions = [...filteredSessions, ...fallbackNonTimedSessions];
+  const executionSessions = filteredSessions;
   const timedSessions = filteredSessions.filter((session) => categoryById.get(session.habit_id)?.type === "time_tracking");
+  const performanceFilteredSessions =
+    selectedObjectiveId && selectedObjectiveId !== ""
+      ? performanceSessions.filter((session) => {
+          const category = categoryById.get(session.habit_id);
+          return category?.objective_id === selectedObjectiveId;
+        })
+      : performanceSessions;
+  const performanceTimedSessions = performanceFilteredSessions.filter((session) => categoryById.get(session.habit_id)?.type === "time_tracking");
 
   const weekPlannedMinutes = timedSessions.reduce((sum, session) => sum + session.planned_minutes, 0);
   const weekDoneMinutes = timedSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
-  const monthDoneMinutes = monthSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
+  const performancePlannedMinutes = performanceTimedSessions.reduce((sum, session) => sum + session.planned_minutes, 0);
+  const performanceDoneMinutes = performanceTimedSessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
   const plannedSessions = filteredSessions.filter((session) => session.planned_minutes > 0);
   const weekCompletion =
     plannedSessions.length > 0 ? Math.round((plannedSessions.filter((session) => session.completed).length / plannedSessions.length) * 100) : 0;
+  const performancePlannedSessions = performanceFilteredSessions.filter((session) => session.planned_minutes > 0);
+  const performanceCompletion =
+    performancePlannedSessions.length > 0
+      ? Math.round((performancePlannedSessions.filter((session) => session.completed).length / performancePlannedSessions.length) * 100)
+      : 0;
   const compensationMinutes = filteredSessions
     .filter((session) => session.planned_minutes === 0)
     .reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
@@ -230,13 +289,65 @@ export default async function HabitsPage({
     calendarEventsByDate.set(event.event_date, list);
   }
 
-  const weekDates = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(selectedWeekStart);
-    date.setDate(selectedWeekStart.getDate() + index);
-    return formatWeekKey(date);
-  });
-
   const todayKey = formatWeekKey(new Date());
+  const qualitativeSessions = performanceFilteredSessions.filter((session) => categoryById.get(session.habit_id)?.type !== "time_tracking");
+  const performanceCalendarEventsByDate = new Map<string, CalendarEvent[]>();
+  for (const event of performanceCalendarEvents) {
+    if (!event.event_date) continue;
+    const list = performanceCalendarEventsByDate.get(event.event_date) ?? [];
+    list.push(event);
+    performanceCalendarEventsByDate.set(event.event_date, list);
+  }
+  const performanceDayKeys = Array.from(new Set([...performanceFilteredSessions.map((session) => session.session_date), ...performanceCalendarEvents.map((event) => event.event_date).filter((date): date is string => Boolean(date))])).sort();
+  const qualitativeDayKeys = performanceDayKeys.length > 0 ? performanceDayKeys : weekDates;
+  const qualitativeDayData = qualitativeDayKeys.map((dateKey) => {
+    const daySessions = qualitativeSessions.filter((session) => session.session_date === dateKey);
+    const dayEvents = performanceCalendarEventsByDate.get(dateKey) ?? [];
+    const calendarCounts = dayEvents.reduce(
+      (counts, event) => {
+        const { mode } = parseCalendarEventDetails(event.details);
+        counts[mode] += 1;
+        return counts;
+      },
+      { event: 0, todo: 0, milestone: 0 }
+    );
+
+    return {
+      dateKey,
+      label: weekdayName(dateKey),
+      taskTotal: daySessions.length,
+      taskCompleted: daySessions.filter((session) => session.completed).length,
+      calendarEvents: calendarCounts.event,
+      calendarTodos: calendarCounts.todo,
+      calendarMilestones: calendarCounts.milestone
+    };
+  });
+  const qualitativeObjectiveMap = new Map<
+    string,
+    {
+      objectiveId: string;
+      label: string;
+      total: number;
+      completed: number;
+    }
+  >();
+  for (const session of qualitativeSessions) {
+    const category = categoryById.get(session.habit_id);
+    if (!category) continue;
+    const objective = category.objective_id ? objectiveById.get(category.objective_id) : undefined;
+    const objectiveId = objective?.id ?? `unassigned-${category.id}`;
+    const label = objective?.title ?? `${category.title} (No objective)`;
+    const existing = qualitativeObjectiveMap.get(objectiveId) ?? {
+      objectiveId,
+      label,
+      total: 0,
+      completed: 0
+    };
+    existing.total += 1;
+    existing.completed += session.completed ? 1 : 0;
+    qualitativeObjectiveMap.set(objectiveId, existing);
+  }
+  const qualitativeObjectiveData = Array.from(qualitativeObjectiveMap.values()).sort((a, b) => b.total - a.total);
   const dayObjectiveTotals = new Map<
     string,
     Map<
@@ -249,7 +360,7 @@ export default async function HabitsPage({
       }
     >
   >();
-  for (const session of filteredSessions) {
+  for (const session of performanceFilteredSessions) {
     const dateKey = session.session_date;
     const category = categoryById.get(session.habit_id);
     if (!category) continue;
@@ -273,8 +384,9 @@ export default async function HabitsPage({
     existing.doneMinutes += doneContribution;
     dayMap.set(objectiveId, existing);
   }
-  const dailyChartData = weekDates.map((dateKey) => {
-    const label = weekdayName(dateKey);
+  const quantitativeDayKeys = performanceDayKeys.length > 0 ? performanceDayKeys : weekDates;
+  const dailyChartData = quantitativeDayKeys.map((dateKey) => {
+    const label = performanceRange === "week" ? weekdayName(dateKey) : formatDateLabel(dateKey);
     const dayMap = dayObjectiveTotals.get(dateKey) ?? new Map();
     const objectives = Array.from(dayMap.values()).map((entry) => {
       const doneWithinPlan = Math.min(entry.doneMinutes, entry.plannedMinutes);
@@ -320,7 +432,7 @@ export default async function HabitsPage({
       overrunMinutes: number;
     }
   >();
-  for (const session of filteredSessions) {
+  for (const session of performanceFilteredSessions) {
     const category = categoryById.get(session.habit_id);
     if (!category) continue;
     const objective = category.objective_id ? objectiveById.get(category.objective_id) : undefined;
@@ -367,13 +479,13 @@ export default async function HabitsPage({
         description="Track weekly sessions and minutes directly against your objectives."
         stats={[
           { label: "daily tasks", value: categories.length },
-          { label: "week done", value: `${weekDoneMinutes} min` }
+          { label: `${performanceRange} done`, value: `${performanceDoneMinutes} min` }
         ]}
       />
 
       <WorkflowNav
         active="execution"
-        executionHref={weekHref(selectedWeekStart, selectedObjectiveId ? { objectiveId: selectedObjectiveId } : undefined)}
+        executionHref={weekHref(selectedWeekStart, { objectiveId: selectedObjectiveId, performance: performanceRange, analytics: analyticsView })}
         calendarHref={`/events?month=${weekStartIso.slice(0, 7)}&date=${weekStartIso}&view=scheduled` as Route}
       />
 
@@ -389,7 +501,7 @@ export default async function HabitsPage({
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <Link
-              href={weekHref(previousWeek)}
+              href={weekHref(previousWeek, { objectiveId: selectedObjectiveId, performance: performanceRange, analytics: analyticsView })}
               className="inline-flex size-9 items-center justify-center rounded-lg border border-[var(--app-panel-border-strong)] bg-[var(--app-btn-secondary-bg)] text-[var(--app-btn-secondary-fg)]"
             >
               <ChevronLeft size={16} />
@@ -398,7 +510,7 @@ export default async function HabitsPage({
               {selectedWeekStart.toLocaleDateString("en-US")} - {selectedWeekEnd.toLocaleDateString("en-US")}
             </span>
             <Link
-              href={weekHref(nextWeek)}
+              href={weekHref(nextWeek, { objectiveId: selectedObjectiveId, performance: performanceRange, analytics: analyticsView })}
               className="inline-flex size-9 items-center justify-center rounded-lg border border-[var(--app-panel-border-strong)] bg-[var(--app-btn-secondary-bg)] text-[var(--app-btn-secondary-fg)]"
             >
               <ChevronRight size={16} />
@@ -414,6 +526,8 @@ export default async function HabitsPage({
                 defaultValue={weekStartIso}
                 className="h-8 rounded-md border border-[var(--ui-input-border)] bg-[var(--ui-input-bg)] px-2 text-sm text-[var(--ui-input-text)] focus:border-[var(--ui-input-focus-border)] focus:ring-2 focus:ring-[var(--ui-input-focus-ring)]"
               />
+              <input type="hidden" name="performance" value={performanceRange} />
+              <input type="hidden" name="analytics" value={analyticsView} />
               {selectedObjectiveId ? <input type="hidden" name="objectiveId" value={selectedObjectiveId} /> : null}
               <button
                 type="submit"
@@ -437,14 +551,14 @@ export default async function HabitsPage({
                 currentTemplateId={selectedTemplateId}
                 currentTemplateName={selectedTemplate?.name ?? "current template"}
                 weekStartDate={weekStartIso}
-                returnPath={weekHref(selectedWeekStart)}
+                returnPath={weekHref(selectedWeekStart, { objectiveId: selectedObjectiveId, performance: performanceRange, analytics: analyticsView })}
                 changeTemplateAction={changeWeekTemplateFormAction}
                 resetSameTemplateAction={syncWeekWithTemplateFormAction}
               />
             </div>
           ) : (
             <ActionForm action={generateWeekFromTemplateFormAction} className="grid gap-2 md:grid-cols-[1fr_auto] md:items-end">
-              <input type="hidden" name="returnPath" value={weekHref(selectedWeekStart)} />
+              <input type="hidden" name="returnPath" value={weekHref(selectedWeekStart, { objectiveId: selectedObjectiveId, performance: performanceRange, analytics: analyticsView })} />
               <input type="hidden" name="weekStartDate" value={weekStartIso} />
               <div className="space-y-1">
                 <p className="text-xs font-medium text-[var(--app-text-muted)]">Template for this week</p>
@@ -473,7 +587,7 @@ export default async function HabitsPage({
             )}
             <Badge variant="secondary" className="bg-[var(--app-chip-bg)] text-[var(--app-chip-fg)]">Week planned: {weekPlannedMinutes} min</Badge>
             <Badge className="bg-[var(--app-btn-primary-bg)] text-[var(--app-btn-primary-fg)]">Week done: {weekDoneMinutes} min</Badge>
-            <Badge variant="secondary" className="bg-[var(--app-chip-bg)] text-[var(--app-chip-fg)]">Month done: {monthDoneMinutes} min</Badge>
+            <Badge variant="secondary" className="bg-[var(--app-chip-bg)] text-[var(--app-chip-fg)]">{performanceTitle}: {performanceDoneMinutes} min</Badge>
             <Badge variant="secondary" className="bg-[var(--app-chip-bg)] text-[var(--app-chip-fg)]">Completion: {weekCompletion}%</Badge>
             {compensationMinutes > 0 ? <Badge variant="warning">Compensation: +{compensationMinutes} min</Badge> : null}
           </div>
@@ -493,30 +607,97 @@ export default async function HabitsPage({
         categories={categories}
         objectives={objectives}
         todayKey={todayKey}
-        weekHref={weekHref(selectedWeekStart, selectedObjectiveId ? { objectiveId: selectedObjectiveId } : undefined)}
+        weekHref={weekHref(selectedWeekStart, { objectiveId: selectedObjectiveId, performance: performanceRange, analytics: analyticsView })}
       />
 
       <Card className="border-[var(--app-panel-border)] bg-[var(--app-panel-bg)]">
-        <CardHeader>
-          <CardTitle className="text-[var(--app-text-strong)]">Daily Objective Bars</CardTitle>
+        <CardHeader className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-[var(--app-text-strong)]">{performanceTitle}</CardTitle>
+              <p className="mt-1 text-sm text-[var(--app-text-muted)]">{performanceSubtitle}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(["week", "month", "quarter"] as const).map((range) => (
+                <Link
+                  key={range}
+                  href={performanceHref(selectedWeekStart, range, analyticsView, selectedObjectiveId)}
+                  className={[
+                    "inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold capitalize transition",
+                    performanceRange === range
+                      ? "border-[var(--app-btn-primary-bg)] bg-[var(--app-btn-primary-bg)] text-[var(--app-btn-primary-fg)]"
+                      : "border-[var(--app-panel-border-strong)] bg-[var(--app-btn-secondary-bg)] text-[var(--app-btn-secondary-fg)] hover:bg-[var(--app-btn-secondary-hover)]"
+                  ].join(" ")}
+                >
+                  {range}
+                </Link>
+              ))}
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {!hasDailyChartData ? (
-            <p className="text-sm text-[var(--app-text-muted)]">No planned tasks this week yet.</p>
-          ) : (
-            <DailyObjectiveChart data={dailyChartData} />
-          )}
+        <CardContent>
+          <div className="mb-4 flex flex-wrap gap-2">
+            {(["all", "qualitative", "quantitative"] as const).map((view) => (
+              <Link
+                key={view}
+                href={analyticsHref(selectedWeekStart, performanceRange, view, selectedObjectiveId)}
+                className={[
+                  "inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold capitalize transition",
+                  analyticsView === view
+                    ? "border-[var(--app-btn-primary-bg)] bg-[var(--app-btn-primary-bg)] text-[var(--app-btn-primary-fg)]"
+                    : "border-[var(--app-panel-border-strong)] bg-[var(--app-btn-secondary-bg)] text-[var(--app-btn-secondary-fg)] hover:bg-[var(--app-btn-secondary-hover)]"
+                ].join(" ")}
+              >
+                {view}
+              </Link>
+            ))}
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-[var(--app-panel-border-strong)] bg-[var(--app-btn-secondary-bg)] p-3">
+              <p className="text-xs font-medium text-[var(--app-text-muted)]">Planned</p>
+              <p className="mt-1 text-2xl font-bold text-[var(--app-text-strong)]">{performancePlannedMinutes} min</p>
+            </div>
+            <div className="rounded-xl border border-[var(--app-panel-border-strong)] bg-[var(--app-btn-secondary-bg)] p-3">
+              <p className="text-xs font-medium text-[var(--app-text-muted)]">Done</p>
+              <p className="mt-1 text-2xl font-bold text-[var(--app-text-strong)]">{performanceDoneMinutes} min</p>
+            </div>
+            <div className="rounded-xl border border-[var(--app-panel-border-strong)] bg-[var(--app-btn-secondary-bg)] p-3">
+              <p className="text-xs font-medium text-[var(--app-text-muted)]">Completion</p>
+              <p className="mt-1 text-2xl font-bold text-[var(--app-text-strong)]">{performanceCompletion}%</p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      <Card className="border-[var(--app-panel-border)] bg-[var(--app-panel-bg)]">
-        <CardHeader>
-          <CardTitle className="text-[var(--app-text-strong)]">Category Objective Bars</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <CategoryObjectiveChart data={objectiveChartData} />
-        </CardContent>
-      </Card>
+      {analyticsView === "all" || analyticsView === "qualitative" ? (
+        <QualitativeProgress days={qualitativeDayData} objectives={qualitativeObjectiveData} />
+      ) : null}
+
+      {analyticsView === "all" || analyticsView === "quantitative" ? (
+        <>
+          <Card className="border-[var(--app-panel-border)] bg-[var(--app-panel-bg)]">
+            <CardHeader>
+              <CardTitle className="text-[var(--app-text-strong)]">Quantitative Daily Bars · {performanceTitle}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {!hasDailyChartData ? (
+                <p className="text-sm text-[var(--app-text-muted)]">No timed work planned or logged in this period yet.</p>
+              ) : (
+                <DailyObjectiveChart data={dailyChartData} />
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-[var(--app-panel-border)] bg-[var(--app-panel-bg)]">
+            <CardHeader>
+              <CardTitle className="text-[var(--app-text-strong)]">Quantitative Objective Bars · {performanceTitle}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <CategoryObjectiveChart data={objectiveChartData} />
+            </CardContent>
+          </Card>
+        </>
+      ) : null}
 
     </div>
   );

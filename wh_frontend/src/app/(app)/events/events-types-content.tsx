@@ -75,6 +75,21 @@ export function EventsTypesContent({ monthKey, selectedIso, eventTypes }: Events
         </ActionForm>
       </div>
 
+      <div className="grid gap-2 rounded-lg border border-[#d7e0f1] bg-white p-3 text-sm text-[#4a5f83] sm:grid-cols-3">
+        <div>
+          <p className="font-semibold text-[#0c1d3c]">Event</p>
+          <p className="text-xs">Informational date or appointment.</p>
+        </div>
+        <div>
+          <p className="font-semibold text-[#0c1d3c]">To-do</p>
+          <p className="text-xs">Something that should be done.</p>
+        </div>
+        <div>
+          <p className="font-semibold text-[#0c1d3c]">Milestone</p>
+          <p className="text-xs">Important marker or deadline.</p>
+        </div>
+      </div>
+
       {uniqueTypes.length > 0 ? (
         <ul className="space-y-2">
           {uniqueTypes.map((type) => (

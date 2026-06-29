@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { RedirectResult } from "@/lib/action-with-state";
+import { serializeCalendarEventDetails } from "@/lib/calendar-event-mode";
 import { requireAppContext } from "@/lib/server-context";
 
 const timeSchema = z.preprocess(
@@ -22,6 +23,7 @@ const optionalDateSchema = z.preprocess(
 
 const createEventSchema = z.object({
   title: z.string().trim().min(2).max(180),
+  eventMode: z.enum(["event", "todo", "milestone"]).default("event"),
   eventDate: optionalDateSchema,
   eventTime: timeSchema,
   eventType: z.string().trim().min(1).max(60),
@@ -31,6 +33,7 @@ const createEventSchema = z.object({
 const updateEventSchema = z.object({
   eventId: z.string().uuid(),
   title: z.string().trim().min(2).max(180),
+  eventMode: z.enum(["event", "todo", "milestone"]).default("event"),
   eventDate: optionalDateSchema,
   eventTime: timeSchema,
   eventType: z.string().trim().min(1).max(60),
@@ -65,6 +68,7 @@ export async function createCalendarEventAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = createEventSchema.safeParse({
     title: formData.get("title"),
+    eventMode: formData.get("eventMode"),
     eventDate: formData.get("eventDate"),
     eventTime: formData.get("eventTime"),
     eventType: formData.get("eventType"),
@@ -90,7 +94,7 @@ export async function createCalendarEventAction(formData: FormData) {
     event_date: payload.data.eventDate,
     event_time: payload.data.eventTime,
     event_type: payload.data.eventType,
-    details: payload.data.details?.trim() ? payload.data.details : null
+    details: serializeCalendarEventDetails(payload.data.eventMode, payload.data.details)
   });
 
   if (error) {
@@ -114,6 +118,7 @@ export async function updateCalendarEventAction(formData: FormData) {
   const payload = updateEventSchema.safeParse({
     eventId: formData.get("eventId"),
     title: formData.get("title"),
+    eventMode: formData.get("eventMode"),
     eventDate: formData.get("eventDate"),
     eventTime: formData.get("eventTime"),
     eventType: formData.get("eventType"),
@@ -139,7 +144,7 @@ export async function updateCalendarEventAction(formData: FormData) {
       event_date: payload.data.eventDate,
       event_time: payload.data.eventTime,
       event_type: payload.data.eventType,
-      details: payload.data.details?.trim() ? payload.data.details : null
+      details: serializeCalendarEventDetails(payload.data.eventMode, payload.data.details)
     })
     .eq("id", payload.data.eventId)
     .eq("account_id", account.accountId);

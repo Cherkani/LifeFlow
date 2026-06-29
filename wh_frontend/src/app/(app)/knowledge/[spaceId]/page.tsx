@@ -10,6 +10,7 @@ type KnowledgeItem = {
   space_id: string;
   kind: "link" | "note" | "bullets";
   title: string | null;
+  tag: string | null;
   url: string | null;
   content: string | null;
   created_at: string;

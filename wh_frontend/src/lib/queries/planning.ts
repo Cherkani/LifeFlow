@@ -1,6 +1,12 @@
 import type { Supabase } from "./types";
 
-export type PlanningObjectiveRow = { id: string; title: string; description: string | null; image_url: string | null };
+export type PlanningObjectiveRow = {
+  id: string;
+  title: string;
+  description: string | null;
+  image_url: string | null;
+  measurement_mode: "quantitative" | "qualitative";
+};
 export type PlanningTaskRow = {
   id: string;
   title: string;
@@ -18,11 +24,20 @@ export type PlanningData = {
   weeks: PlanningWeekRow[];
 };
 
+function withDefaultMeasurementMode(
+  objectives: Array<Omit<PlanningObjectiveRow, "measurement_mode"> & { measurement_mode?: "quantitative" | "qualitative" | null }>
+): PlanningObjectiveRow[] {
+  return objectives.map((objective) => ({
+    ...objective,
+    measurement_mode: objective.measurement_mode ?? "quantitative"
+  }));
+}
+
 export async function getPlanningData(supabase: Supabase, accountId: string): Promise<PlanningData> {
   const [objectivesRes, tasksRes, templatesRes, weeksRes] = await Promise.all([
     supabase
       .from("habit_objectives")
-      .select("id, title, description, image_url")
+      .select("id, title, description, image_url, measurement_mode")
       .eq("account_id", accountId)
       .order("created_at", { ascending: false }),
     supabase
@@ -42,8 +57,18 @@ export async function getPlanningData(supabase: Supabase, accountId: string): Pr
       .eq("account_id", accountId)
       .order("week_start_date", { ascending: true })
   ]);
+  const objectivesData =
+    objectivesRes.error && objectivesRes.error.message.includes("measurement_mode")
+      ? (
+          await supabase
+            .from("habit_objectives")
+            .select("id, title, description, image_url")
+            .eq("account_id", accountId)
+            .order("created_at", { ascending: false })
+        ).data
+      : objectivesRes.data;
   return {
-    objectives: (objectivesRes.data ?? []) as PlanningObjectiveRow[],
+    objectives: withDefaultMeasurementMode((objectivesData ?? []) as Array<Omit<PlanningObjectiveRow, "measurement_mode"> & { measurement_mode?: "quantitative" | "qualitative" | null }>),
     tasks: (tasksRes.data ?? []) as PlanningTaskRow[],
     templates: (templatesRes.data ?? []) as PlanningTemplateRow[],
     weeks: (weeksRes.data ?? []) as PlanningWeekRow[]

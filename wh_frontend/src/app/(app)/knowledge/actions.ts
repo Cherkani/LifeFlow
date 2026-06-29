@@ -27,6 +27,7 @@ const createItemSchema = z.object({
   spaceId: z.string().uuid(),
   kind: z.enum(["link", "note", "bullets"]),
   title: z.string().trim().max(180).optional(),
+  tag: z.string().trim().max(80).optional(),
   url: z.string().trim().optional(),
   content: z.string().trim().optional(),
   isHidden: z
@@ -39,6 +40,7 @@ const updateItemSchema = z.object({
   itemId: z.string().uuid(),
   kind: z.enum(["link", "note", "bullets"]),
   title: z.string().trim().max(180).optional(),
+  tag: z.string().trim().max(80).optional(),
   url: z.string().trim().optional(),
   content: z.string().trim().optional(),
   isHidden: z
@@ -104,6 +106,16 @@ function mapDbErrorMessage(errorMessage: string | null | undefined) {
   }
 
   return errorMessage;
+}
+
+function isMissingKnowledgeTagColumn(errorMessage: string | null | undefined) {
+  return Boolean(errorMessage?.includes("column \"tag\" of relation \"knowledge_items\" does not exist"));
+}
+
+function withoutKnowledgeTag<T extends { tag?: unknown }>(payload: T) {
+  const fallbackPayload = { ...payload };
+  delete fallbackPayload.tag;
+  return fallbackPayload;
 }
 
 function readAccountSettings(settings: unknown) {
@@ -264,6 +276,7 @@ export async function createKnowledgeItemAction(formData: FormData) {
     spaceId: formData.get("spaceId"),
     kind: formData.get("kind"),
     title: formData.get("title"),
+    tag: formData.get("tag"),
     url: formData.get("url"),
     content: formData.get("content"),
     isHidden: formData.get("isHidden")
@@ -280,18 +293,31 @@ export async function createKnowledgeItemAction(formData: FormData) {
 
   const { supabase } = await requireAppContext();
 
-  const { data: item, error } = await supabase
+  const itemPayload = {
+    space_id: payload.data.spaceId,
+    kind: payload.data.kind,
+    title: normalizeOptional(payload.data.title),
+    tag: normalizeOptional(payload.data.tag),
+    url: validated.url,
+    content: validated.content,
+    is_hidden: payload.data.isHidden
+  };
+
+  let { data: item, error } = await supabase
     .from("knowledge_items")
-    .insert({
-      space_id: payload.data.spaceId,
-      kind: payload.data.kind,
-      title: normalizeOptional(payload.data.title),
-      url: validated.url,
-      content: validated.content,
-      is_hidden: payload.data.isHidden
-    })
+    .insert(itemPayload)
     .select("id")
     .single();
+
+  if (error && isMissingKnowledgeTagColumn(error.message)) {
+    const retry = await supabase
+      .from("knowledge_items")
+      .insert(withoutKnowledgeTag(itemPayload))
+      .select("id")
+      .single();
+    item = retry.data;
+    error = retry.error;
+  }
 
   if (error) {
     return redirectTarget(returnPath, "error", mapDbErrorMessage(error.message));
@@ -311,6 +337,7 @@ export async function updateKnowledgeItemAction(formData: FormData) {
     itemId: formData.get("itemId"),
     kind: formData.get("kind"),
     title: formData.get("title"),
+    tag: formData.get("tag"),
     url: formData.get("url"),
     content: formData.get("content"),
     isHidden: formData.get("isHidden")
@@ -328,18 +355,32 @@ export async function updateKnowledgeItemAction(formData: FormData) {
   const { supabase } = await requireAppContext();
   const spaceId = await getSpaceIdByItemId(payload.data.itemId);
 
-  const { data: item, error } = await supabase
+  const itemPayload = {
+    kind: payload.data.kind,
+    title: normalizeOptional(payload.data.title),
+    tag: normalizeOptional(payload.data.tag),
+    url: validated.url,
+    content: validated.content,
+    is_hidden: payload.data.isHidden
+  };
+
+  let { data: item, error } = await supabase
     .from("knowledge_items")
-    .update({
-      kind: payload.data.kind,
-      title: normalizeOptional(payload.data.title),
-      url: validated.url,
-      content: validated.content,
-      is_hidden: payload.data.isHidden
-    })
+    .update(itemPayload)
     .eq("id", payload.data.itemId)
     .select("id")
     .single();
+
+  if (error && isMissingKnowledgeTagColumn(error.message)) {
+    const retry = await supabase
+      .from("knowledge_items")
+      .update(withoutKnowledgeTag(itemPayload))
+      .eq("id", payload.data.itemId)
+      .select("id")
+      .single();
+    item = retry.data;
+    error = retry.error;
+  }
 
   if (error) {
     return redirectTarget(returnPath, "error", mapDbErrorMessage(error.message));
@@ -445,11 +486,21 @@ export async function verifyKnowledgeItemCodeAction(input: { itemId: string; cod
     return { ok: false as const, error: "Incorrect unlock code." };
   }
 
-  const { data: item, error } = await supabase
+  let { data: item, error } = await supabase
     .from("knowledge_items")
-    .select("id, space_id, kind, title, url, content, created_at, checked, is_hidden")
+    .select("id, space_id, kind, title, tag, url, content, created_at, checked, is_hidden")
     .eq("id", payload.data.itemId)
     .maybeSingle();
+
+  if (error?.message.includes("column knowledge_items.tag does not exist")) {
+    const retry = await supabase
+      .from("knowledge_items")
+      .select("id, space_id, kind, title, url, content, created_at, checked, is_hidden")
+      .eq("id", payload.data.itemId)
+      .maybeSingle();
+    item = retry.data ? { ...retry.data, tag: null } : null;
+    error = retry.error;
+  }
 
   if (error) {
     return { ok: false as const, error: mapDbErrorMessage(error.message) };
@@ -466,6 +517,7 @@ export async function verifyKnowledgeItemCodeAction(input: { itemId: string; cod
       space_id: item.space_id,
       kind: item.kind,
       title: item.title,
+      tag: item.tag ?? null,
       url: item.url,
       content: item.content,
       created_at: item.created_at,

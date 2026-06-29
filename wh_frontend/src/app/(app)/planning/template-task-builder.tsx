@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/select";
 type ObjectiveOption = {
   id: string;
   title: string;
+  measurementMode: "quantitative" | "qualitative";
 };
 
 type TemplateTask = {
@@ -80,19 +81,13 @@ function TaskRow({
     [dayOfWeek, task.id, onUpdateObjective]
   );
 
-  const handleTaskTypeChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      onUpdateTask(dayOfWeek, task.id, "taskType", e.target.value);
-    },
-    [dayOfWeek, task.id, onUpdateTask]
-  );
-
   const fieldBaseId = `template-day-${dayOfWeek}-task-${task.id}`;
-  const isTimed = task.taskType === "time_tracking";
+  const selectedObjective = objectives.find((objective) => objective.id === task.objectiveId);
+  const isQualitativeObjective = selectedObjective?.measurementMode === "qualitative";
 
   return (
     <div className="rounded-xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-3">
-      <div className="grid gap-3 md:grid-cols-[1.1fr_1.5fr_130px_110px_140px_auto] md:items-end">
+      <div className="grid gap-3 md:grid-cols-[1.1fr_1.5fr_110px_140px_auto] md:items-end">
         <div className="space-y-1.5">
           <Label htmlFor={`${fieldBaseId}-objective`} className="text-xs uppercase tracking-wide text-[var(--app-text-muted)]">
             Objective
@@ -127,41 +122,29 @@ function TaskRow({
             spellCheck={false}
           />
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor={`${fieldBaseId}-type`} className="text-xs uppercase tracking-wide text-[var(--app-text-muted)]">
-            Type
-          </Label>
-          <Select
-            id={`${fieldBaseId}-type`}
-            name={`${fieldBaseId}-type`}
-            value={task.taskType}
-            onChange={handleTaskTypeChange}
-            autoComplete="off"
-          >
-            <option value="time_tracking">Timed</option>
-            <option value="fixed_protocol">Checklist</option>
-            <option value="count">Count</option>
-            <option value="custom">Custom</option>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor={`${fieldBaseId}-minutes`} className="text-xs uppercase tracking-wide text-[var(--app-text-muted)]">
-            Avg min
-          </Label>
-          <Input
-            id={`${fieldBaseId}-minutes`}
-            name={`${fieldBaseId}-minutes`}
-            type="number"
-            min={0}
-            inputMode="numeric"
-            value={isTimed ? task.plannedMinutes : "0"}
-            onChange={handleMinutesChange}
-            disabled={!isTimed}
-            placeholder="Avg min"
-            aria-label={`Planned minutes for ${task.id}`}
-            autoComplete="off"
-          />
-        </div>
+        {!isQualitativeObjective ? (
+          <div className="space-y-1.5">
+            <Label htmlFor={`${fieldBaseId}-minutes`} className="text-xs uppercase tracking-wide text-[var(--app-text-muted)]">
+              Avg min
+            </Label>
+            <Input
+              id={`${fieldBaseId}-minutes`}
+              name={`${fieldBaseId}-minutes`}
+              type="number"
+              min={0}
+              inputMode="numeric"
+              value={task.plannedMinutes}
+              onChange={handleMinutesChange}
+              placeholder="Avg min"
+              aria-label={`Planned minutes for ${task.id}`}
+              autoComplete="off"
+            />
+          </div>
+        ) : (
+          <p className="self-end rounded-lg border border-[var(--app-panel-border-strong)] bg-[var(--app-btn-secondary-bg)] px-3 py-2 text-xs font-medium text-[var(--app-text-muted)]">
+            Qualitative, no time target
+          </p>
+        )}
         <div className="space-y-1.5">
           <Label htmlFor={`${fieldBaseId}-start-time`} className="text-xs uppercase tracking-wide text-[var(--app-text-muted)]">
             Start time
@@ -212,6 +195,14 @@ function createDraft(id: string, overrides?: Partial<TaskDraft>): TaskDraft {
     plannedMinutes: overrides?.plannedMinutes ?? "",
     startTime: overrides?.startTime ?? ""
   };
+}
+
+function getDefaultTaskTypeForObjective(objective?: ObjectiveOption) {
+  return objective?.measurementMode === "qualitative" ? "fixed_protocol" : "time_tracking";
+}
+
+function getTaskTypeForObjective(objective?: ObjectiveOption) {
+  return objective?.measurementMode === "qualitative" ? "fixed_protocol" : "time_tracking";
 }
 
 function isBlankDraft(task: TaskDraft) {
@@ -270,19 +261,21 @@ export function TemplateTaskBuilder({ objectives, initialTasks }: TemplateTaskBu
         dayConfig.flatMap((day) =>
           (tasksByDay[day.dayOfWeek] ?? []).map((task) => {
             const normalizedStartTime = task.startTime.trim();
+            const objective = objectives.find((option) => option.id === task.objectiveId);
+            const normalizedTaskType = getTaskTypeForObjective(objective);
             return {
               dayOfWeek: day.dayOfWeek,
               title: task.title,
               objectiveId: task.objectiveId,
-              taskType: task.taskType,
-              plannedMinutes: Number(task.plannedMinutes || 0),
+              taskType: normalizedTaskType,
+              plannedMinutes: normalizedTaskType === "time_tracking" ? Number(task.plannedMinutes || 0) : 0,
               startTime: normalizedStartTime.length > 0 ? normalizedStartTime : null,
               habitId: task.habitId && task.habitId.length > 0 ? task.habitId : null
             };
           })
         )
       ),
-    [tasksByDay]
+    [objectives, tasksByDay]
   );
 
   const dayHasCopySource = useCallback(
@@ -360,12 +353,15 @@ export function TemplateTaskBuilder({ objectives, initialTasks }: TemplateTaskBu
           }
 
           const previousObjectiveTitle = objectives.find((objective) => objective.id === task.objectiveId)?.title ?? "";
-          const nextObjectiveTitle = objectives.find((objective) => objective.id === objectiveId)?.title ?? "";
+          const nextObjective = objectives.find((objective) => objective.id === objectiveId);
+          const nextObjectiveTitle = nextObjective?.title ?? "";
           const shouldAutoFillTitle = task.title.trim().length === 0 || task.title === previousObjectiveTitle;
 
           return {
             ...task,
             objectiveId,
+            taskType: getDefaultTaskTypeForObjective(nextObjective),
+            plannedMinutes: nextObjective?.measurementMode === "qualitative" ? "0" : task.plannedMinutes,
             title: shouldAutoFillTitle ? nextObjectiveTitle : task.title
           };
         })
@@ -433,7 +429,7 @@ export function TemplateTaskBuilder({ objectives, initialTasks }: TemplateTaskBu
       ))}
 
       <p className="text-xs text-[var(--app-text-muted)]">
-        Each task should include title, objective, and average minutes. Start time is optional.
+        Quantitative tasks can use average minutes. Qualitative tasks are tracked as checklist/count/custom work. Start time is optional.
       </p>
     </div>
   );

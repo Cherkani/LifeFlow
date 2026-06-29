@@ -9,6 +9,7 @@ import { SubmitButton } from "@/components/forms/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ModalShell } from "@/components/ui/modal-shell";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { EventsTypeField } from "./events-type-field";
 
@@ -56,6 +57,7 @@ export function EventsAddBacklog({ monthKey, selectedIso, view = "backlog", even
           >
             <input type="hidden" name="returnPath" value={returnPath} />
             <input type="hidden" name="eventDate" value="" />
+            <input type="hidden" name="eventMode" value="todo" />
             <div className="space-y-2">
               <Label htmlFor="backlogTitle">Title</Label>
               <Input
@@ -64,6 +66,12 @@ export function EventsAddBacklog({ monthKey, selectedIso, view = "backlog", even
                 required
                 placeholder="e.g. Plan offsite agenda"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="backlogModePreview">Mode</Label>
+              <Select id="backlogModePreview" value="todo" disabled>
+                <option value="todo">To-do · should be done</option>
+              </Select>
             </div>
             <EventsTypeField fieldId="backlogType" name="eventType" savedTypes={eventTypes} defaultValue={eventTypes[0] ?? "General"} />
             <div className="space-y-2">

@@ -16,6 +16,7 @@ import {
   Pencil,
   Plus,
   ShieldAlert,
+  Tags,
   Trash2
 } from "lucide-react";
 
@@ -50,6 +51,7 @@ type KnowledgeItem = {
   space_id: string;
   kind: "link" | "note" | "bullets";
   title: string | null;
+  tag: string | null;
   url: string | null;
   content: string | null;
   created_at: string;
@@ -74,6 +76,11 @@ function parseBullets(content: string): string[] {
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .map((line) => line.replace(/^[-*•]\s*/, ""));
+}
+
+function getItemTag(item: KnowledgeItem) {
+  const tag = item.tag?.trim();
+  return tag && tag.length > 0 ? tag : "Untagged";
 }
 
 type AddItemFormProps = {
@@ -112,6 +119,17 @@ function AddItemForm({ spaceId, returnPath, action, onSuccess }: AddItemFormProp
           name="title"
           placeholder={kind === "link" ? "e.g. Article name" : kind === "bullets" ? "e.g. Key points" : "e.g. Main idea"}
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="new-tag">Tag / group (optional)</Label>
+        <Input
+          id="new-tag"
+          name="tag"
+          placeholder="e.g. Basics, Recipes, Research, To read"
+          autoComplete="off"
+        />
+        <p className="text-xs text-slate-500">Items with the same tag are grouped together inside this topic.</p>
       </div>
 
       {kind === "link" ? (
@@ -201,6 +219,7 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
   const [protectedModal, setProtectedModal] = useState<ProtectedModalState | null>(null);
   const [unlockCode, setUnlockCode] = useState("");
   const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [selectedTag, setSelectedTag] = useState("All");
   const [isUnlocking, startUnlockTransition] = useTransition();
 
   const returnPath = `/knowledge/${space.id}`;
@@ -209,6 +228,19 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
   const bulletsCount = items.filter((i) => i.kind === "bullets").length;
   const hiddenCount = items.filter((i) => i.is_hidden).length;
   const reviewItems = items.filter((item) => !item.is_hidden);
+  const tags = Array.from(new Set(items.map(getItemTag))).sort((a, b) => {
+    if (a === "Untagged") return 1;
+    if (b === "Untagged") return -1;
+    return a.localeCompare(b);
+  });
+  const visibleItems = selectedTag === "All" ? items : items.filter((item) => getItemTag(item) === selectedTag);
+  const groupedItems = tags
+    .filter((tag) => selectedTag === "All" || tag === selectedTag)
+    .map((tag) => ({
+      tag,
+      items: visibleItems.filter((item) => getItemTag(item) === tag)
+    }))
+    .filter((group) => group.items.length > 0);
 
   const getResolvedItem = (item: KnowledgeItem): KnowledgeItem => revealedItems[item.id] ?? item;
 
@@ -395,13 +427,45 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
       ) : null}
 
       <Card>
-        <CardHeader>
-          <CardTitle>Topic Items</CardTitle>
+        <CardHeader className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle>Topic Items</CardTitle>
+            {tags.length > 0 ? (
+              <Badge variant="secondary" className="gap-1">
+                <Tags size={12} />
+                {tags.length} group{tags.length !== 1 ? "s" : ""}
+              </Badge>
+            ) : null}
+          </div>
+          {tags.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {["All", ...tags].map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => setSelectedTag(tag)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                    selectedTag === tag
+                      ? "border-[#0b1f3b] bg-[#0b1f3b] text-white"
+                      : "border-[#c7d3e8] bg-[#edf3ff] text-[#23406d] hover:bg-[#e3ebf9]"
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </CardHeader>
         <CardContent>
           {items.length > 0 ? (
-            <div className="space-y-3">
-              {items.map((item) => {
+            <div className="space-y-6">
+              {groupedItems.map((group) => (
+                <section key={group.tag} className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2 border-b border-[#d7e0f1] pb-2">
+                    <h3 className="text-sm font-bold text-[#0c1d3c]">{group.tag}</h3>
+                    <Badge variant="secondary">{group.items.length} item{group.items.length !== 1 ? "s" : ""}</Badge>
+                  </div>
+                  {group.items.map((item) => {
                 const resolvedItem = getResolvedItem(item);
                 const hasLink = Boolean(resolvedItem.url && resolvedItem.url.length > 0);
                 const isLink = resolvedItem.kind === "link";
@@ -442,6 +506,10 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
                           <FileText size={14} className="text-slate-500" />
                         )}
                         <Badge variant={item.kind === "link" ? "default" : "secondary"}>{item.kind}</Badge>
+                        <Badge variant="secondary" className="gap-1">
+                          <Tags size={11} />
+                          {getItemTag(item)}
+                        </Badge>
                         {item.is_hidden ? (
                           <Badge variant="secondary" className="gap-1">
                             <Lock size={11} />
@@ -559,7 +627,9 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
                     )}
                   </article>
                 );
-              })}
+                  })}
+                </section>
+              ))}
             </div>
           ) : (
             <p className="text-sm text-slate-500">No items yet. Add your first link, note, bullets, or hidden record above.</p>
@@ -598,6 +668,17 @@ export function KnowledgeSpaceContent({ space, items, errorMessage, successMessa
                   <Label htmlFor={`title-${editingItem.id}`}>Title</Label>
                   <Input id={`title-${editingItem.id}`} name="title" defaultValue={editingItem.title ?? ""} placeholder="Optional" />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor={`tag-${editingItem.id}`}>Tag / group (optional)</Label>
+                <Input
+                  id={`tag-${editingItem.id}`}
+                  name="tag"
+                  defaultValue={editingItem.tag ?? ""}
+                  placeholder="e.g. Basics, Recipes, Research, To read"
+                  autoComplete="off"
+                />
               </div>
 
               <div className="space-y-2">

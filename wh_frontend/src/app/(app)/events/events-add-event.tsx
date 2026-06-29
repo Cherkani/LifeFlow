@@ -8,6 +8,7 @@ import { ActionForm } from "@/components/forms/action-form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ModalShell } from "@/components/ui/modal-shell";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { EventsTypeField } from "./events-type-field";
@@ -60,6 +61,14 @@ export function EventsAddEvent({ monthKey, selectedIso, eventTypes }: EventsAddE
               />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="eventMode">Mode</Label>
+                <Select id="eventMode" name="eventMode" defaultValue="event">
+                  <option value="event">Event · informational</option>
+                  <option value="todo">To-do · should be done</option>
+                  <option value="milestone">Milestone · important marker</option>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="eventDate">Date</Label>
                 <Input id="eventDate" name="eventDate" type="date" defaultValue={selectedIso} required />

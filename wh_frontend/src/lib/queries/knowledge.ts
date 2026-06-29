@@ -51,6 +51,7 @@ export async function getKnowledgeSpaceById(
 
 export type KnowledgeItemFullRow = KnowledgeItemRow & {
   title: string | null;
+  tag: string | null;
   url: string | null;
   content: string | null;
   created_at: string;
@@ -61,14 +62,30 @@ export async function getKnowledgeSpaceItems(
   supabase: Supabase,
   spaceId: string
 ): Promise<KnowledgeItemFullRow[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("knowledge_items")
-    .select("id, space_id, kind, title, url, content, created_at, checked, is_hidden")
+    .select("id, space_id, kind, title, tag, url, content, created_at, checked, is_hidden")
     .eq("space_id", spaceId)
     .order("checked", { ascending: true })
     .order("created_at", { ascending: false });
+
+  if (error?.message.includes("column knowledge_items.tag does not exist")) {
+    const retry = await supabase
+      .from("knowledge_items")
+      .select("id, space_id, kind, title, url, content, created_at, checked, is_hidden")
+      .eq("space_id", spaceId)
+      .order("checked", { ascending: true })
+      .order("created_at", { ascending: false });
+    const fallbackData = ((retry.data ?? []) as Array<Omit<KnowledgeItemFullRow, "tag">>).map((item) => ({ ...item, tag: null }));
+    return fallbackData.map((item) => ({
+      ...item,
+      content: item.is_hidden ? null : item.content
+    }));
+  }
+
   return ((data ?? []) as KnowledgeItemFullRow[]).map((item) => ({
     ...item,
+    tag: item.tag ?? null,
     content: item.is_hidden ? null : item.content
   }));
 }

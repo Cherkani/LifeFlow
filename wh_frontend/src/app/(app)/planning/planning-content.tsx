@@ -8,6 +8,7 @@ import { createObjectiveFormAction, deleteObjectiveFormAction, updateObjectiveFo
 import { ActionForm } from "@/components/forms/action-form";
 import { PexelsImagePicker } from "@/components/forms/pexels-image-picker";
 import { SubmitButton } from "@/components/forms/submit-button";
+import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,7 @@ type Objective = {
   title: string;
   description: string | null;
   image_url: string | null;
+  measurement_mode: "quantitative" | "qualitative";
 };
 
 type Task = {
@@ -74,6 +76,8 @@ type PlanningContentProps = {
   templateIdsByObjective: Record<string, string[]>;
   taskCountByObjective: Record<string, number>;
   weekCountByTemplate: Record<string, number>;
+  errorMessage?: string | null;
+  successMessage?: string | null;
   stats: {
     objectivesCount: number;
     templatesCount: number;
@@ -91,6 +95,8 @@ export function PlanningContent({
   templateIdsByObjective,
   taskCountByObjective,
   weekCountByTemplate,
+  errorMessage,
+  successMessage,
   stats
 }: PlanningContentProps) {
   const [activeModal, setActiveModal] = useState<
@@ -144,6 +150,9 @@ export function PlanningContent({
 
   return (
     <>
+      {errorMessage ? <Alert variant="error">{errorMessage}</Alert> : null}
+      {successMessage ? <Alert variant="success">{successMessage}</Alert> : null}
+
       <SectionHeader
         title="Planning Studio"
         description="Design objectives and weekly templates with clearer, faster structure."
@@ -294,6 +303,9 @@ export function PlanningContent({
                           </p>
                         ) : null}
                         <div className="mt-2 space-y-1">
+                          <Badge variant="secondary" className="bg-[var(--app-chip-bg)] text-[var(--app-chip-fg)]">
+                            {objective.measurement_mode === "quantitative" ? "Quantitative" : "Qualitative"}
+                          </Badge>
                           <p className="text-xs font-medium text-[#6b7da1]">
                             {templateCount} template{templateCount !== 1 ? "s" : ""}
                           </p>
@@ -477,6 +489,13 @@ export function PlanningContent({
                 placeholder="Short context for this objective."
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="objectiveMeasurementMode">Objective mode</Label>
+              <Select id="objectiveMeasurementMode" name="measurementMode" defaultValue="quantitative">
+                <option value="quantitative">Quantitative · track time or measurable effort</option>
+                <option value="qualitative">Qualitative · checklist, calendar, or presence-based</option>
+              </Select>
+            </div>
             <PexelsImagePicker inputName="imageUrl" label="Objective image (optional)" />
             <SubmitButton label="Save objective" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>
@@ -515,6 +534,17 @@ export function PlanningContent({
                 defaultValue={editingObjective.description ?? ""}
                 placeholder="Short context for this objective."
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editObjectiveMeasurementMode">Objective mode</Label>
+              <Select
+                id="editObjectiveMeasurementMode"
+                name="measurementMode"
+                defaultValue={editingObjective.measurement_mode}
+              >
+                <option value="quantitative">Quantitative · track time or measurable effort</option>
+                <option value="qualitative">Qualitative · checklist, calendar, or presence-based</option>
+              </Select>
             </div>
             <PexelsImagePicker
               inputName="imageUrl"
@@ -574,7 +604,7 @@ export function PlanningContent({
               <div className="space-y-2">
                 <p className="text-sm font-medium text-[#0c1d3c]">Daily tasks</p>
                 <TemplateTaskBuilder
-                  objectives={objectives.map((o) => ({ id: o.id, title: o.title }))}
+                  objectives={objectives.map((o) => ({ id: o.id, title: o.title, measurementMode: o.measurement_mode }))}
                 />
               </div>
               <SubmitButton label="Save template" pendingLabel="Saving..." className="w-full sm:w-auto" />
@@ -612,7 +642,7 @@ export function PlanningContent({
                     />
                   </div>
                   <TemplateTaskBuilder
-                    objectives={objectives.map((o) => ({ id: o.id, title: o.title }))}
+                    objectives={objectives.map((o) => ({ id: o.id, title: o.title, measurementMode: o.measurement_mode }))}
                     initialTasks={editingTemplateInitialTasks}
                   />
                   <SubmitButton
