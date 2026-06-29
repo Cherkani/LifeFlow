@@ -4,8 +4,10 @@ import { CalendarDays, ChevronLeft, ChevronRight, ListTodo } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card";
 import { LifeSummaryBand } from "@/components/life/life-context";
+import { WorkflowNav } from "@/components/life/workflow-nav";
 import { getCalendarEventTypeUsage, getCalendarEventTypes, getCalendarEvents, getCalendarUndatedEvents } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
+import { startOfIsoWeek } from "@/lib/utils";
 
 import { EventsAddEvent } from "./events-add-event";
 import { EventsBacklogContent } from "./events-backlog-content";
@@ -87,6 +89,7 @@ export default async function EventsPage({
   const prevMonthKey = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, "0")}`;
   const nextMonthKey = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}`;
   const selectedIso = formatDateKey(selectedDate);
+  const selectedWeekIso = formatDateKey(startOfIsoWeek(selectedDate));
 
   const { supabase, account } = await requireAppContext();
   const allEvents = (await getCalendarEvents(
@@ -148,6 +151,12 @@ export default async function EventsPage({
           { label: "backlog", value: backlogEvents.length },
           { label: "this month", value: events.length }
         ]}
+      />
+
+      <WorkflowNav
+        active="calendar"
+        executionHref={`/habits?week=${selectedWeekIso}` as Route}
+        calendarHref={buildEventsHref(monthKey, selectedIso, activeView) as Route}
       />
 
       <Card>

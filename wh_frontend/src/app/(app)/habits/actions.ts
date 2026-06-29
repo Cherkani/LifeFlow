@@ -53,7 +53,9 @@ const toggleSessionSchema = z.object({
 });
 
 const completeSessionSchema = z.object({
-  sessionId: z.string().uuid(),
+  sessionId: z.string().optional(),
+  habitId: z.string().uuid().optional(),
+  sessionDate: z.union([z.literal(""), dateInputSchema]).optional(),
   completed: z.enum(["on"]).optional(),
   actualMinutes: z.union([z.literal(""), z.coerce.number().int().min(0).max(100000)]).optional()
 });
@@ -345,6 +347,8 @@ export async function completeSessionWithHoursAction(formData: FormData) {
   const completedRaw = formData.get("completed");
   const payload = completeSessionSchema.safeParse({
     sessionId: formData.get("sessionId"),
+    habitId: formData.get("habitId"),
+    sessionDate: formData.get("sessionDate"),
     completed: completedRaw === null ? undefined : completedRaw,
     actualMinutes: actualMinutesRaw === null ? undefined : actualMinutesRaw
   });
@@ -360,17 +364,56 @@ export async function completeSessionWithHoursAction(formData: FormData) {
       : payload.data.actualMinutes;
 
   const { supabase } = await requireAppContext();
-  const { data: session } = await supabase
-    .from("habit_sessions")
-    .select("id, minimum_minutes, actual_minutes, habits(type)")
-    .eq("id", payload.data.sessionId)
-    .maybeSingle();
+  const hasPersistedSessionId = typeof payload.data.sessionId === "string" && z.string().uuid().safeParse(payload.data.sessionId).success;
+  let session:
+    | {
+        id: string;
+        minimum_minutes: number;
+        actual_minutes: number | null;
+        habits?: { type?: "time_tracking" | "fixed_protocol" | "count" | "custom" } | Array<{ type?: "time_tracking" | "fixed_protocol" | "count" | "custom" }>;
+      }
+    | null = null;
+
+  if (hasPersistedSessionId) {
+    const { data } = await supabase
+      .from("habit_sessions")
+      .select("id, minimum_minutes, actual_minutes, habits(type)")
+      .eq("id", payload.data.sessionId as string)
+      .maybeSingle();
+    session = data;
+  } else if (payload.data.habitId && payload.data.sessionDate) {
+    const { data: habit } = await supabase
+      .from("habits")
+      .select("id, type, minimum_minutes")
+      .eq("id", payload.data.habitId)
+      .maybeSingle();
+
+    if (!habit) {
+      return { redirectTo: returnPath };
+    }
+
+    const { data: existingSession } = await supabase
+      .from("habit_sessions")
+      .select("id, minimum_minutes, actual_minutes")
+      .eq("habit_id", payload.data.habitId)
+      .eq("session_date", payload.data.sessionDate)
+      .maybeSingle();
+
+    session = existingSession
+      ? { ...existingSession, habits: { type: habit.type } }
+      : {
+          id: payload.data.sessionId || `virtual-${payload.data.habitId}-${payload.data.sessionDate}`,
+          minimum_minutes: habit.minimum_minutes ?? 0,
+          actual_minutes: null,
+          habits: { type: habit.type }
+        };
+  }
 
   if (!session) {
     return { redirectTo: returnPath };
   }
 
-  const relatedHabit = (session as { habits?: { type?: "time_tracking" | "fixed_protocol" | "count" | "custom" } | Array<{ type?: "time_tracking" | "fixed_protocol" | "count" | "custom" }> } | null)?.habits;
+  const relatedHabit = session.habits;
   const habitType = Array.isArray(relatedHabit) ? relatedHabit[0]?.type : relatedHabit?.type;
   const requiresMinutes = habitType === "time_tracking";
 
@@ -382,13 +425,29 @@ export async function completeSessionWithHoursAction(formData: FormData) {
     ? (requiresMinutes ? (minutes ?? session.minimum_minutes) : (minutes ?? 0))
     : (minutes ?? null);
 
-  await supabase
-    .from("habit_sessions")
-    .update({
-      completed,
-      actual_minutes: actualMinutes
-    })
-    .eq("id", payload.data.sessionId);
+  if (hasPersistedSessionId) {
+    await supabase
+      .from("habit_sessions")
+      .update({
+        completed,
+        actual_minutes: actualMinutes
+      })
+      .eq("id", payload.data.sessionId as string);
+  } else if (payload.data.habitId && payload.data.sessionDate) {
+    await supabase.from("habit_sessions").upsert(
+      {
+        habit_id: payload.data.habitId,
+        session_date: payload.data.sessionDate,
+        planned_minutes: 0,
+        minimum_minutes: session.minimum_minutes,
+        completed,
+        actual_minutes: actualMinutes
+      },
+      {
+        onConflict: "habit_id,session_date"
+      }
+    );
+  }
 
   revalidatePath(returnPath.split("?")[0] || "/habits");
   return { redirectTo: returnPath };

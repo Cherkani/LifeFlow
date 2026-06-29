@@ -17,6 +17,7 @@ type TemplateTask = {
   dayOfWeek: number;
   title: string;
   objectiveId: string;
+  taskType: "time_tracking" | "fixed_protocol" | "count" | "custom";
   plannedMinutes: number;
   startTime: string | null;
   habitId?: string | null;
@@ -27,6 +28,7 @@ type TaskDraft = {
   habitId?: string;
   title: string;
   objectiveId: string;
+  taskType: "time_tracking" | "fixed_protocol" | "count" | "custom";
   plannedMinutes: string;
   startTime: string;
 };
@@ -78,11 +80,19 @@ function TaskRow({
     [dayOfWeek, task.id, onUpdateObjective]
   );
 
+  const handleTaskTypeChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      onUpdateTask(dayOfWeek, task.id, "taskType", e.target.value);
+    },
+    [dayOfWeek, task.id, onUpdateTask]
+  );
+
   const fieldBaseId = `template-day-${dayOfWeek}-task-${task.id}`;
+  const isTimed = task.taskType === "time_tracking";
 
   return (
     <div className="rounded-xl border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-3">
-      <div className="grid gap-3 md:grid-cols-[1.2fr_1.8fr_110px_140px_auto] md:items-end">
+      <div className="grid gap-3 md:grid-cols-[1.1fr_1.5fr_130px_110px_140px_auto] md:items-end">
         <div className="space-y-1.5">
           <Label htmlFor={`${fieldBaseId}-objective`} className="text-xs uppercase tracking-wide text-[var(--app-text-muted)]">
             Objective
@@ -118,6 +128,23 @@ function TaskRow({
           />
         </div>
         <div className="space-y-1.5">
+          <Label htmlFor={`${fieldBaseId}-type`} className="text-xs uppercase tracking-wide text-[var(--app-text-muted)]">
+            Type
+          </Label>
+          <Select
+            id={`${fieldBaseId}-type`}
+            name={`${fieldBaseId}-type`}
+            value={task.taskType}
+            onChange={handleTaskTypeChange}
+            autoComplete="off"
+          >
+            <option value="time_tracking">Timed</option>
+            <option value="fixed_protocol">Checklist</option>
+            <option value="count">Count</option>
+            <option value="custom">Custom</option>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
           <Label htmlFor={`${fieldBaseId}-minutes`} className="text-xs uppercase tracking-wide text-[var(--app-text-muted)]">
             Avg min
           </Label>
@@ -127,8 +154,9 @@ function TaskRow({
             type="number"
             min={0}
             inputMode="numeric"
-            value={task.plannedMinutes}
+            value={isTimed ? task.plannedMinutes : "0"}
             onChange={handleMinutesChange}
+            disabled={!isTimed}
             placeholder="Avg min"
             aria-label={`Planned minutes for ${task.id}`}
             autoComplete="off"
@@ -180,6 +208,7 @@ function createDraft(id: string, overrides?: Partial<TaskDraft>): TaskDraft {
     habitId: overrides?.habitId ?? "",
     title: overrides?.title ?? "",
     objectiveId: overrides?.objectiveId ?? "",
+    taskType: overrides?.taskType ?? "time_tracking",
     plannedMinutes: overrides?.plannedMinutes ?? "",
     startTime: overrides?.startTime ?? ""
   };
@@ -189,6 +218,7 @@ function isBlankDraft(task: TaskDraft) {
   return (
     task.title.trim().length === 0 &&
     task.objectiveId.trim().length === 0 &&
+    task.taskType === "time_tracking" &&
     task.plannedMinutes.trim().length === 0 &&
     task.startTime.trim().length === 0
   );
@@ -211,6 +241,7 @@ function createInitialState(initialTasks?: TemplateTask[]) {
           habitId: task.habitId ?? "",
           title: task.title,
           objectiveId: task.objectiveId,
+          taskType: task.taskType ?? "time_tracking",
           plannedMinutes: String(task.plannedMinutes ?? ""),
           startTime: task.startTime ?? ""
         })
@@ -243,6 +274,7 @@ export function TemplateTaskBuilder({ objectives, initialTasks }: TemplateTaskBu
               dayOfWeek: day.dayOfWeek,
               title: task.title,
               objectiveId: task.objectiveId,
+              taskType: task.taskType,
               plannedMinutes: Number(task.plannedMinutes || 0),
               startTime: normalizedStartTime.length > 0 ? normalizedStartTime : null,
               habitId: task.habitId && task.habitId.length > 0 ? task.habitId : null
@@ -280,6 +312,7 @@ export function TemplateTaskBuilder({ objectives, initialTasks }: TemplateTaskBu
         return createDraft(`${targetDayOfWeek}-${idCounterRef.current}`, {
           title: task.title,
           objectiveId: task.objectiveId,
+          taskType: task.taskType,
           plannedMinutes: task.plannedMinutes,
           startTime: task.startTime
         });

@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LifeSummaryBand } from "@/components/life/life-context";
+import { WorkflowNav } from "@/components/life/workflow-nav";
 import { getPlanningData, getPlanningSessions, getPlanningTemplateEntries } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
 import { startOfIsoWeek, toDateInputValue } from "@/lib/utils";
@@ -18,6 +19,7 @@ type Task = {
   id: string;
   title: string;
   objective_id: string | null;
+  type: "time_tracking" | "fixed_protocol" | "count" | "custom";
   metadata: unknown;
 };
 
@@ -147,6 +149,12 @@ export default async function PlanningPage() {
           { label: "objectives", value: objectives.length },
           { label: "tasks", value: tasks.length }
         ]}
+      />
+
+      <WorkflowNav
+        active="planning"
+        executionHref={`/habits?week=${currentWeekKey}` as const}
+        calendarHref={`/events?month=${currentWeekKey.slice(0, 7)}&date=${toDateInputValue(today)}&view=scheduled` as const}
       />
 
       <PlanningContent

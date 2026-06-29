@@ -1,7 +1,13 @@
 import type { Supabase } from "./types";
 
 export type PlanningObjectiveRow = { id: string; title: string; description: string | null; image_url: string | null };
-export type PlanningTaskRow = { id: string; title: string; objective_id: string | null; metadata: unknown };
+export type PlanningTaskRow = {
+  id: string;
+  title: string;
+  objective_id: string | null;
+  type: "time_tracking" | "fixed_protocol" | "count" | "custom";
+  metadata: unknown;
+};
 export type PlanningTemplateRow = { id: string; name: string; objective_id: string | null };
 export type PlanningWeekRow = { id: string; template_id: string; week_start_date: string };
 
@@ -21,7 +27,7 @@ export async function getPlanningData(supabase: Supabase, accountId: string): Pr
       .order("created_at", { ascending: false }),
     supabase
       .from("habits")
-      .select("id, title, objective_id, metadata")
+      .select("id, title, objective_id, type, metadata")
       .eq("account_id", accountId)
       .eq("is_active", true)
       .order("created_at", { ascending: false }),

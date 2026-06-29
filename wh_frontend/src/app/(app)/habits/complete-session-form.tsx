@@ -14,6 +14,7 @@ import { SubmitButton } from "@/components/forms/submit-button";
 type SessionSummary = {
   id: string;
   habit_id: string;
+  session_date: string;
   planned_minutes: number;
   minimum_minutes: number;
   actual_minutes: number | null;
@@ -22,6 +23,10 @@ type SessionSummary = {
 
 const backButtonClass =
   "inline-flex h-10 items-center justify-center rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-btn-secondary-bg)] px-4 py-2 text-sm font-medium text-[var(--app-btn-secondary-fg)] transition hover:bg-[var(--app-btn-secondary-hover)]";
+
+function isPersistedSessionId(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
 
 export function CompleteSessionForm({
   session,
@@ -39,11 +44,14 @@ export function CompleteSessionForm({
   const [checked, setChecked] = useState(session.completed);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const deleteFormRef = useRef<HTMLFormElement>(null);
+  const canDelete = isPersistedSessionId(session.id);
 
   return (
     <div className="space-y-4">
       <ActionForm action={completeSessionWithHoursFormAction} className="space-y-4" onSuccess={onClose}>
         <input type="hidden" name="sessionId" value={session.id} />
+        <input type="hidden" name="habitId" value={session.habit_id} />
+        <input type="hidden" name="sessionDate" value={session.session_date} />
         <input type="hidden" name="returnPath" value={returnPath} />
         <div className="rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-3">
           <p className="text-sm font-semibold text-[var(--app-text-strong)]">{habitTitle}</p>
@@ -84,20 +92,22 @@ export function CompleteSessionForm({
               </Link>
             )}
           </div>
-          <button
-            type="button"
-            aria-label="Delete task"
-            title="Delete task"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--app-panel-border)] bg-[var(--ui-badge-danger-bg)] text-[var(--ui-badge-danger-fg)] transition hover:brightness-95"
-            onClick={() => {
-              setShowDeleteConfirm(true);
-            }}
-          >
-            <Trash2 size={14} />
-          </button>
+          {canDelete ? (
+            <button
+              type="button"
+              aria-label="Delete task"
+              title="Delete task"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--app-panel-border)] bg-[var(--ui-badge-danger-bg)] text-[var(--ui-badge-danger-fg)] transition hover:brightness-95"
+              onClick={() => {
+                setShowDeleteConfirm(true);
+              }}
+            >
+              <Trash2 size={14} />
+            </button>
+          ) : null}
         </div>
       </ActionForm>
-      {showDeleteConfirm ? (
+      {showDeleteConfirm && canDelete ? (
         <div className="rounded-lg border border-[var(--app-panel-border)] bg-[var(--app-panel-bg-soft)] p-3">
           <p className="text-sm font-semibold text-[var(--app-text-strong)]">Delete this task?</p>
           <p className="mt-1 text-xs text-[var(--app-text-muted)]">This will remove the task from this day and cannot be undone.</p>

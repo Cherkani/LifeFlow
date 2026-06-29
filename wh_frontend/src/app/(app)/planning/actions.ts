@@ -57,6 +57,7 @@ type TemplateTaskPayload = {
   dayOfWeek: number;
   title: string;
   objectiveId: string;
+  taskType: "time_tracking" | "fixed_protocol" | "count" | "custom";
   plannedMinutes: number;
   startTime: string | null;
   habitId: string | null;
@@ -84,12 +85,13 @@ function parseTasksPayload(formData: FormData, options?: { allowExistingHabitIds
           dayOfWeek: item.dayOfWeek,
           title: typeof item.title === "string" ? item.title.trim() : "",
           objectiveId: typeof item.objectiveId === "string" ? item.objectiveId.trim() : "",
+          taskType: typeof item.taskType === "string" ? item.taskType.trim() : "time_tracking",
           plannedMinutes: item.plannedMinutes,
           startTime: typeof item.startTime === "string" ? item.startTime.trim() : "",
           habitId: typeof item.habitId === "string" ? item.habitId.trim() : null
         };
       })
-      .filter((row): row is { dayOfWeek: unknown; title: string; objectiveId: string; plannedMinutes: unknown; startTime: string; habitId: string | null } => row !== null)
+      .filter((row): row is { dayOfWeek: unknown; title: string; objectiveId: string; taskType: string; plannedMinutes: unknown; startTime: string; habitId: string | null } => row !== null)
       .filter((row) => row.title.length > 0 || row.objectiveId.length > 0 || row.startTime.length > 0);
 
     const payloadSchema = z.array(
@@ -97,6 +99,7 @@ function parseTasksPayload(formData: FormData, options?: { allowExistingHabitIds
         dayOfWeek: z.coerce.number().int().min(1).max(7),
         title: z.string().trim().min(1).max(140),
         objectiveId: z.string().uuid(),
+        taskType: z.enum(["time_tracking", "fixed_protocol", "count", "custom"]).default("time_tracking"),
         plannedMinutes: z.coerce.number().int().min(0).max(100000),
         startTime: z.union([z.string().trim().max(60), z.literal(""), z.null()]),
         habitId: z.string().uuid().nullable().optional()
@@ -118,7 +121,8 @@ function parseTasksPayload(formData: FormData, options?: { allowExistingHabitIds
         dayOfWeek: task.dayOfWeek,
         title: task.title,
         objectiveId: task.objectiveId,
-        plannedMinutes: task.plannedMinutes,
+        taskType: task.taskType,
+        plannedMinutes: task.taskType === "time_tracking" ? task.plannedMinutes : 0,
         startTime:
           typeof task.startTime === "string" && task.startTime.trim().length > 0 ? task.startTime.trim() : null,
         habitId: options?.allowExistingHabitIds ? task.habitId ?? null : null
@@ -158,6 +162,7 @@ function parseTasksPayload(formData: FormData, options?: { allowExistingHabitIds
       dayOfWeek,
       title,
       objectiveId,
+      taskType: plannedMinutes > 0 ? "time_tracking" : "fixed_protocol",
       plannedMinutes: Math.round(plannedMinutes),
       startTime,
       habitId: null
@@ -220,9 +225,9 @@ export async function createTemplateWithDailyTasksAction(formData: FormData) {
         account_id: account.accountId,
         objective_id: task.objectiveId,
         title: task.title,
-        type: "time_tracking",
+        type: task.taskType,
         weekly_target_minutes: null,
-        minimum_minutes: task.plannedMinutes,
+        minimum_minutes: task.taskType === "time_tracking" ? task.plannedMinutes : 0,
         is_active: true,
         metadata
       })
@@ -238,7 +243,7 @@ export async function createTemplateWithDailyTasksAction(formData: FormData) {
       habit_id: habit.id,
       day_of_week: task.dayOfWeek,
       planned_minutes: task.plannedMinutes,
-      minimum_minutes: task.plannedMinutes,
+      minimum_minutes: task.taskType === "time_tracking" ? task.plannedMinutes : 0,
       is_required: true
     });
   }
@@ -321,7 +326,8 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
         .update({
           title: task.title,
           objective_id: task.objectiveId,
-          minimum_minutes: task.plannedMinutes,
+          type: task.taskType,
+          minimum_minutes: task.taskType === "time_tracking" ? task.plannedMinutes : 0,
           metadata
         })
         .eq("id", task.habitId);
@@ -332,7 +338,7 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
           habit_id: task.habitId,
           day_of_week: task.dayOfWeek,
           planned_minutes: task.plannedMinutes,
-          minimum_minutes: task.plannedMinutes,
+          minimum_minutes: task.taskType === "time_tracking" ? task.plannedMinutes : 0,
           is_required: true
         },
         {
@@ -352,9 +358,9 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
           account_id: account.accountId,
           objective_id: task.objectiveId,
           title: task.title,
-          type: "time_tracking",
+          type: task.taskType,
           weekly_target_minutes: null,
-          minimum_minutes: task.plannedMinutes,
+          minimum_minutes: task.taskType === "time_tracking" ? task.plannedMinutes : 0,
           is_active: true,
           metadata
         })
@@ -370,7 +376,7 @@ export async function updateTemplateWithDailyTasksAction(formData: FormData) {
         habit_id: habit.id,
         day_of_week: task.dayOfWeek,
         planned_minutes: task.plannedMinutes,
-        minimum_minutes: task.plannedMinutes,
+        minimum_minutes: task.taskType === "time_tracking" ? task.plannedMinutes : 0,
         is_required: true
       });
     }

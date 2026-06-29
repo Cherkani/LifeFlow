@@ -13,6 +13,7 @@ import { DailyObjectiveChart } from "@/app/(app)/habits/daily-objective-chart";
 import { CategoryObjectiveChart } from "@/app/(app)/habits/category-objective-chart";
 import { ActionForm } from "@/components/forms/action-form";
 import { LifeSummaryBand } from "@/components/life/life-context";
+import { WorkflowNav } from "@/components/life/workflow-nav";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -174,6 +175,35 @@ export default async function HabitsPage({
           return category?.objective_id === selectedObjectiveId;
         })
       : sessions;
+  const fallbackNonTimedSessions: Session[] = [];
+  for (const category of categories) {
+    if (selectedObjectiveId && selectedObjectiveId !== "" && category.objective_id !== selectedObjectiveId) {
+      continue;
+    }
+    if (category.type === "time_tracking") {
+      continue;
+    }
+    for (const dateKey of Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(selectedWeekStart);
+      date.setDate(selectedWeekStart.getDate() + index);
+      return formatWeekKey(date);
+    })) {
+      const alreadyExists = filteredSessions.some((session) => session.habit_id === category.id && session.session_date === dateKey);
+      if (alreadyExists) {
+        continue;
+      }
+      fallbackNonTimedSessions.push({
+        id: `virtual-${category.id}-${dateKey}`,
+        habit_id: category.id,
+        session_date: dateKey,
+        planned_minutes: 0,
+        minimum_minutes: 0,
+        actual_minutes: null,
+        completed: false
+      });
+    }
+  }
+  const executionSessions = [...filteredSessions, ...fallbackNonTimedSessions];
   const timedSessions = filteredSessions.filter((session) => categoryById.get(session.habit_id)?.type === "time_tracking");
 
   const weekPlannedMinutes = timedSessions.reduce((sum, session) => sum + session.planned_minutes, 0);
@@ -187,7 +217,7 @@ export default async function HabitsPage({
     .reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
 
   const sessionsByDate = new Map<string, Session[]>();
-  for (const session of filteredSessions) {
+  for (const session of executionSessions) {
     const list = sessionsByDate.get(session.session_date) ?? [];
     list.push(session);
     sessionsByDate.set(session.session_date, list);
@@ -341,6 +371,12 @@ export default async function HabitsPage({
         ]}
       />
 
+      <WorkflowNav
+        active="execution"
+        executionHref={weekHref(selectedWeekStart, selectedObjectiveId ? { objectiveId: selectedObjectiveId } : undefined)}
+        calendarHref={`/events?month=${weekStartIso.slice(0, 7)}&date=${weekStartIso}&view=scheduled` as Route}
+      />
+
       <header className="space-y-1">
         <h1 className="text-2xl font-bold tracking-tight text-[var(--app-text-strong)]">Execution Weekly Tracker</h1>
         <p className="text-sm text-[var(--app-text-muted)]">Assign a template for the week once, then track tasks by day in minutes.</p>
@@ -389,7 +425,7 @@ export default async function HabitsPage({
           </div>
 
           {templates.length === 0 ? (
-            <p className="text-sm text-[var(--app-text-muted)]">No templates yet. Create one from Planner first.</p>
+            <p className="text-sm text-[var(--app-text-muted)]">No templates yet. Create one from Planner first; no-time habits and calendar items can still appear below.</p>
           ) : currentWeek?.template_id ? (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--app-panel-border-strong)] bg-[var(--app-btn-secondary-bg)] p-3">
               <div>

@@ -45,6 +45,7 @@ type Task = {
   id: string;
   title: string;
   objective_id: string | null;
+  type: "time_tracking" | "fixed_protocol" | "count" | "custom";
   metadata: unknown;
 };
 
@@ -114,6 +115,7 @@ export function PlanningContent({
               title: task?.title ?? "",
               objectiveId: task?.objective_id ?? "",
               plannedMinutes: entry.planned_minutes,
+              taskType: task?.type ?? "time_tracking",
               startTime: getStartTime(task?.metadata),
               habitId: entry.habit_id
             };
@@ -406,7 +408,9 @@ export function PlanningContent({
                                           {dayName[dayOfWeek - 1]} · {task?.title ?? "Task"}
                                         </p>
                                         <p className="mt-0.5 text-[11px] leading-relaxed text-[#4a5f83]">
-                                          {entry.planned_minutes} min planned · Min {entry.minimum_minutes} min
+                                          {task?.type === "time_tracking"
+                                            ? `${entry.planned_minutes} min planned · Min ${entry.minimum_minutes} min`
+                                            : "No time tracking"}
                                           {startTime ? ` · ${startTime}` : ""}
                                           {taskObjective ? ` · ${taskObjective}` : ""}
                                           {entry.is_required ? " · Required" : ""}
