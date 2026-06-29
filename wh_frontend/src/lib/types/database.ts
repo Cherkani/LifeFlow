@@ -912,6 +912,7 @@ export type Database = {
           account_id: string;
           token: string;
           scope: "debts";
+          debt_group_key: string | null;
           is_active: boolean;
           created_by: string | null;
           created_at: string;
@@ -921,6 +922,7 @@ export type Database = {
           account_id: string;
           token?: string;
           scope?: "debts";
+          debt_group_key?: string | null;
           is_active?: boolean;
           created_by?: string | null;
           created_at?: string;
@@ -930,6 +932,7 @@ export type Database = {
           account_id?: string;
           token?: string;
           scope?: "debts";
+          debt_group_key?: string | null;
           is_active?: boolean;
           created_by?: string | null;
           created_at?: string;

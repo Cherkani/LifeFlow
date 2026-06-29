@@ -669,25 +669,14 @@ export function FinanceModals({
         Subscription
       </button>
     ) : tab === "debts" ? (
-      <>
-        <button
-          type="button"
-          onClick={() => setActiveModal("debt-entry")}
-          className="inline-flex items-center gap-2 rounded-lg bg-[#1e3a6d] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#274881]"
-        >
-          <Plus size={16} />
-          Debt Entry
-        </button>
-        <ActionForm action={createDebtShareFormAction}>
-          <input type="hidden" name="returnPath" value={baseHref} />
-          <button
-            type="submit"
-            className="inline-flex items-center gap-2 rounded-lg border border-[#c7d3e8] bg-[#edf3ff] px-3 py-2 text-sm font-semibold text-[#23406d] transition hover:bg-[#e3ebf9]"
-          >
-            Public link
-          </button>
-        </ActionForm>
-      </>
+      <button
+        type="button"
+        onClick={() => setActiveModal("debt-entry")}
+        className="inline-flex items-center gap-2 rounded-lg bg-[#1e3a6d] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#274881]"
+      >
+        <Plus size={16} />
+        Debt Entry
+      </button>
     ) : (
       <button
         type="button"
@@ -1620,7 +1609,19 @@ export function FinanceModals({
                         {group.rows.length} line{group.rows.length === 1 ? "" : "s"}
                       </p>
                     </div>
-                    <p className="text-sm font-semibold text-rose-600">{formatMoneyDhs(group.total)}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-rose-600">{formatMoneyDhs(group.total)}</p>
+                      <ActionForm action={createDebtShareFormAction}>
+                        <input type="hidden" name="returnPath" value={baseHref} />
+                        <input type="hidden" name="debtGroupKey" value={group.key} />
+                        <button
+                          type="submit"
+                          className="rounded-full border border-[#c7d3e8] bg-white px-3 py-1 text-xs font-bold text-[#23406d] transition hover:bg-[#edf3ff]"
+                        >
+                          Share group
+                        </button>
+                      </ActionForm>
+                    </div>
                   </div>
                   {group.rows.map((debt) => (
                     <DebtPayRow key={debt.id} debt={debt} baseHref={baseHref} selectedDateIso={anchorIso} />

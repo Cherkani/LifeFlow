@@ -128,6 +128,10 @@ const deleteDebtSchema = z.object({
   debtId: z.string().uuid()
 });
 
+const debtShareSchema = z.object({
+  debtGroupKey: z.string().trim().min(1).max(120).regex(/^[\p{L}\p{N}_-]+$/u)
+});
+
 function getSafeReturnPath(raw: FormDataEntryValue | null) {
   const value = typeof raw === "string" ? raw.trim() : "";
   return value.startsWith("/finance") ? value : "/finance";
@@ -974,6 +978,15 @@ export async function deleteDebtAction(formData: FormData) {
 
 export async function createDebtShareAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = debtShareSchema.safeParse({
+    debtGroupKey: formData.get("debtGroupKey")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const debtGroupKey = payload.data.debtGroupKey.toLowerCase();
   const { supabase, user, account } = await requireAppContext();
 
   const { data: existing } = await supabase
@@ -981,6 +994,7 @@ export async function createDebtShareAction(formData: FormData) {
     .select("token")
     .eq("account_id", account.accountId)
     .eq("scope", "debts")
+    .eq("debt_group_key", debtGroupKey)
     .eq("is_active", true)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -995,6 +1009,7 @@ export async function createDebtShareAction(formData: FormData) {
     .insert({
       account_id: account.accountId,
       scope: "debts",
+      debt_group_key: debtGroupKey,
       created_by: user.id
     })
     .select("token")

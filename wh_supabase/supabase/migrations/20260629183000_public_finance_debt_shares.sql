@@ -3,12 +3,16 @@ create table if not exists public.finance_public_shares (
   account_id uuid not null references public.accounts(id) on delete cascade,
   token text not null unique default replace(gen_random_uuid()::text, '-', ''),
   scope text not null default 'debts' check (scope in ('debts')),
+  debt_group_key text,
   is_active boolean not null default true,
   created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now()
 );
 
-create index if not exists idx_finance_public_shares_account on public.finance_public_shares(account_id, scope, is_active);
+create unique index if not exists idx_finance_public_shares_debt_group_unique
+  on public.finance_public_shares(account_id, scope, debt_group_key)
+  where is_active = true and scope = 'debts';
+create index if not exists idx_finance_public_shares_account on public.finance_public_shares(account_id, scope, debt_group_key, is_active);
 create index if not exists idx_finance_public_shares_token on public.finance_public_shares(token) where is_active = true;
 
 alter table public.finance_public_shares enable row level security;
@@ -39,7 +43,7 @@ as $$
 declare
   v_share record;
 begin
-  select s.account_id, a.name as account_name, a.currency_code
+  select s.account_id, s.debt_group_key, a.name as account_name, a.currency_code
     into v_share
   from public.finance_public_shares s
   join public.accounts a on a.id = s.account_id
@@ -56,6 +60,7 @@ begin
     'found', true,
     'accountName', v_share.account_name,
     'currencyCode', v_share.currency_code,
+    'debtGroupKey', v_share.debt_group_key,
     'debts', coalesce(
       (
         select jsonb_agg(
@@ -72,6 +77,7 @@ begin
         )
         from public.debts d
         where d.account_id = v_share.account_id
+          and lower(coalesce(nullif((regexp_split_to_array(trim(d.name), '\s+'))[1], ''), 'ungrouped')) = v_share.debt_group_key
       ),
       '[]'::jsonb
     )

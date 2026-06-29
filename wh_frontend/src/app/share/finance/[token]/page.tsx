@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { formatMoneyDhs } from "@/lib/utils";
 
+import { CopyShareLinkButton } from "./copy-share-link-button";
+
 type PublicDebt = {
   id: string;
   name: string;
@@ -19,6 +21,7 @@ type PublicDebtPayload = {
   found: boolean;
   accountName?: string;
   currencyCode?: string;
+  debtGroupKey?: string | null;
   debts?: PublicDebt[];
 };
 
@@ -55,7 +58,7 @@ export default async function PublicFinanceDebtSharePage({
       <main className="min-h-screen bg-[#f5efe5] px-4 py-10 text-[#172033]">
         <section className="mx-auto max-w-2xl rounded-[2rem] border border-[#e3d4bd] bg-white p-8 shadow-sm">
           <Badge className="bg-[#fff4dc] text-[#8a5a00]">Public finance link</Badge>
-          <h1 className="mt-5 text-3xl font-black tracking-tight">This share link is not available.</h1>
+            <h1 className="mt-5 text-3xl font-black tracking-tight">This group share link is not available.</h1>
           <p className="mt-3 text-sm leading-6 text-[#667085]">
             It may have been disabled, deleted, or copied incorrectly. Ask the owner to generate a fresh public link.
           </p>
@@ -86,11 +89,18 @@ export default async function PublicFinanceDebtSharePage({
       <section className="mx-auto flex max-w-5xl flex-col gap-5">
         <div className="overflow-hidden rounded-[2rem] border border-[#e3d4bd] bg-white shadow-sm">
           <div className="bg-[radial-gradient(circle_at_top_left,_#fde2a6,_transparent_34%),linear-gradient(135deg,_#172033,_#32405f)] p-7 text-white">
-            <Badge className="bg-white/15 text-white">Read-only public view</Badge>
-            <h1 className="mt-4 text-3xl font-black tracking-tight">{payload.accountName ?? "Finance"} debt snapshot</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/75">
-              Shared debt overview grouped by person. This page is view-only and does not require login.
-            </p>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <Badge className="bg-white/15 text-white">Read-only group view</Badge>
+                <h1 className="mt-4 text-3xl font-black tracking-tight">
+                  {titleCase(payload.debtGroupKey ?? "group")} debts
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/75">
+                  Shared from {payload.accountName ?? "Finance"}. Only this group is visible, and this page is view-only.
+                </p>
+              </div>
+              <CopyShareLinkButton />
+            </div>
           </div>
           <div className="grid gap-3 p-5 sm:grid-cols-3">
             <Card className="border-[#eadcc8] bg-[#fffaf2]">
