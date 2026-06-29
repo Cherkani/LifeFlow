@@ -24,7 +24,7 @@ export function CopyShareLinkButton() {
   }
 
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
       <button
         type="button"
         onClick={copyLink}
@@ -37,7 +37,7 @@ export function CopyShareLinkButton() {
           readOnly
           value={currentUrl}
           onFocus={(event) => event.currentTarget.select()}
-          className="w-72 rounded-full border border-white/30 bg-white/10 px-3 py-2 text-xs text-white outline-none"
+          className="w-full rounded-full border border-white/30 bg-white/10 px-3 py-2 text-xs text-white outline-none placeholder:text-white/60 sm:w-72"
           aria-label="Share link"
         />
       ) : null}

@@ -462,6 +462,12 @@ function getDebtGroupKey(name: string) {
   return firstWord ? firstWord.toLowerCase() : "ungrouped";
 }
 
+function getOpenDebtDisplayAmount(debt: DebtRow) {
+  const remaining = Number(debt.remaining_balance ?? 0);
+  const principal = Number(debt.principal ?? 0);
+  return debt.status === "open" && remaining <= 0 ? principal : remaining;
+}
+
 export function FinanceModals({
   tab,
   period,
@@ -553,7 +559,7 @@ export function FinanceModals({
         key,
         label: key === "ungrouped" ? "Ungrouped" : key,
         rows,
-        total: rows.reduce((sum, debt) => sum + Number(debt.remaining_balance ?? debt.principal ?? 0), 0)
+        total: rows.reduce((sum, debt) => sum + getOpenDebtDisplayAmount(debt), 0)
       }))
       .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
   }, [debts]);

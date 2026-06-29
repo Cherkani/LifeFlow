@@ -69,7 +69,10 @@ begin
             'name', d.name,
             'type', d.type,
             'principal', d.principal,
-            'remainingBalance', d.remaining_balance,
+            'remainingBalance', case
+              when d.status = 'open' and coalesce(d.remaining_balance, 0) <= 0 then d.principal
+              else coalesce(d.remaining_balance, d.principal)
+            end,
             'status', d.status,
             'dueDate', d.due_date
           )
