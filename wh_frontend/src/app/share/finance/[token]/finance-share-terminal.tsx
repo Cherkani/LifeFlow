@@ -68,6 +68,7 @@ export function FinanceShareTerminal({ accountName, groupKey, groupName, debts }
   const commandCountRef = useRef(0);
   const commandHistoryRef = useRef<string[]>([]);
   const historyIndexRef = useRef<number | null>(null);
+  const completionRef = useRef<{ base: string; matches: string[]; index: number } | null>(null);
   const normalizedAccountName = safeTerminalName(accountName);
   const openDebts = useMemo(() => debts.filter((debt) => debt.status === "open" && debt.amount > 0), [debts]);
   const openTotal = useMemo(() => openDebts.reduce((sum, debt) => sum + debt.amount, 0), [openDebts]);
@@ -84,6 +85,10 @@ export function FinanceShareTerminal({ accountName, groupKey, groupName, debts }
       "cat debts.txt",
       "cat details.txt",
       "cat README.md",
+      "balance",
+      "debts.txt",
+      "details.txt",
+      "README.md",
       "date",
       "whoami",
       "clear"
@@ -136,22 +141,47 @@ export function FinanceShareTerminal({ accountName, groupKey, groupName, debts }
       terminal.write(`\x1b[2K\r\x1b[32m${normalizedAccountName}@life-flow\x1b[0m:\x1b[34m${promptPath}\x1b[0m$ ${command}`);
     }
 
+    function getCompletionMatches(current: string) {
+      const fileNames = ["balance", "debts.txt", "details.txt", "README.md"];
+      const fileCommandMatch = current.match(/^(cat|less)\s+(.+)$/i);
+
+      if (fileCommandMatch) {
+        const commandName = fileCommandMatch[1];
+        const partialFileName = fileCommandMatch[2].toLowerCase();
+        return fileNames
+          .filter((fileName) => fileName.toLowerCase().startsWith(partialFileName))
+          .map((fileName) => `${commandName} ${fileName}`);
+      }
+
+      const currentLower = current.toLowerCase();
+      return completions.filter((item) => item.toLowerCase().startsWith(currentLower));
+    }
+
     function autocompleteCommand() {
       const current = commandRef.current;
-      const currentLower = current.toLowerCase();
-      const matches = completions.filter((item) => item.toLowerCase().startsWith(currentLower));
+      const activeCompletion = completionRef.current;
+
+      if (activeCompletion && current === activeCompletion.matches[activeCompletion.index]) {
+        const nextIndex = (activeCompletion.index + 1) % activeCompletion.matches.length;
+        completionRef.current = { ...activeCompletion, index: nextIndex };
+        commandRef.current = activeCompletion.matches[nextIndex];
+        redrawCommand(commandRef.current);
+        return;
+      }
+
+      const matches = getCompletionMatches(current);
 
       if (matches.length === 1) {
+        completionRef.current = { base: current, matches, index: 0 };
         commandRef.current = matches[0];
         redrawCommand(commandRef.current);
         return;
       }
 
       if (matches.length > 1) {
-        terminal.write("\r\n");
-        writeLines(matches);
-        prompt();
-        terminal.write(commandRef.current);
+        completionRef.current = { base: current, matches, index: 0 };
+        commandRef.current = matches[0];
+        redrawCommand(commandRef.current);
       }
     }
 
@@ -171,6 +201,7 @@ export function FinanceShareTerminal({ accountName, groupKey, groupName, debts }
       if (command === "clear") {
         terminal.clear();
         commandCountRef.current = 0;
+        completionRef.current = null;
         prompt();
         return;
       }
@@ -178,6 +209,7 @@ export function FinanceShareTerminal({ accountName, groupKey, groupName, debts }
       commandCountRef.current += 1;
       commandHistoryRef.current = [...commandHistoryRef.current, command].slice(-50);
       historyIndexRef.current = null;
+      completionRef.current = null;
       const lower = command.toLowerCase();
       const parts = lower.split(/\s+/);
 
@@ -275,6 +307,7 @@ export function FinanceShareTerminal({ accountName, groupKey, groupName, debts }
             ? commandHistoryRef.current.length - 1
             : Math.max(0, historyIndexRef.current - 1);
         commandRef.current = commandHistoryRef.current[historyIndexRef.current] ?? "";
+        completionRef.current = null;
         redrawCommand(commandRef.current);
         return;
       }
@@ -288,6 +321,7 @@ export function FinanceShareTerminal({ accountName, groupKey, groupName, debts }
         } else {
           commandRef.current = commandHistoryRef.current[historyIndexRef.current] ?? "";
         }
+        completionRef.current = null;
         redrawCommand(commandRef.current);
         return;
       }
@@ -302,12 +336,14 @@ export function FinanceShareTerminal({ accountName, groupKey, groupName, debts }
         terminal.write("\r\n");
         runCommand(commandRef.current);
         commandRef.current = "";
+        completionRef.current = null;
         return;
       }
 
       if (domEvent.key === "Backspace") {
         if (commandRef.current.length > 0) {
           commandRef.current = commandRef.current.slice(0, -1);
+          completionRef.current = null;
           terminal.write("\b \b");
         }
         return;
@@ -318,6 +354,7 @@ export function FinanceShareTerminal({ accountName, groupKey, groupName, debts }
       const code = key.charCodeAt(0);
       if (code >= 32 && code <= 126) {
         commandRef.current += key;
+        completionRef.current = null;
         terminal.write(key);
       }
     });
