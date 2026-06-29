@@ -196,14 +196,10 @@ type FinanceModalsProps = {
   subscriptionBudgetPressure: number | null;
   nextSubscription:
     | {
-        id: string;
+        subscriptionId: string;
         name: string;
         amount: number;
-        recurrence: "monthly" | "yearly";
-        next_due_date: string | null;
-        end_date: string | null;
-        notes: string | null;
-        is_active: boolean;
+        due_on: string;
       }
     | undefined;
   openDebtTotal: number;
@@ -1234,8 +1230,8 @@ export function FinanceModals({
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-semibold text-[#0c1d3c]">
-                  {nextSubscription?.next_due_date
-                    ? `${nextSubscription.name} · ${nextSubscription.next_due_date}`
+                  {nextSubscription?.due_on
+                    ? `${nextSubscription.name} · ${nextSubscription.due_on}`
                     : "No current due date"}
                 </p>
                 {expiredSubscriptionCount > 0 ? (
@@ -1753,8 +1749,9 @@ export function FinanceModals({
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="subscriptionNextDueDate">Next due date</Label>
+                <Label htmlFor="subscriptionNextDueDate">Start date</Label>
                 <Input id="subscriptionNextDueDate" name="nextDueDate" type="date" defaultValue={anchorIso} />
+                <p className="text-xs text-[#4a5f83]">This can be a past date. We use it as the recurring anchor for future due dates.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="subscriptionEndDate">End date (optional)</Label>
@@ -1804,13 +1801,14 @@ export function FinanceModals({
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="editSubscriptionNextDueDate">Next due date</Label>
+                <Label htmlFor="editSubscriptionNextDueDate">Start date</Label>
                 <Input
                   id="editSubscriptionNextDueDate"
                   name="nextDueDate"
                   type="date"
                   defaultValue={editingSubscription.next_due_date ?? ""}
                 />
+                <p className="text-xs text-[#4a5f83]">This can be a past date. We use it as the recurring anchor for future due dates.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="editSubscriptionEndDate">End date (optional)</Label>

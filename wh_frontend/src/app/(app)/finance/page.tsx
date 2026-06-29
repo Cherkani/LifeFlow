@@ -128,6 +128,70 @@ function getIncomeSourceOccurrences(source: IncomeSourceRow, rangeStart: string,
   return occurrences;
 }
 
+function getSubscriptionOccurrences(subscription: SubscriptionRow, rangeStart: string, rangeEnd: string) {
+  const occurrences: Array<{ subscriptionId: string; name: string; amount: number; due_on: string }> = [];
+
+  if (!subscription.is_active || !subscription.next_due_date || subscription.next_due_date > rangeEnd) {
+    return occurrences;
+  }
+
+  const maxIterations = subscription.recurrence === "yearly" ? 200 : 1200;
+  for (let index = 0; index < maxIterations; index += 1) {
+    const due_on =
+      subscription.recurrence === "monthly"
+        ? addMonthlyOccurrence(subscription.next_due_date, index)
+        : addYearlyOccurrence(subscription.next_due_date, index);
+
+    if (due_on > rangeEnd) {
+      break;
+    }
+
+    if (subscription.end_date && due_on > subscription.end_date) {
+      break;
+    }
+
+    if (due_on >= rangeStart) {
+      occurrences.push({
+        subscriptionId: subscription.id,
+        name: subscription.name,
+        amount: subscription.amount,
+        due_on
+      });
+    }
+  }
+
+  return occurrences;
+}
+
+function getNextSubscriptionOccurrence(subscription: SubscriptionRow, rangeStart: string) {
+  if (!subscription.is_active || !subscription.next_due_date) {
+    return null;
+  }
+
+  const maxIterations = subscription.recurrence === "yearly" ? 200 : 1200;
+  for (let index = 0; index < maxIterations; index += 1) {
+    const due_on =
+      subscription.recurrence === "monthly"
+        ? addMonthlyOccurrence(subscription.next_due_date, index)
+        : addYearlyOccurrence(subscription.next_due_date, index);
+
+    if (subscription.end_date && due_on > subscription.end_date) {
+      break;
+    }
+
+    if (due_on >= rangeStart) {
+      return {
+        subscriptionId: subscription.id,
+        name: subscription.name,
+        amount: subscription.amount,
+        due_on
+      };
+    }
+  }
+
+  return null;
+}
+
 function parseAnchorDate(raw: string | undefined) {
   if (typeof raw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
     return new Date(`${raw}T00:00:00`);
@@ -342,27 +406,23 @@ export default async function FinancePage({
   const visibleSubscriptions = subscriptions.filter((subscription) =>
     isSubscriptionVisibleInRange(subscription, rangeStart)
   );
-  const dueSubscriptions = activeSubscriptions.filter((subscription) => {
-    return Boolean(
-      subscription.next_due_date &&
-        subscription.next_due_date >= rangeStart &&
-        subscription.next_due_date <= rangeEnd &&
-        (!subscription.end_date || subscription.end_date >= subscription.next_due_date)
-    );
-  });
+  const dueSubscriptionOccurrences = activeSubscriptions.flatMap((subscription) =>
+    getSubscriptionOccurrences(subscription, rangeStart, rangeEnd)
+  );
   const recurringMonthlyCost = visibleSubscriptions.reduce(
     (sum, subscription) => sum + getMonthlyEquivalent(subscription.amount, subscription.recurrence),
     0
   );
-  const dueSubscriptionsTotal = dueSubscriptions.reduce((sum, subscription) => sum + subscription.amount, 0);
-  const nextSubscription = [...visibleSubscriptions]
-    .filter((subscription) => Boolean(subscription.next_due_date))
-    .sort((a, b) => (a.next_due_date ?? "").localeCompare(b.next_due_date ?? ""))[0];
+  const dueSubscriptionsTotal = dueSubscriptionOccurrences.reduce((sum, subscription) => sum + subscription.amount, 0);
+  const nextSubscription = visibleSubscriptions
+    .map((subscription) => getNextSubscriptionOccurrence(subscription, rangeStart))
+    .filter((subscription): subscription is NonNullable<typeof subscription> => Boolean(subscription))
+    .sort((a, b) => a.due_on.localeCompare(b.due_on))[0];
   const expiredSubscriptionCount = subscriptions.filter((subscription) => isSubscriptionExpired(subscription, rangeStart)).length;
   const subscriptionDueChartData = timelineDates.map((date) => {
     const key = toIsoDate(date);
-    const dueAmount = dueSubscriptions
-      .filter((subscription) => subscription.next_due_date === key)
+    const dueAmount = dueSubscriptionOccurrences
+      .filter((subscription) => subscription.due_on === key)
       .reduce((sum, subscription) => sum + subscription.amount, 0);
     return {
       day:
