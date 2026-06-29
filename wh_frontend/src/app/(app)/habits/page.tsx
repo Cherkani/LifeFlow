@@ -12,6 +12,7 @@ import { WeekResetModal } from "@/app/(app)/habits/week-reset-modal";
 import { DailyObjectiveChart } from "@/app/(app)/habits/daily-objective-chart";
 import { CategoryObjectiveChart } from "@/app/(app)/habits/category-objective-chart";
 import { QualitativeProgress } from "@/app/(app)/habits/qualitative-progress";
+import { ContributionHeatmap } from "@/app/(app)/habits/contribution-heatmap";
 import { ActionForm } from "@/components/forms/action-form";
 import { LifeSummaryBand } from "@/components/life/life-context";
 import { WorkflowNav } from "@/components/life/workflow-nav";
@@ -133,6 +134,17 @@ function formatDateLabel(value: string, options?: Intl.DateTimeFormatOptions) {
     month: "short",
     day: "numeric"
   });
+}
+
+function getDateKeysBetween(startIso: string, endIso: string) {
+  const keys: string[] = [];
+  const cursor = new Date(`${startIso}T00:00:00`);
+  const end = new Date(`${endIso}T00:00:00`);
+  while (cursor <= end) {
+    keys.push(formatWeekKey(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return keys;
 }
 
 function parsePerformanceRange(raw: string | undefined): PerformanceRange {
@@ -299,6 +311,19 @@ export default async function HabitsPage({
     performanceCalendarEventsByDate.set(event.event_date, list);
   }
   const performanceDayKeys = Array.from(new Set([...performanceFilteredSessions.map((session) => session.session_date), ...performanceCalendarEvents.map((event) => event.event_date).filter((date): date is string => Boolean(date))])).sort();
+  const contributionDayKeys = getDateKeysBetween(performanceStartIso, performanceEndIso);
+  const contributionData = contributionDayKeys.map((dateKey) => {
+    const daySessions = performanceFilteredSessions.filter((session) => session.session_date === dateKey);
+    const completedTasks = daySessions.filter((session) => session.completed).length;
+    const doneMinutes = daySessions.reduce((sum, session) => sum + (session.actual_minutes ?? 0), 0);
+
+    return {
+      dateKey,
+      completedTasks,
+      doneMinutes,
+      score: completedTasks + Math.floor(doneMinutes / 30)
+    };
+  });
   const qualitativeDayKeys = performanceDayKeys.length > 0 ? performanceDayKeys : weekDates;
   const qualitativeDayData = qualitativeDayKeys.map((dateKey) => {
     const daySessions = qualitativeSessions.filter((session) => session.session_date === dateKey);
@@ -668,6 +693,12 @@ export default async function HabitsPage({
           </div>
         </CardContent>
       </Card>
+
+      <ContributionHeatmap
+        title="Contribution Heatmap"
+        subtitle={`${performanceTitle} · ${performanceSubtitle}`}
+        days={contributionData}
+      />
 
       {analyticsView === "all" || analyticsView === "qualitative" ? (
         <QualitativeProgress days={qualitativeDayData} objectives={qualitativeObjectiveData} />
