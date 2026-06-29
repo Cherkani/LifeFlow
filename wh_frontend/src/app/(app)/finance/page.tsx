@@ -19,6 +19,7 @@ type DebtRow = {
   remaining_balance: number | null;
   status: "open" | "closed";
   due_date: string | null;
+  project_id: string | null;
 };
 
 type SubscriptionRow = {
@@ -30,6 +31,7 @@ type SubscriptionRow = {
   end_date: string | null;
   notes: string | null;
   is_active: boolean;
+  project_id: string | null;
 };
 
 type IncomeSourceRow = {
@@ -41,7 +43,10 @@ type IncomeSourceRow = {
   end_date: string | null;
   notes: string | null;
   is_active: boolean;
+  project_id: string | null;
 };
+
+type FinanceTab = "expenses" | "income" | "subscriptions" | "debts" | "projects";
 
 function getMonthlyEquivalent(amount: number, recurrence: "monthly" | "yearly") {
   return recurrence === "yearly" ? amount / 12 : amount;
@@ -93,7 +98,14 @@ function addYearlyOccurrence(anchorIso: string, offset: number) {
 }
 
 function getIncomeSourceOccurrences(source: IncomeSourceRow, rangeStart: string, rangeEnd: string) {
-  const occurrences: Array<{ sourceId: string; name: string; amount: number; occurred_on: string; notes: string | null }> = [];
+  const occurrences: Array<{
+    sourceId: string;
+    name: string;
+    amount: number;
+    occurred_on: string;
+    notes: string | null;
+    project_id: string | null;
+  }> = [];
 
   if (!source.is_active || source.start_date > rangeEnd) {
     return occurrences;
@@ -120,7 +132,8 @@ function getIncomeSourceOccurrences(source: IncomeSourceRow, rangeStart: string,
         name: source.name,
         amount: source.amount,
         occurred_on,
-        notes: source.notes
+        notes: source.notes,
+        project_id: source.project_id
       });
     }
   }
@@ -129,7 +142,13 @@ function getIncomeSourceOccurrences(source: IncomeSourceRow, rangeStart: string,
 }
 
 function getSubscriptionOccurrences(subscription: SubscriptionRow, rangeStart: string, rangeEnd: string) {
-  const occurrences: Array<{ subscriptionId: string; name: string; amount: number; due_on: string }> = [];
+  const occurrences: Array<{
+    subscriptionId: string;
+    name: string;
+    amount: number;
+    due_on: string;
+    project_id: string | null;
+  }> = [];
 
   if (!subscription.is_active || !subscription.next_due_date || subscription.next_due_date > rangeEnd) {
     return occurrences;
@@ -155,7 +174,8 @@ function getSubscriptionOccurrences(subscription: SubscriptionRow, rangeStart: s
         subscriptionId: subscription.id,
         name: subscription.name,
         amount: subscription.amount,
-        due_on
+        due_on,
+        project_id: subscription.project_id
       });
     }
   }
@@ -207,10 +227,11 @@ function parsePeriod(raw: string | undefined): "day" | "week" | "month" {
   return "day";
 }
 
-function parseTab(raw: string | undefined): "expenses" | "income" | "subscriptions" | "debts" {
+function parseTab(raw: string | undefined): FinanceTab {
   if (raw === "income") return "income";
   if (raw === "subscriptions") return "subscriptions";
   if (raw === "debts") return "debts";
+  if (raw === "projects") return "projects";
   return "expenses";
 }
 
@@ -268,7 +289,8 @@ export default async function FinancePage({
     start_date: source.start_date,
     end_date: source.end_date,
     notes: source.notes,
-    is_active: source.is_active
+    is_active: source.is_active,
+    project_id: source.project_id
   })) as IncomeSourceRow[];
   const subscriptions = financeData.subscriptions.map((subscription) => ({
     id: subscription.id,
@@ -278,11 +300,24 @@ export default async function FinancePage({
     next_due_date: subscription.next_due_date,
     end_date: subscription.end_date,
     notes: subscription.notes,
-    is_active: subscription.is_active
+    is_active: subscription.is_active,
+    project_id: subscription.project_id
   })) as SubscriptionRow[];
   const debts = financeData.debts as unknown as DebtRow[];
   const debtIdsInContext = new Set(debts.map((debt) => debt.id));
   const payments = financeData.payments.filter((payment) => debtIdsInContext.has(payment.debt_id));
+  const objectiveByProjectId = new Map<string, (typeof financeData.objectives)[number]>();
+  for (const objective of financeData.objectives) {
+    if (objective.project_id && !objectiveByProjectId.has(objective.project_id)) {
+      objectiveByProjectId.set(objective.project_id, objective);
+    }
+  }
+  const knowledgeByProjectId = new Map<string, (typeof financeData.knowledgeSpaces)[number]>();
+  for (const space of financeData.knowledgeSpaces) {
+    if (space.project_id && !knowledgeByProjectId.has(space.project_id)) {
+      knowledgeByProjectId.set(space.project_id, space);
+    }
+  }
 
   const categoryNameById: Record<string, string> = {};
   for (const c of categories) {
@@ -381,6 +416,7 @@ export default async function FinancePage({
   }
   const debtPaymentByDay = new Map<string, number>();
   for (const payment of payments) {
+    if (payment.project_expense_id) continue;
     debtPaymentByDay.set(payment.paid_at, (debtPaymentByDay.get(payment.paid_at) ?? 0) + Number(payment.amount));
   }
   let runningNet = 0;
@@ -441,7 +477,10 @@ export default async function FinancePage({
   const periodPaymentsTotal = payments
     .filter((p) => p.paid_at >= rangeStart && p.paid_at <= rangeEnd)
     .reduce((sum, p) => sum + Number(p.amount), 0);
-  const actualOutputTotal = totalSpent + periodPaymentsTotal;
+  const periodUnledgeredPaymentsTotal = payments
+    .filter((p) => p.paid_at >= rangeStart && p.paid_at <= rangeEnd && !p.project_expense_id)
+    .reduce((sum, p) => sum + Number(p.amount), 0);
+  const actualOutputTotal = totalSpent + periodUnledgeredPaymentsTotal;
   const committedOutputTotal = actualOutputTotal + dueSubscriptionsTotal;
   const netAfterDebtPayments = periodIncomeTotal - actualOutputTotal;
   const netAfterCommittedOutput = periodIncomeTotal - committedOutputTotal;
@@ -458,12 +497,14 @@ export default async function FinancePage({
   const recentExpensesForClient = recentExpenses.map((e) => ({
     id: e.id,
     category_id: e.category_id,
+    project_id: e.project_id,
     amount: Number(e.amount),
     occurred_on: e.occurred_on,
     notes: e.notes
   }));
   const periodIncomeForClient = periodIncome.map((entry) => ({
     id: entry.id,
+    project_id: entry.project_id,
     amount: Number(entry.amount),
     occurred_on: entry.occurred_on,
     notes: entry.notes
@@ -485,7 +526,8 @@ export default async function FinancePage({
     start_date: source.start_date,
     end_date: source.end_date,
     notes: source.notes,
-    is_active: source.is_active
+    is_active: source.is_active,
+    project_id: source.project_id
   }));
   const nextIncomeSource = sourceIncomeOccurrences
     .slice()
@@ -494,9 +536,91 @@ export default async function FinancePage({
   const periodExpensesForClient = periodExpenses.map((e) => ({
     id: e.id,
     category_id: e.category_id,
+    project_id: e.project_id,
     amount: Number(e.amount),
     occurred_on: e.occurred_on
   }));
+  const projectHabitIdsByProject = new Map<string, Set<string>>();
+  for (const project of financeData.projects) {
+    const linkedObjective = objectiveByProjectId.get(project.id);
+    const ids = new Set(
+      financeData.projectHabits
+        .filter((habit) => habit.project_id === project.id || (linkedObjective && habit.objective_id === linkedObjective.id))
+        .map((habit) => habit.id)
+    );
+    projectHabitIdsByProject.set(project.id, ids);
+  }
+  const debtById = new Map(debts.map((debt) => [debt.id, debt]));
+  const projectMetrics = financeData.projects.map((project) => {
+    const linkedObjective = objectiveByProjectId.get(project.id) ?? null;
+    const knowledgeSpace = knowledgeByProjectId.get(project.id) ?? null;
+    const manualRevenue = periodIncome
+      .filter((entry) => entry.project_id === project.id)
+      .reduce((sum, entry) => sum + Number(entry.amount), 0);
+    const sourceRevenue = sourceIncomeOccurrences
+      .filter((entry) => entry.project_id === project.id)
+      .reduce((sum, entry) => sum + entry.amount, 0);
+    const expenseTotal = periodExpenses
+      .filter((entry) => entry.project_id === project.id)
+      .reduce((sum, entry) => sum + Number(entry.amount), 0);
+    const subscriptionCost = dueSubscriptionOccurrences
+      .filter((entry) => entry.project_id === project.id)
+      .reduce((sum, entry) => sum + entry.amount, 0);
+    const recurringMonthlyCostForProject = subscriptions
+      .filter((subscription) => subscription.project_id === project.id && isSubscriptionVisibleInRange(subscription, rangeStart))
+      .reduce((sum, subscription) => sum + getMonthlyEquivalent(subscription.amount, subscription.recurrence), 0);
+    const debtPayments = payments.filter((payment) => debtById.get(payment.debt_id)?.project_id === project.id);
+    const debtCost = debtPayments.reduce((sum, payment) => sum + Number(payment.amount), 0);
+    const unledgeredDebtCost = debtPayments
+      .filter((payment) => !payment.project_expense_id)
+      .reduce((sum, payment) => sum + Number(payment.amount), 0);
+    const habitIds = projectHabitIdsByProject.get(project.id) ?? new Set<string>();
+    const actualMinutes = financeData.projectSessions
+      .filter((session) => habitIds.has(session.habit_id))
+      .reduce((sum, session) => sum + Number(session.actual_minutes ?? 0), 0);
+    const revenue = manualRevenue + sourceRevenue;
+    const totalCost = expenseTotal + subscriptionCost + unledgeredDebtCost;
+    const profit = revenue - totalCost;
+    const loggedHours = actualMinutes / 60;
+
+    return {
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      status: project.status,
+      start_date: project.start_date,
+      end_date: project.end_date,
+      image_url: project.image_url,
+      objective: linkedObjective,
+      knowledgeSpace,
+      revenue,
+      manualRevenue,
+      sourceRevenue,
+      expenseTotal,
+      subscriptionCost,
+      debtCost,
+      totalCost,
+      profit,
+      loggedMinutes: actualMinutes,
+      loggedHours,
+      revenuePerHour: loggedHours > 0 ? revenue / loggedHours : null,
+      profitPerHour: loggedHours > 0 ? profit / loggedHours : null,
+      recurringMonthlyCost: recurringMonthlyCostForProject,
+      incomeSourceCount: incomeSources.filter((source) => source.project_id === project.id).length,
+      subscriptionCount: subscriptions.filter((subscription) => subscription.project_id === project.id).length,
+      debtCount: debts.filter((debt) => debt.project_id === project.id).length,
+      recentEntries: [
+        ...periodIncome
+          .filter((entry) => entry.project_id === project.id)
+          .map((entry) => ({ id: entry.id, type: "income" as const, amount: Number(entry.amount), date: entry.occurred_on, notes: entry.notes })),
+        ...periodExpenses
+          .filter((entry) => entry.project_id === project.id)
+          .map((entry) => ({ id: entry.id, type: "expense" as const, amount: Number(entry.amount), date: entry.occurred_on, notes: null }))
+      ]
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 5)
+    };
+  });
 
   return (
     <div className="finance-theme space-y-6">
@@ -505,7 +629,8 @@ export default async function FinancePage({
         description="Track spending, income, subscriptions, debts, and payments by period."
         stats={[
           { label: "expenses", value: periodExpenses.length },
-          { label: "income", value: periodIncome.length }
+          { label: "income", value: periodIncome.length },
+          { label: "projects", value: financeData.projects.length }
         ]}
       />
 
@@ -521,6 +646,10 @@ export default async function FinancePage({
         recentExpenses={recentExpensesForClient}
         periodIncome={periodIncomeForClient}
         incomeSources={incomeSourcesForClient}
+        projects={financeData.projects}
+        objectives={financeData.objectives}
+        knowledgeSpaces={financeData.knowledgeSpaces}
+        projectMetrics={projectMetrics}
         sourceIncomeOccurrences={sourceIncomeOccurrences}
         sourceIncomeTotal={sourceIncomeTotal}
         recurringIncomeMonthly={visibleIncomeSources.reduce((sum, source) => sum + getMonthlyEquivalent(source.amount, source.recurrence), 0)}

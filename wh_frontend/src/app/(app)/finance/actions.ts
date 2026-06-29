@@ -7,6 +7,7 @@ import type { RedirectResult } from "@/lib/action-with-state";
 import { requireAppContext } from "@/lib/server-context";
 
 const dateInputSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
+const optionalProjectIdSchema = z.union([z.literal(""), z.string().uuid()]).optional();
 
 const createCategorySchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -27,12 +28,14 @@ const deleteCategorySchema = z.object({
 
 const createExpenseSchema = z.object({
   categoryId: z.string().uuid(),
+  projectId: optionalProjectIdSchema,
   amount: z.coerce.number().positive().max(100000000),
   occurredOn: dateInputSchema,
   notes: z.string().max(1000).optional()
 });
 
 const createIncomeSchema = z.object({
+  projectId: optionalProjectIdSchema,
   amount: z.coerce.number().positive().max(100000000),
   occurredOn: dateInputSchema,
   notes: z.string().max(1000).optional()
@@ -45,7 +48,8 @@ const incomeSourceSchema = z.object({
   startDate: dateInputSchema,
   endDate: z.union([z.literal(""), dateInputSchema]).optional(),
   notes: z.preprocess((v) => (v === null || v === "" ? undefined : v), z.string().max(1000).optional()),
-  isActive: z.union([z.literal("true"), z.literal("false")]).optional()
+  isActive: z.union([z.literal("true"), z.literal("false")]).optional(),
+  projectId: optionalProjectIdSchema
 });
 
 const updateIncomeSourceSchema = incomeSourceSchema.extend({
@@ -63,7 +67,8 @@ const subscriptionSchema = z.object({
   nextDueDate: z.union([z.literal(""), dateInputSchema]).optional(),
   endDate: z.union([z.literal(""), dateInputSchema]).optional(),
   notes: z.preprocess((v) => (v === null || v === "" ? undefined : v), z.string().max(1000).optional()),
-  isActive: z.union([z.literal("true"), z.literal("false")]).optional()
+  isActive: z.union([z.literal("true"), z.literal("false")]).optional(),
+  projectId: optionalProjectIdSchema
 });
 
 const updateSubscriptionSchema = subscriptionSchema.extend({
@@ -77,6 +82,7 @@ const subscriptionIdSchema = z.object({
 const updateExpenseSchema = z.object({
   expenseId: z.string().uuid(),
   categoryId: z.string().uuid(),
+  projectId: optionalProjectIdSchema,
   amount: z.coerce.number().positive().max(100000000),
   occurredOn: dateInputSchema,
   notes: z.string().max(1000).optional()
@@ -92,7 +98,22 @@ const debtSchema = z.object({
   principal: z.coerce.number().positive().max(100000000),
   apr: z.union([z.literal(""), z.coerce.number().min(0).max(100)]).optional(),
   dueDate: z.union([z.literal(""), dateInputSchema]).optional(),
-  remainingBalance: z.union([z.literal(""), z.coerce.number().min(0).max(100000000)]).optional()
+  remainingBalance: z.union([z.literal(""), z.coerce.number().min(0).max(100000000)]).optional(),
+  projectId: optionalProjectIdSchema
+});
+
+const projectSchema = z.object({
+  name: z.string().trim().min(2).max(160),
+  description: z.preprocess((v) => (v === null || v === "" ? undefined : v), z.string().max(2000).optional()),
+  status: z.enum(["idea", "active", "paused", "completed", "archived"]).default("active"),
+  startDate: z.union([z.literal(""), dateInputSchema]).optional(),
+  endDate: z.union([z.literal(""), dateInputSchema]).optional(),
+  objectiveId: z.string().uuid(),
+  imageUrl: z.string().trim().optional()
+});
+
+const updateProjectSchema = projectSchema.extend({
+  projectId: z.string().uuid()
 });
 
 const debtPaymentSchema = z.object({
@@ -110,6 +131,10 @@ const deleteDebtSchema = z.object({
 function getSafeReturnPath(raw: FormDataEntryValue | null) {
   const value = typeof raw === "string" ? raw.trim() : "";
   return value.startsWith("/finance") ? value : "/finance";
+}
+
+function normalizeOptionalId(value: string | undefined) {
+  return value && value.length > 0 ? value : null;
 }
 
 export async function createExpenseCategoryAction(formData: FormData) {
@@ -146,6 +171,7 @@ export async function createExpenseAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = createExpenseSchema.safeParse({
     categoryId: formData.get("categoryId"),
+    projectId: formData.get("projectId"),
     amount: formData.get("amount"),
     occurredOn: formData.get("occurredOn"),
     notes: formData.get("notes")
@@ -159,6 +185,7 @@ export async function createExpenseAction(formData: FormData) {
   await supabase.from("ledger_entries").insert({
     account_id: account.accountId,
     category_id: payload.data.categoryId,
+    project_id: normalizeOptionalId(payload.data.projectId),
     entry_type: "expense",
     amount: payload.data.amount.toFixed(2),
     currency_code: account.currencyCode,
@@ -174,6 +201,7 @@ export async function createExpenseAction(formData: FormData) {
 export async function createIncomeAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = createIncomeSchema.safeParse({
+    projectId: formData.get("projectId"),
     amount: formData.get("amount"),
     occurredOn: formData.get("occurredOn"),
     notes: formData.get("notes")
@@ -184,6 +212,7 @@ export async function createIncomeAction(formData: FormData) {
   await supabase.from("ledger_entries").insert({
     account_id: account.accountId,
     category_id: null,
+    project_id: normalizeOptionalId(payload.data.projectId),
     entry_type: "income",
     amount: payload.data.amount.toFixed(2),
     currency_code: account.currencyCode,
@@ -197,11 +226,124 @@ export async function createIncomeAction(formData: FormData) {
   return { redirectTo: returnPath };
 }
 
+export async function createProjectAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = projectSchema.safeParse({
+    name: formData.get("name"),
+    description: formData.get("description"),
+    status: formData.get("status"),
+    startDate: formData.get("startDate"),
+    endDate: formData.get("endDate"),
+    objectiveId: formData.get("objectiveId"),
+    imageUrl: formData.get("imageUrl")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  const { data: objective } = await supabase
+    .from("habit_objectives")
+    .select("id")
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.objectiveId)
+    .maybeSingle();
+
+  if (!objective) {
+    return { redirectTo: returnPath };
+  }
+
+  const { data: project } = await supabase
+    .from("life_projects")
+    .insert({
+      account_id: account.accountId,
+      name: payload.data.name,
+      description: payload.data.description?.trim() || null,
+      status: payload.data.status,
+      start_date: payload.data.startDate === "" ? null : payload.data.startDate,
+      end_date: payload.data.endDate === "" ? null : payload.data.endDate,
+      image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null
+    })
+    .select("id, name")
+    .single();
+
+  if (project) {
+    await supabase
+      .from("habit_objectives")
+      .update({ project_id: project.id })
+      .eq("account_id", account.accountId)
+      .eq("id", payload.data.objectiveId);
+
+    await supabase.from("knowledge_spaces").insert({
+      account_id: account.accountId,
+      title: `${project.name} Knowledge`,
+      project_id: project.id,
+      image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null
+    });
+  }
+
+  revalidatePath("/finance", "layout");
+  revalidatePath("/planning", "layout");
+  revalidatePath("/knowledge", "layout");
+  return { redirectTo: returnPath };
+}
+
+export async function updateProjectAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = updateProjectSchema.safeParse({
+    projectId: formData.get("projectId"),
+    name: formData.get("name"),
+    description: formData.get("description"),
+    status: formData.get("status"),
+    startDate: formData.get("startDate"),
+    endDate: formData.get("endDate"),
+    objectiveId: formData.get("objectiveId"),
+    imageUrl: formData.get("imageUrl")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  await supabase
+    .from("life_projects")
+    .update({
+      name: payload.data.name,
+      description: payload.data.description?.trim() || null,
+      status: payload.data.status,
+      start_date: payload.data.startDate === "" ? null : payload.data.startDate,
+      end_date: payload.data.endDate === "" ? null : payload.data.endDate,
+      image_url: payload.data.imageUrl && URL.canParse(payload.data.imageUrl) ? payload.data.imageUrl : null
+    })
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.projectId);
+
+  await supabase
+    .from("habit_objectives")
+    .update({ project_id: null })
+    .eq("account_id", account.accountId)
+    .eq("project_id", payload.data.projectId);
+
+  await supabase
+    .from("habit_objectives")
+    .update({ project_id: payload.data.projectId })
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.objectiveId);
+
+  revalidatePath("/finance", "layout");
+  revalidatePath("/planning", "layout");
+  revalidatePath("/knowledge", "layout");
+  return { redirectTo: returnPath };
+}
+
 export async function updateExpenseAction(formData: FormData) {
   const returnPath = getSafeReturnPath(formData.get("returnPath"));
   const payload = updateExpenseSchema.safeParse({
     expenseId: formData.get("expenseId"),
     categoryId: formData.get("categoryId"),
+    projectId: formData.get("projectId"),
     amount: formData.get("amount"),
     occurredOn: formData.get("occurredOn"),
     notes: formData.get("notes")
@@ -216,6 +358,7 @@ export async function updateExpenseAction(formData: FormData) {
     .from("ledger_entries")
     .update({
       category_id: payload.data.categoryId,
+      project_id: normalizeOptionalId(payload.data.projectId),
       amount: payload.data.amount.toFixed(2),
       occurred_on: payload.data.occurredOn,
       notes: payload.data.notes?.trim() || null
@@ -237,7 +380,8 @@ export async function createIncomeSourceAction(formData: FormData) {
     startDate: formData.get("startDate"),
     endDate: formData.get("endDate"),
     notes: formData.get("notes"),
-    isActive: formData.get("isActive")
+    isActive: formData.get("isActive"),
+    projectId: formData.get("projectId")
   });
 
   if (!payload.success) {
@@ -254,7 +398,8 @@ export async function createIncomeSourceAction(formData: FormData) {
     start_date: payload.data.startDate,
     end_date: payload.data.endDate === "" ? null : payload.data.endDate,
     notes: payload.data.notes?.trim() || null,
-    is_active: payload.data.isActive !== "false"
+    is_active: payload.data.isActive !== "false",
+    project_id: normalizeOptionalId(payload.data.projectId)
   });
 
   revalidatePath("/finance", "layout");
@@ -271,7 +416,8 @@ export async function updateIncomeSourceAction(formData: FormData) {
     startDate: formData.get("startDate"),
     endDate: formData.get("endDate"),
     notes: formData.get("notes"),
-    isActive: formData.get("isActive")
+    isActive: formData.get("isActive"),
+    projectId: formData.get("projectId")
   });
 
   if (!payload.success) {
@@ -288,7 +434,8 @@ export async function updateIncomeSourceAction(formData: FormData) {
       start_date: payload.data.startDate,
       end_date: payload.data.endDate === "" ? null : payload.data.endDate,
       notes: payload.data.notes?.trim() || null,
-      is_active: payload.data.isActive !== "false"
+      is_active: payload.data.isActive !== "false",
+      project_id: normalizeOptionalId(payload.data.projectId)
     })
     .eq("account_id", account.accountId)
     .eq("id", payload.data.incomeSourceId);
@@ -357,7 +504,8 @@ export async function createSubscriptionAction(formData: FormData) {
     nextDueDate: formData.get("nextDueDate"),
     endDate: formData.get("endDate"),
     notes: formData.get("notes"),
-    isActive: formData.get("isActive")
+    isActive: formData.get("isActive"),
+    projectId: formData.get("projectId")
   });
 
   if (!payload.success) {
@@ -374,7 +522,8 @@ export async function createSubscriptionAction(formData: FormData) {
     next_due_date: payload.data.nextDueDate === "" ? null : payload.data.nextDueDate,
     end_date: payload.data.endDate === "" ? null : payload.data.endDate,
     notes: payload.data.notes?.trim() || null,
-    is_active: payload.data.isActive !== "false"
+    is_active: payload.data.isActive !== "false",
+    project_id: normalizeOptionalId(payload.data.projectId)
   });
 
   revalidatePath("/finance", "layout");
@@ -391,7 +540,8 @@ export async function updateSubscriptionAction(formData: FormData) {
     nextDueDate: formData.get("nextDueDate"),
     endDate: formData.get("endDate"),
     notes: formData.get("notes"),
-    isActive: formData.get("isActive")
+    isActive: formData.get("isActive"),
+    projectId: formData.get("projectId")
   });
 
   if (!payload.success) {
@@ -408,7 +558,8 @@ export async function updateSubscriptionAction(formData: FormData) {
       next_due_date: payload.data.nextDueDate === "" ? null : payload.data.nextDueDate,
       end_date: payload.data.endDate === "" ? null : payload.data.endDate,
       notes: payload.data.notes?.trim() || null,
-      is_active: payload.data.isActive !== "false"
+      is_active: payload.data.isActive !== "false",
+      project_id: normalizeOptionalId(payload.data.projectId)
     })
     .eq("account_id", account.accountId)
     .eq("id", payload.data.subscriptionId);
@@ -498,7 +649,8 @@ export async function createDebtAction(formData: FormData) {
     principal: formData.get("principal"),
     apr: formData.get("apr"),
     dueDate: formData.get("dueDate"),
-    remainingBalance: formData.get("remainingBalance")
+    remainingBalance: formData.get("remainingBalance"),
+    projectId: formData.get("projectId")
   });
 
   if (!payload.success) {
@@ -519,6 +671,7 @@ export async function createDebtAction(formData: FormData) {
       payload.data.remainingBalance === "" || typeof payload.data.remainingBalance === "undefined"
         ? payload.data.principal.toFixed(2)
         : payload.data.remainingBalance.toFixed(2),
+    project_id: normalizeOptionalId(payload.data.projectId),
     created_by: user.id
   });
 
@@ -541,6 +694,36 @@ export async function createDebtPaymentAction(formData: FormData) {
   }
 
   const { supabase, user, account } = await requireAppContext();
+  const { data: debt } = await supabase
+    .from("debts")
+    .select("id, name, remaining_balance, principal, project_id")
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.debtId)
+    .maybeSingle();
+
+  if (!debt) {
+    return { redirectTo: returnPath };
+  }
+
+  let projectExpenseId: string | null = null;
+  if (debt.project_id) {
+    const { data: expense } = await supabase
+      .from("ledger_entries")
+      .insert({
+        account_id: account.accountId,
+        category_id: null,
+        project_id: debt.project_id,
+        entry_type: "expense",
+        amount: payload.data.amount.toFixed(2),
+        currency_code: account.currencyCode,
+        occurred_on: payload.data.paidAt,
+        notes: `Debt payment: ${debt.name}${payload.data.notes ? ` - ${payload.data.notes.trim()}` : ""}`,
+        created_by: user.id
+      })
+      .select("id")
+      .single();
+    projectExpenseId = expense?.id ?? null;
+  }
 
   await supabase.from("debt_payments").insert({
     account_id: account.accountId,
@@ -549,27 +732,21 @@ export async function createDebtPaymentAction(formData: FormData) {
     paid_at: payload.data.paidAt,
     method: payload.data.method?.trim() || null,
     notes: payload.data.notes?.trim() || null,
+    project_expense_id: projectExpenseId,
     created_by: user.id
   });
 
-  const { data: debt } = await supabase
+  const previous = Number(debt.remaining_balance ?? debt.principal ?? 0);
+  const nextBalance = Math.max(previous - payload.data.amount, 0);
+
+  await supabase
     .from("debts")
-    .select("remaining_balance, principal")
-    .eq("id", payload.data.debtId)
-    .maybeSingle();
-
-  if (debt) {
-    const previous = Number(debt.remaining_balance ?? debt.principal ?? 0);
-    const nextBalance = Math.max(previous - payload.data.amount, 0);
-
-    await supabase
-      .from("debts")
-      .update({
-        remaining_balance: nextBalance.toFixed(2),
-        status: nextBalance <= 0 ? "closed" : "open"
-      })
-      .eq("id", payload.data.debtId);
-  }
+    .update({
+      remaining_balance: nextBalance.toFixed(2),
+      status: nextBalance <= 0 ? "closed" : "open"
+    })
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.debtId);
 
   revalidatePath("/finance", "layout");
   return { redirectTo: returnPath };
@@ -665,6 +842,20 @@ export async function createIncomeFormAction(
   return createIncomeAction(formData);
 }
 
+export async function createProjectFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return createProjectAction(formData);
+}
+
+export async function updateProjectFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return updateProjectAction(formData);
+}
+
 export async function createIncomeSourceFormAction(
   _prevState: RedirectResult | null,
   formData: FormData
@@ -746,6 +937,15 @@ export async function deleteDebtAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
+  const { data: generatedPayments } = await supabase
+    .from("debt_payments")
+    .select("project_expense_id")
+    .eq("account_id", account.accountId)
+    .eq("debt_id", payload.data.debtId)
+    .not("project_expense_id", "is", null);
+  const generatedExpenseIds = (generatedPayments ?? [])
+    .map((payment) => payment.project_expense_id)
+    .filter((id): id is string => Boolean(id));
 
   await supabase
     .from("debt_payments")
@@ -758,6 +958,15 @@ export async function deleteDebtAction(formData: FormData) {
     .delete()
     .eq("account_id", account.accountId)
     .eq("id", payload.data.debtId);
+
+  if (generatedExpenseIds.length > 0) {
+    await supabase
+      .from("ledger_entries")
+      .delete()
+      .eq("account_id", account.accountId)
+      .eq("entry_type", "expense")
+      .in("id", generatedExpenseIds);
+  }
 
   revalidatePath("/finance", "layout");
   return { redirectTo: returnPath };

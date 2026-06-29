@@ -718,6 +718,8 @@ export type Database = {
           end_date: string | null;
           notes: string | null;
           is_active: boolean;
+          phase_id: string | null;
+          project_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -732,6 +734,8 @@ export type Database = {
           end_date?: string | null;
           notes?: string | null;
           is_active?: boolean;
+          phase_id?: string | null;
+          project_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -746,6 +750,8 @@ export type Database = {
           end_date?: string | null;
           notes?: string | null;
           is_active?: boolean;
+          phase_id?: string | null;
+          project_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -806,6 +812,7 @@ export type Database = {
           paid_at: string;
           method: string | null;
           notes: string | null;
+          project_expense_id: string | null;
           created_by: string | null;
           created_at: string;
         };
@@ -817,6 +824,7 @@ export type Database = {
           paid_at: string;
           method?: string | null;
           notes?: string | null;
+          project_expense_id?: string | null;
           created_by?: string | null;
           created_at?: string;
         };
@@ -828,6 +836,7 @@ export type Database = {
           paid_at?: string;
           method?: string | null;
           notes?: string | null;
+          project_expense_id?: string | null;
           created_by?: string | null;
           created_at?: string;
         };

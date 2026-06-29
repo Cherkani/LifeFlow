@@ -17,6 +17,7 @@ import {
   createExpenseFormAction,
   createIncomeFormAction,
   createIncomeSourceFormAction,
+  createProjectFormAction,
   createSubscriptionFormAction,
   deleteExpenseCategoryFormAction,
   deleteDebtFormAction,
@@ -28,6 +29,7 @@ import {
   updateExpenseCategoryFormAction,
   updateExpenseFormAction,
   updateIncomeSourceFormAction,
+  updateProjectFormAction,
   updateSubscriptionFormAction
 } from "@/app/(app)/finance/actions";
 import { ActionForm } from "@/components/forms/action-form";
@@ -51,6 +53,7 @@ type DebtRow = {
   remaining_balance: number | null;
   status: "open" | "closed";
   due_date: string | null;
+  project_id: string | null;
 };
 
 type PaymentRow = {
@@ -73,12 +76,13 @@ type CategoryRow = {
 type ExpenseRow = {
   id: string;
   category_id: string | null;
+  project_id: string | null;
   amount: number;
   occurred_on: string;
   notes: string | null;
 };
 
-type IncomeRow = { id: string; amount: number; occurred_on: string; notes: string | null };
+type IncomeRow = { id: string; project_id: string | null; amount: number; occurred_on: string; notes: string | null };
 type IncomeSourceRow = {
   id: string;
   name: string;
@@ -88,11 +92,13 @@ type IncomeSourceRow = {
   end_date: string | null;
   notes: string | null;
   is_active: boolean;
+  project_id: string | null;
 };
 
 type PeriodExpenseRow = {
   id: string;
   category_id: string | null;
+  project_id: string | null;
   amount: number;
   occurred_on: string;
 };
@@ -106,6 +112,41 @@ type SubscriptionRow = {
   end_date: string | null;
   notes: string | null;
   is_active: boolean;
+  project_id: string | null;
+};
+
+type ProjectRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  status: "idea" | "active" | "paused" | "completed" | "archived";
+  start_date: string | null;
+  end_date: string | null;
+  image_url: string | null;
+};
+
+type ObjectiveRow = { id: string; title: string; project_id: string | null; image_url: string | null };
+type KnowledgeSpaceRow = { id: string; title: string; project_id: string | null };
+type ProjectMetric = ProjectRow & {
+  objective: ObjectiveRow | null;
+  knowledgeSpace: KnowledgeSpaceRow | null;
+  revenue: number;
+  manualRevenue: number;
+  sourceRevenue: number;
+  expenseTotal: number;
+  subscriptionCost: number;
+  debtCost: number;
+  totalCost: number;
+  profit: number;
+  loggedMinutes: number;
+  loggedHours: number;
+  revenuePerHour: number | null;
+  profitPerHour: number | null;
+  recurringMonthlyCost: number;
+  incomeSourceCount: number;
+  subscriptionCount: number;
+  debtCount: number;
+  recentEntries: Array<{ id: string; type: "income" | "expense"; amount: number; date: string; notes: string | null }>;
 };
 
 function toDateInputValue(date: Date) {
@@ -151,7 +192,7 @@ function buildFinanceHref(options?: {
 }
 
 type FinanceModalsProps = {
-  tab: "expenses" | "income" | "subscriptions" | "debts";
+  tab: "expenses" | "income" | "subscriptions" | "debts" | "projects";
   period: "day" | "week" | "month";
   anchorIso: string;
   categories: CategoryRow[];
@@ -162,7 +203,11 @@ type FinanceModalsProps = {
   recentExpenses: ExpenseRow[];
   periodIncome: IncomeRow[];
   incomeSources: IncomeSourceRow[];
-  sourceIncomeOccurrences: Array<{ sourceId: string; name: string; amount: number; occurred_on: string; notes: string | null }>;
+  projects: ProjectRow[];
+  objectives: ObjectiveRow[];
+  knowledgeSpaces: KnowledgeSpaceRow[];
+  projectMetrics: ProjectMetric[];
+  sourceIncomeOccurrences: Array<{ sourceId: string; name: string; amount: number; occurred_on: string; notes: string | null; project_id: string | null }>;
   sourceIncomeTotal: number;
   recurringIncomeMonthly: number;
   activeIncomeSourceCount: number;
@@ -385,6 +430,32 @@ function DebtPayRow({
   );
 }
 
+function ProjectSelect({
+  projects,
+  defaultValue = "",
+  id = "projectId"
+}: {
+  projects: ProjectRow[];
+  defaultValue?: string | null;
+  id?: string;
+}) {
+  if (projects.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>Project (optional)</Label>
+      <Select id={id} name="projectId" defaultValue={defaultValue ?? ""}>
+        <option value="">No project</option>
+        {projects.map((project) => (
+          <option key={project.id} value={project.id}>
+            {project.name}
+          </option>
+        ))}
+      </Select>
+    </div>
+  );
+}
+
 export function FinanceModals({
   tab,
   period,
@@ -397,6 +468,9 @@ export function FinanceModals({
   recentExpenses,
   periodIncome,
   incomeSources,
+  projects,
+  objectives,
+  projectMetrics,
   sourceIncomeOccurrences,
   sourceIncomeTotal,
   recurringIncomeMonthly,
@@ -421,7 +495,6 @@ export function FinanceModals({
   totalSpent,
   averageDaySpend,
   topDay,
-  overLimitCount,
   activeSubscriptionCount,
   expiredSubscriptionCount,
   recurringMonthlyCost,
@@ -430,10 +503,6 @@ export function FinanceModals({
   nextSubscription,
   openDebtTotal,
   periodPaymentsTotal,
-  actualOutputTotal,
-  committedOutputTotal,
-  netAfterDebtPayments,
-  netAfterCommittedOutput,
   rangeStartIso,
   rangeEndIso,
   previousAnchorIso,
@@ -441,12 +510,13 @@ export function FinanceModals({
 }: FinanceModalsProps) {
   const todayIso = toDateInputValue(new Date());
   const [activeModal, setActiveModal] = useState<
-    "expense" | "income" | "income-source" | "edit-income-source" | "edit-expense" | "debt-entry" | "expense-category" | "edit-category" | "subscription" | "edit-subscription" | null
+    "expense" | "income" | "income-source" | "edit-income-source" | "edit-expense" | "debt-entry" | "expense-category" | "edit-category" | "subscription" | "edit-subscription" | "project" | "edit-project" | null
   >(null);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingIncomeSourceId, setEditingIncomeSourceId] = useState<string | null>(null);
   const [editingSubscriptionId, setEditingSubscriptionId] = useState<string | null>(null);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [recentSearch, setRecentSearch] = useState("");
@@ -461,6 +531,7 @@ export function FinanceModals({
   const editingSubscription = editingSubscriptionId
     ? subscriptions.find((subscription) => subscription.id === editingSubscriptionId) ?? null
     : null;
+  const editingProject = editingProjectId ? projectMetrics.find((project) => project.id === editingProjectId) ?? null : null;
   const activeCategoryName = activeCategoryId ? categoryNameById[activeCategoryId] ?? null : null;
 
   const timelineDates = useMemo(() => enumerateIsoDates(rangeStartIso, rangeEndIso), [rangeStartIso, rangeEndIso]);
@@ -521,6 +592,7 @@ export function FinanceModals({
     setEditingExpenseId(null);
     setEditingIncomeSourceId(null);
     setEditingSubscriptionId(null);
+    setEditingProjectId(null);
     setActiveCategoryId(null);
   };
 
@@ -572,7 +644,7 @@ export function FinanceModals({
         <Plus size={16} />
         Subscription
       </button>
-    ) : (
+    ) : tab === "debts" ? (
       <button
         type="button"
         onClick={() => setActiveModal("debt-entry")}
@@ -580,6 +652,15 @@ export function FinanceModals({
       >
         <Plus size={16} />
         Debt Entry
+      </button>
+    ) : (
+      <button
+        type="button"
+        onClick={() => setActiveModal("project")}
+        className="inline-flex items-center gap-2 rounded-lg bg-[#0f766e] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#115e59]"
+      >
+        <Plus size={16} />
+        Project
       </button>
     );
 
@@ -641,6 +722,17 @@ export function FinanceModals({
               ].join(" ")}
             >
               Debts
+            </Link>
+            <Link
+              href={buildFinanceHref({ tab: "projects", period, anchor: anchorIso }) as Route}
+              className={[
+                "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
+                tab === "projects"
+                  ? "bg-[var(--app-btn-primary-bg)] text-[var(--app-btn-primary-fg)] shadow-sm"
+                  : "text-[var(--app-btn-secondary-fg)] hover:bg-[var(--app-btn-secondary-bg)]"
+              ].join(" ")}
+            >
+              Projects
             </Link>
           </div>
 
@@ -1339,6 +1431,130 @@ export function FinanceModals({
             </CardContent>
           </Card>
         </>
+      ) : tab === "projects" ? (
+        <>
+          {projectMetrics.length > 0 ? (
+            <div className="grid gap-4 xl:grid-cols-2">
+              {projectMetrics.map((project) => (
+                <Card key={project.id} className="overflow-hidden">
+                  <CardHeader className="flex flex-row items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <CardTitle className="truncate">{project.name}</CardTitle>
+                      <p className="mt-1 text-sm text-[#4a5f83]">
+                        {project.objective ? `Objective: ${project.objective.title}` : "No objective linked"}
+                        {project.start_date ? ` · starts ${project.start_date}` : ""}
+                        {project.end_date ? ` · ends ${project.end_date}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={project.status === "active" ? "secondary" : "default"}>{project.status}</Badge>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingProjectId(project.id);
+                          setActiveModal("edit-project");
+                        }}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#c7d3e8] bg-white text-[#23406d] transition hover:bg-[#edf3ff]"
+                        aria-label="Edit project"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {project.description ? <p className="text-sm text-[#4a5f83]">{project.description}</p> : null}
+                    <div className="grid gap-3 sm:grid-cols-4">
+                      <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3">
+                        <p className="text-xs font-semibold uppercase text-emerald-700">Revenue</p>
+                        <p className="mt-1 text-lg font-bold text-emerald-700">{formatMoneyDhs(project.revenue)}</p>
+                      </div>
+                      <div className="rounded-xl border border-rose-100 bg-rose-50/60 p-3">
+                        <p className="text-xs font-semibold uppercase text-rose-700">Cost</p>
+                        <p className="mt-1 text-lg font-bold text-rose-700">{formatMoneyDhs(project.totalCost)}</p>
+                      </div>
+                      <div className="rounded-xl border border-[#d7e0f1] bg-white p-3">
+                        <p className="text-xs font-semibold uppercase text-[#4a5f83]">Profit</p>
+                        <p className={`mt-1 text-lg font-bold ${project.profit >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                          {formatMoneyDhs(project.profit)}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-[#d7e0f1] bg-white p-3">
+                        <p className="text-xs font-semibold uppercase text-[#4a5f83]">Logged</p>
+                        <p className="mt-1 text-lg font-bold text-[#0c1d3c]">{project.loggedHours.toFixed(1)}h</p>
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-4">
+                      <div className="rounded-lg bg-[#f8fafc] p-3">
+                        <p className="text-xs text-[#4a5f83]">Revenue/hour</p>
+                        <p className="font-semibold text-[#0c1d3c]">{project.revenuePerHour === null ? "No time" : formatMoneyDhs(project.revenuePerHour)}</p>
+                      </div>
+                      <div className="rounded-lg bg-[#f8fafc] p-3">
+                        <p className="text-xs text-[#4a5f83]">Profit/hour</p>
+                        <p className="font-semibold text-[#0c1d3c]">{project.profitPerHour === null ? "No time" : formatMoneyDhs(project.profitPerHour)}</p>
+                      </div>
+                      <div className="rounded-lg bg-[#f8fafc] p-3">
+                        <p className="text-xs text-[#4a5f83]">Recurring cost</p>
+                        <p className="font-semibold text-[#0c1d3c]">{formatMoneyDhs(project.recurringMonthlyCost)} / month</p>
+                      </div>
+                      <div className="rounded-lg bg-[#f8fafc] p-3">
+                        <p className="text-xs text-[#4a5f83]">Links</p>
+                        <p className="font-semibold text-[#0c1d3c]">
+                          {project.incomeSourceCount} sources · {project.subscriptionCount} subs · {project.debtCount} debts
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-lg border border-[#d7e0f1] p-3">
+                        <p className="text-xs text-[#4a5f83]">Expenses</p>
+                        <p className="font-semibold text-[#0c1d3c]">{formatMoneyDhs(project.expenseTotal)}</p>
+                      </div>
+                      <div className="rounded-lg border border-[#d7e0f1] p-3">
+                        <p className="text-xs text-[#4a5f83]">Subscriptions due</p>
+                        <p className="font-semibold text-[#0c1d3c]">{formatMoneyDhs(project.subscriptionCost)}</p>
+                      </div>
+                      <div className="rounded-lg border border-[#d7e0f1] p-3">
+                        <p className="text-xs text-[#4a5f83]">Debt paid</p>
+                        <p className="font-semibold text-[#0c1d3c]">{formatMoneyDhs(project.debtCost)}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {project.knowledgeSpace ? (
+                        <Link href={`/knowledge/${project.knowledgeSpace.id}` as Route} className="rounded-lg bg-[#edf3ff] px-3 py-2 text-sm font-semibold text-[#23406d]">
+                          Open knowledge
+                        </Link>
+                      ) : null}
+                      {project.objective ? (
+                        <Link href="/planning" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+                          Open planner
+                        </Link>
+                      ) : null}
+                    </div>
+                    {project.recentEntries.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-[#0c1d3c]">Recent project entries</p>
+                        {project.recentEntries.map((entry) => (
+                          <div key={`${entry.type}-${entry.id}`} className="flex items-center justify-between rounded-lg bg-[#f8fafc] px-3 py-2 text-sm">
+                            <span className="text-[#4a5f83]">{entry.date} · {entry.notes || entry.type}</span>
+                            <span className={entry.type === "income" ? "font-semibold text-emerald-700" : "font-semibold text-rose-700"}>
+                              {entry.type === "income" ? "+" : "-"}{formatMoneyDhs(entry.amount)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="py-10 text-center">
+                <p className="font-semibold text-[#0c1d3c]">No finance projects yet.</p>
+                <p className="mt-1 text-sm text-[#4a5f83]">Create a project and link it to one Planning objective to combine money, time, subscriptions, debts, and knowledge.</p>
+              </CardContent>
+            </Card>
+          )}
+        </>
       ) : (
         <>
           {/* Summary strip */}
@@ -1451,6 +1667,7 @@ export function FinanceModals({
                 <Label htmlFor="notes">Note (optional)</Label>
                 <Input id="notes" name="notes" placeholder="What was this expense?" />
               </div>
+              <ProjectSelect projects={projects} id="expenseProjectId" />
               <SubmitButton label="Save expense" pendingLabel="Saving..." className="w-full sm:w-auto" />
             </ActionForm>
           )}
@@ -1475,6 +1692,7 @@ export function FinanceModals({
               <Label htmlFor="incomeNotes">Source or note (optional)</Label>
               <Input id="incomeNotes" name="notes" placeholder="e.g. Salary, freelance invoice" />
             </div>
+            <ProjectSelect projects={projects} id="incomeProjectId" />
             <SubmitButton label="Save income" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>
         </ModalShell>
@@ -1517,6 +1735,7 @@ export function FinanceModals({
               <Label htmlFor="incomeSourceNotes">Notes</Label>
               <Input id="incomeSourceNotes" name="notes" placeholder="Optional note" />
             </div>
+            <ProjectSelect projects={projects} id="incomeSourceProjectId" />
             <SubmitButton label="Save income source" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>
         </ModalShell>
@@ -1594,6 +1813,7 @@ export function FinanceModals({
                 <Label htmlFor="editNotes">Note (optional)</Label>
                 <Input id="editNotes" name="notes" placeholder="What was this expense?" defaultValue={editingExpense.notes ?? ""} />
               </div>
+              <ProjectSelect projects={projects} defaultValue={editingExpense.project_id} id="editExpenseProjectId" />
               <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
             </ActionForm>
           )}
@@ -1638,6 +1858,7 @@ export function FinanceModals({
               <Label htmlFor="editIncomeSourceNotes">Notes</Label>
               <Input id="editIncomeSourceNotes" name="notes" defaultValue={editingIncomeSource.notes ?? ""} />
             </div>
+            <ProjectSelect projects={projects} defaultValue={editingIncomeSource.project_id} id="editIncomeSourceProjectId" />
             <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>
         </ModalShell>
@@ -1671,6 +1892,7 @@ export function FinanceModals({
                 <Input id="dueDate" name="dueDate" type="date" />
               </div>
             </div>
+            <ProjectSelect projects={projects} id="debtProjectId" />
             <SubmitButton label="Save debt" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>
         </ModalShell>
@@ -1763,7 +1985,120 @@ export function FinanceModals({
               <Label htmlFor="subscriptionNotes">Notes</Label>
               <Input id="subscriptionNotes" name="notes" placeholder="Optional note" />
             </div>
+            <ProjectSelect projects={projects} id="subscriptionProjectId" />
             <SubmitButton label="Save subscription" pendingLabel="Saving..." className="w-full sm:w-auto" />
+          </ActionForm>
+        </ModalShell>
+      ) : null}
+
+      {activeModal === "project" ? (
+        <ModalShell title="Create finance project" description="Link one project to one Planning objective, then measure money against execution time." onClose={closeModal}>
+          {objectives.length === 0 ? (
+            <div className="space-y-4">
+              <p className="text-sm text-[#4a5f83]">Create a Planning objective first, then come back and link this finance project to it.</p>
+              <Link href="/planning" className="inline-flex rounded-lg bg-[#0b1f3b] px-4 py-2 text-sm font-semibold text-white">
+                Open Planner
+              </Link>
+            </div>
+          ) : (
+            <ActionForm action={createProjectFormAction} className="space-y-4" onSuccess={closeModal}>
+              <input type="hidden" name="returnPath" value={baseHref} />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="projectName">Name</Label>
+                  <Input id="projectName" name="name" required placeholder="Client, app, course, business..." />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="projectObjectiveId">Objective</Label>
+                  <Select id="projectObjectiveId" name="objectiveId" required>
+                    <option value="">Choose objective</option>
+                    {objectives.map((objective) => (
+                      <option key={objective.id} value={objective.id}>
+                        {objective.title}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="projectStatus">Status</Label>
+                  <Select id="projectStatus" name="status" defaultValue="active">
+                    <option value="idea">Idea</option>
+                    <option value="active">Active</option>
+                    <option value="paused">Paused</option>
+                    <option value="completed">Completed</option>
+                    <option value="archived">Archived</option>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="projectStartDate">Start date</Label>
+                  <Input id="projectStartDate" name="startDate" type="date" defaultValue={anchorIso} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="projectEndDate">End date (optional)</Label>
+                  <Input id="projectEndDate" name="endDate" type="date" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="projectDescription">Description</Label>
+                <Input id="projectDescription" name="description" placeholder="What should this project explain financially?" />
+              </div>
+              <PexelsImagePicker inputName="imageUrl" label="Project image (optional)" />
+              <SubmitButton label="Save project" pendingLabel="Saving..." className="w-full sm:w-auto" />
+            </ActionForm>
+          )}
+        </ModalShell>
+      ) : null}
+
+      {activeModal === "edit-project" && editingProject ? (
+        <ModalShell title="Edit finance project" description="Change the objective link, dates, status, or project details." onClose={closeModal}>
+          <ActionForm action={updateProjectFormAction} className="space-y-4" onSuccess={closeModal}>
+            <input type="hidden" name="returnPath" value={baseHref} />
+            <input type="hidden" name="projectId" value={editingProject.id} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="editProjectName">Name</Label>
+                <Input id="editProjectName" name="name" required defaultValue={editingProject.name} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editProjectObjectiveId">Objective</Label>
+                <Select id="editProjectObjectiveId" name="objectiveId" required defaultValue={editingProject.objective?.id ?? ""}>
+                  <option value="">Choose objective</option>
+                  {objectives.map((objective) => (
+                    <option key={objective.id} value={objective.id}>
+                      {objective.title}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="editProjectStatus">Status</Label>
+                <Select id="editProjectStatus" name="status" defaultValue={editingProject.status}>
+                  <option value="idea">Idea</option>
+                  <option value="active">Active</option>
+                  <option value="paused">Paused</option>
+                  <option value="completed">Completed</option>
+                  <option value="archived">Archived</option>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editProjectStartDate">Start date</Label>
+                <Input id="editProjectStartDate" name="startDate" type="date" defaultValue={editingProject.start_date ?? ""} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editProjectEndDate">End date (optional)</Label>
+                <Input id="editProjectEndDate" name="endDate" type="date" defaultValue={editingProject.end_date ?? ""} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editProjectDescription">Description</Label>
+              <Input id="editProjectDescription" name="description" defaultValue={editingProject.description ?? ""} />
+            </div>
+            <PexelsImagePicker inputName="imageUrl" label="Project image (optional)" defaultValue={editingProject.image_url ?? ""} />
+            <SubmitButton label="Save project" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>
         </ModalShell>
       ) : null}
@@ -1825,6 +2160,7 @@ export function FinanceModals({
               <Label htmlFor="editSubscriptionNotes">Notes</Label>
               <Input id="editSubscriptionNotes" name="notes" defaultValue={editingSubscription.notes ?? ""} />
             </div>
+            <ProjectSelect projects={projects} defaultValue={editingSubscription.project_id} id="editSubscriptionProjectId" />
             <SubmitButton label="Save changes" pendingLabel="Saving..." className="w-full sm:w-auto" />
           </ActionForm>
         </ModalShell>
