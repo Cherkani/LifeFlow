@@ -66,10 +66,30 @@ export function FinanceShareTerminal({ accountName, groupKey, groupName, debts }
   const terminalInstanceRef = useRef<Terminal | null>(null);
   const commandRef = useRef("");
   const commandCountRef = useRef(0);
+  const commandHistoryRef = useRef<string[]>([]);
+  const historyIndexRef = useRef<number | null>(null);
   const normalizedAccountName = safeTerminalName(accountName);
   const openDebts = useMemo(() => debts.filter((debt) => debt.status === "open" && debt.amount > 0), [debts]);
   const openTotal = useMemo(() => openDebts.reduce((sum, debt) => sum + debt.amount, 0), [openDebts]);
   const promptPath = `~/finance/debts/${groupKey}`;
+  const completions = useMemo(
+    () => [
+      "help",
+      "pwd",
+      "ls",
+      "ls -la",
+      "ll",
+      "tree",
+      "cat balance",
+      "cat debts.txt",
+      "cat details.txt",
+      "cat README.md",
+      "date",
+      "whoami",
+      "clear"
+    ],
+    []
+  );
 
   useEffect(() => {
     const element = terminalRef.current;
@@ -112,6 +132,29 @@ export function FinanceShareTerminal({ accountName, groupKey, groupName, debts }
       terminal.write(`\r\n\x1b[32m${normalizedAccountName}@life-flow\x1b[0m:\x1b[34m${promptPath}\x1b[0m$ `);
     }
 
+    function redrawCommand(command: string) {
+      terminal.write(`\x1b[2K\r\x1b[32m${normalizedAccountName}@life-flow\x1b[0m:\x1b[34m${promptPath}\x1b[0m$ ${command}`);
+    }
+
+    function autocompleteCommand() {
+      const current = commandRef.current;
+      const currentLower = current.toLowerCase();
+      const matches = completions.filter((item) => item.toLowerCase().startsWith(currentLower));
+
+      if (matches.length === 1) {
+        commandRef.current = matches[0];
+        redrawCommand(commandRef.current);
+        return;
+      }
+
+      if (matches.length > 1) {
+        terminal.write("\r\n");
+        writeLines(matches);
+        prompt();
+        terminal.write(commandRef.current);
+      }
+    }
+
     function writeLines(lines: string[], color?: string) {
       for (const line of lines) {
         terminal.writeln(`${color ?? ""}${line}${color ? "\x1b[0m" : ""}`);
@@ -133,6 +176,8 @@ export function FinanceShareTerminal({ accountName, groupKey, groupName, debts }
       }
 
       commandCountRef.current += 1;
+      commandHistoryRef.current = [...commandHistoryRef.current, command].slice(-50);
+      historyIndexRef.current = null;
       const lower = command.toLowerCase();
       const parts = lower.split(/\s+/);
 
@@ -142,32 +187,53 @@ export function FinanceShareTerminal({ accountName, groupKey, groupName, debts }
           "  help                 show this help",
           "  pwd                  print current folder",
           "  ls / ls -la          list files",
+          "  tree                 show shared folder tree",
           "  cat balance          show open balance",
           "  cat debts.txt        show debt lines",
           "  cat details.txt      show detailed debts",
+          "  cat README.md        explain this share",
+          "  date                 print local date",
           "  whoami               show share scope",
           "  clear                clear terminal"
         ]);
       } else if (lower === "pwd") {
         terminal.writeln(promptPath);
-      } else if (lower === "ls" || lower === "ls -la" || lower === "dir") {
-        if (lower === "ls -la") {
+      } else if (lower === "ls" || lower === "ls -la" || lower === "ll" || lower === "dir") {
+        if (lower === "ls -la" || lower === "ll") {
           writeLines([
             "dr-xr-xr-x  1 share  public    128 .",
             "dr-xr-xr-x  1 share  public    128 ..",
+            "-r--r--r--  1 share  public    184 README.md",
             "-r--r--r--  1 share  public     44 balance",
             "-r--r--r--  1 share  public    512 debts.txt",
             "-r--r--r--  1 share  public    512 details.txt"
           ]);
         } else {
-          writeLines(["balance  debts.txt  details.txt"]);
+          writeLines(["README.md  balance  debts.txt  details.txt"]);
         }
+      } else if (lower === "tree") {
+        writeLines([
+          ".",
+          "|-- README.md",
+          "|-- balance",
+          "|-- debts.txt",
+          "`-- details.txt"
+        ]);
       } else if (lower === "summary" || lower === "balance" || lower === "cat balance") {
         writeLines([`OPEN_BALANCE  ${formatMoneyDhs(openTotal)}`, `OPEN_LINES    ${openDebts.length}`], "\x1b[33m");
       } else if (lower === "list" || lower === "cat debts.txt" || lower === "cat debts" || lower === "less debts.txt") {
         writeLines(buildLedgerLines(debts));
       } else if (lower === "cat details.txt" || lower === "cat details" || lower === "less details.txt") {
         writeLines(buildDetailedDebtLines(debts));
+      } else if (lower === "cat readme.md" || lower === "cat readme") {
+        writeLines([
+          "# finance share",
+          `group: ${groupName}`,
+          "mode: read-only",
+          "hint: try `cat debts.txt`, `cat balance`, or `tree`."
+        ]);
+      } else if (lower === "date") {
+        terminal.writeln(new Date().toString());
       } else if (lower === "whoami") {
         writeLines([`account=${accountName}`, `group=${groupKey}`, "mode=read_only"]);
       } else if (parts[0] === "mkdir" || parts[0] === "touch" || parts[0] === "rm" || parts[0] === "mv" || parts[0] === "cp") {
@@ -185,25 +251,61 @@ export function FinanceShareTerminal({ accountName, groupKey, groupName, debts }
 
     terminal.open(element);
     terminalInstanceRef.current = terminal;
-    terminal.writeln("\x1b[32mFinance share terminal v1.0\x1b[0m");
-    terminal.writeln(`connected to finance-share/${groupKey}`);
-    terminal.writeln(`group=${groupName} read_only=true`);
-    terminal.writeln("type `help` to see commands");
+    terminal.writeln("\x1b[32m  __ _                         \x1b[0m");
+    terminal.writeln("\x1b[32m / _(_)_ __   __ _ _ __   ___ ___\x1b[0m");
+    terminal.writeln("\x1b[32m| |_| | '_ \\ / _` | '_ \\ / __/ _ \\\x1b[0m");
+    terminal.writeln("\x1b[32m|  _| | | | | (_| | | | | (_|  __/\x1b[0m");
+    terminal.writeln("\x1b[32m|_| |_|_| |_|\\__,_|_| |_|\\___\\___|\x1b[0m");
+    terminal.writeln("");
+    terminal.writeln(`connected: finance-share/${groupKey}`);
+    terminal.writeln(`mounted:   ${promptPath}`);
+    terminal.writeln(`group:     ${groupName}`);
+    terminal.writeln("mode:      read-only");
+    terminal.writeln("hint:      type `help`, use ↑/↓ for history");
     terminal.writeln("");
     terminal.writeln(`OPEN_BALANCE  \x1b[33m${formatMoneyDhs(openTotal)}\x1b[0m`);
     terminal.writeln(`OPEN_LINES    ${openDebts.length}`);
     prompt();
 
-    const disposable = terminal.onData((data) => {
-      const code = data.charCodeAt(0);
-      if (data === "\r") {
+    const disposable = terminal.onKey(({ key, domEvent }) => {
+      if (domEvent.key === "ArrowUp") {
+        if (commandHistoryRef.current.length === 0) return;
+        historyIndexRef.current =
+          historyIndexRef.current === null
+            ? commandHistoryRef.current.length - 1
+            : Math.max(0, historyIndexRef.current - 1);
+        commandRef.current = commandHistoryRef.current[historyIndexRef.current] ?? "";
+        redrawCommand(commandRef.current);
+        return;
+      }
+
+      if (domEvent.key === "ArrowDown") {
+        if (historyIndexRef.current === null) return;
+        historyIndexRef.current += 1;
+        if (historyIndexRef.current >= commandHistoryRef.current.length) {
+          historyIndexRef.current = null;
+          commandRef.current = "";
+        } else {
+          commandRef.current = commandHistoryRef.current[historyIndexRef.current] ?? "";
+        }
+        redrawCommand(commandRef.current);
+        return;
+      }
+
+      if (domEvent.key === "Tab") {
+        domEvent.preventDefault();
+        autocompleteCommand();
+        return;
+      }
+
+      if (domEvent.key === "Enter") {
         terminal.write("\r\n");
         runCommand(commandRef.current);
         commandRef.current = "";
         return;
       }
 
-      if (data === "\u007F") {
+      if (domEvent.key === "Backspace") {
         if (commandRef.current.length > 0) {
           commandRef.current = commandRef.current.slice(0, -1);
           terminal.write("\b \b");
@@ -211,9 +313,12 @@ export function FinanceShareTerminal({ accountName, groupKey, groupName, debts }
         return;
       }
 
+      if (domEvent.ctrlKey || domEvent.metaKey || domEvent.altKey) return;
+
+      const code = key.charCodeAt(0);
       if (code >= 32 && code <= 126) {
-        commandRef.current += data;
-        terminal.write(data);
+        commandRef.current += key;
+        terminal.write(key);
       }
     });
 
@@ -222,7 +327,7 @@ export function FinanceShareTerminal({ accountName, groupKey, groupName, debts }
       terminal.dispose();
       terminalInstanceRef.current = null;
     };
-  }, [accountName, debts, groupKey, groupName, normalizedAccountName, openDebts.length, openTotal, promptPath]);
+  }, [accountName, completions, debts, groupKey, groupName, normalizedAccountName, openDebts.length, openTotal, promptPath]);
 
   return (
     <div className="overflow-hidden rounded-xl border border-[#183322] bg-[#05080b] shadow-[0_0_90px_rgba(28,230,120,0.13)]">
