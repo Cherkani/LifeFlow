@@ -74,6 +74,11 @@ type CalendarEvent = {
   event_date: string | null;
   event_time: string | null;
   event_type: string;
+  objective_id: string | null;
+  habit_id: string | null;
+  habit_session_id: string | null;
+  completed_at: string | null;
+  completed_on: string | null;
 };
 
 type PerformanceRange = "week" | "month" | "quarter";

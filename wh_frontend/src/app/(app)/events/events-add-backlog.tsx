@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { ListPlus } from "lucide-react";
+import Link from "next/link";
+import type { Route } from "next";
 
 import { createCalendarEventFormAction } from "@/app/(app)/events/actions";
 import { ActionForm } from "@/components/forms/action-form";
@@ -11,7 +13,6 @@ import { Label } from "@/components/ui/label";
 import { ModalShell } from "@/components/ui/modal-shell";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { EventsTypeField } from "./events-type-field";
 
 function buildEventsHref(month: string, date: string, view: "scheduled" | "backlog" = "scheduled") {
   const query = new URLSearchParams();
@@ -25,10 +26,10 @@ type EventsAddBacklogProps = {
   monthKey: string;
   selectedIso: string;
   view?: "scheduled" | "backlog";
-  eventTypes?: string[];
+  objectives: Array<{ id: string; title: string; measurement_mode: "quantitative" | "qualitative" }>;
 };
 
-export function EventsAddBacklog({ monthKey, selectedIso, view = "backlog", eventTypes = [] }: EventsAddBacklogProps) {
+export function EventsAddBacklog({ monthKey, selectedIso, view = "backlog", objectives }: EventsAddBacklogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const returnPath = buildEventsHref(monthKey, selectedIso, view);
 
@@ -58,6 +59,7 @@ export function EventsAddBacklog({ monthKey, selectedIso, view = "backlog", even
             <input type="hidden" name="returnPath" value={returnPath} />
             <input type="hidden" name="eventDate" value="" />
             <input type="hidden" name="eventMode" value="todo" />
+            <input type="hidden" name="eventType" value="General" />
             <div className="space-y-2">
               <Label htmlFor="backlogTitle">Title</Label>
               <Input
@@ -73,7 +75,27 @@ export function EventsAddBacklog({ monthKey, selectedIso, view = "backlog", even
                 <option value="todo">To-do · should be done</option>
               </Select>
             </div>
-            <EventsTypeField fieldId="backlogType" name="eventType" savedTypes={eventTypes} defaultValue={eventTypes[0] ?? "General"} />
+            <div className="space-y-2">
+              <Label htmlFor="backlogObjectiveId">Objective (optional)</Label>
+              {objectives.length > 0 ? (
+                <Select id="backlogObjectiveId" name="objectiveId" defaultValue="">
+                  <option value="">No objective yet</option>
+                  {objectives.map((objective) => (
+                    <option key={objective.id} value={objective.id}>
+                      {objective.title} · {objective.measurement_mode}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <p className="rounded-lg border border-[#d7e0f1] bg-[#f8fafc] p-3 text-sm text-[#4a5f83]">
+                  No objectives yet. Create one in{" "}
+                  <Link href={"/planning" as Route} className="font-semibold text-[#23406d] underline">
+                    Planner
+                  </Link>
+                  .
+                </p>
+              )}
+            </div>
             <div className="space-y-2">
               <Label htmlFor="backlogDetails">Details (optional)</Label>
               <Textarea

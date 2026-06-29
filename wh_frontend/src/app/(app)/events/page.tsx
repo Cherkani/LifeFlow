@@ -5,14 +5,13 @@ import { CalendarDays, ChevronLeft, ChevronRight, ListTodo } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card";
 import { LifeSummaryBand } from "@/components/life/life-context";
 import { WorkflowNav } from "@/components/life/workflow-nav";
-import { getCalendarEventTypeUsage, getCalendarEventTypes, getCalendarEvents, getCalendarUndatedEvents } from "@/lib/queries";
+import { getCalendarEvents, getCalendarUndatedEvents } from "@/lib/queries";
 import { requireAppContext } from "@/lib/server-context";
 import { startOfIsoWeek } from "@/lib/utils";
 
 import { EventsAddEvent } from "./events-add-event";
 import { EventsBacklogContent } from "./events-backlog-content";
 import { EventsList } from "./events-list";
-import { EventsTypesContent } from "./events-types-content";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +28,17 @@ type CalendarEvent = {
   event_date: string | null;
   event_time: string | null;
   event_type: string;
+  objective_id: string | null;
+  habit_id: string | null;
+  habit_session_id: string | null;
+  completed_at: string | null;
+  completed_on: string | null;
+};
+
+type ObjectiveOption = {
+  id: string;
+  title: string;
+  measurement_mode: "quantitative" | "qualitative";
 };
 
 function isIsoDate(value: string | undefined) {
@@ -62,7 +72,7 @@ function formatLongDate(date: Date) {
   return `${month} ${ordinal(date.getDate())}, ${date.getFullYear()}`;
 }
 
-function buildEventsHref(month: string, date: string, view: "scheduled" | "backlog" | "types" = "scheduled") {
+function buildEventsHref(month: string, date: string, view: "scheduled" | "backlog" = "scheduled") {
   const query = new URLSearchParams();
   query.set("month", month);
   query.set("date", date);
@@ -80,7 +90,7 @@ export default async function EventsPage({
   const selectedDate = isIsoDate(params.date) ? new Date(`${params.date}T00:00:00`) : new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
   const monthDate = parseMonth(params.month, selectedDate);
-  const activeView = params.view === "backlog" || params.view === "types" ? params.view : "scheduled";
+  const activeView = params.view === "backlog" ? "backlog" : "scheduled";
   const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
   const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
   const monthKey = `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, "0")}`;
@@ -99,22 +109,18 @@ export default async function EventsPage({
     formatDateKey(monthEnd)
   )) as CalendarEvent[];
   const allBacklogEvents = (await getCalendarUndatedEvents(supabase, account.accountId)) as CalendarEvent[];
-  const eventTypeRows = await getCalendarEventTypes(supabase, account.accountId);
-  const eventTypeUsageRows = await getCalendarEventTypeUsage(supabase, account.accountId);
+  const { data: objectiveRows } = await supabase
+    .from("habit_objectives")
+    .select("id, title, measurement_mode")
+    .eq("account_id", account.accountId)
+    .order("title");
   const events = allEvents;
   const backlogEvents = allBacklogEvents;
-  const eventTypes = eventTypeRows.map((type) => type.name);
-  const eventTypeUsage = new Map<string, number>();
-  for (const row of eventTypeUsageRows) {
-    const key = row.event_type.trim();
-    if (!key) continue;
-    eventTypeUsage.set(key, (eventTypeUsage.get(key) ?? 0) + 1);
-  }
-  const eventTypesWithUsage = eventTypeRows.map((type) => ({
-    id: type.id,
-    name: type.name,
-    usageCount: eventTypeUsage.get(type.name.trim()) ?? 0
-  }));
+  const objectives = ((objectiveRows ?? []) as Array<{ id: string; title: string; measurement_mode?: "quantitative" | "qualitative" | null }>).map((objective) => ({
+    id: objective.id,
+    title: objective.title,
+    measurement_mode: objective.measurement_mode ?? "quantitative"
+  })) satisfies ObjectiveOption[];
 
   const eventsByDate = new Map<string, CalendarEvent[]>();
   for (const event of events) {
@@ -189,17 +195,6 @@ export default async function EventsPage({
                 <ListTodo size={16} />
                 Backlog
               </Link>
-              <Link
-                href={buildEventsHref(monthKey, selectedIso, "types") as Route}
-                className={[
-                  "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
-                  activeView === "types"
-                    ? "bg-[var(--app-btn-primary-bg)] text-[var(--app-btn-primary-fg)] shadow-sm"
-                    : "text-[var(--app-btn-secondary-fg)] hover:bg-[var(--app-btn-secondary-bg)]"
-                ].join(" ")}
-              >
-                Types
-              </Link>
             </div>
           </div>
         </CardContent>
@@ -214,7 +209,7 @@ export default async function EventsPage({
                 <EventsAddEvent
                   monthKey={monthKey}
                   selectedIso={selectedIso}
-                  eventTypes={eventTypes}
+                  objectives={objectives}
                 />
               </div>
 
@@ -290,26 +285,20 @@ export default async function EventsPage({
                 monthKey={monthKey}
                 selectedIso={selectedIso}
                 view="scheduled"
-                eventTypes={eventTypes}
+                objectives={objectives}
               />
             </CardContent>
           </Card>
         </div>
-      ) : activeView === "backlog" ? (
+      ) : (
         <Card>
           <CardContent className="space-y-5 py-6">
             <EventsBacklogContent
               backlogEvents={backlogEvents}
               monthKey={monthKey}
               selectedIso={selectedIso}
-              eventTypes={eventTypes}
+              objectives={objectives}
             />
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="space-y-5 py-6">
-            <EventsTypesContent monthKey={monthKey} selectedIso={selectedIso} eventTypes={eventTypesWithUsage} />
           </CardContent>
         </Card>
       )}

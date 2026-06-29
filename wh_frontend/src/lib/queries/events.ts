@@ -7,15 +7,11 @@ export type CalendarEventRow = {
   event_date: string | null;
   event_time: string | null;
   event_type: string;
-};
-
-export type CalendarEventTypeRow = {
-  id: string;
-  name: string;
-};
-
-export type CalendarEventTypeUsageRow = {
-  event_type: string;
+  objective_id: string | null;
+  habit_id: string | null;
+  habit_session_id: string | null;
+  completed_at: string | null;
+  completed_on: string | null;
 };
 
 export async function getCalendarEvents(
@@ -26,7 +22,7 @@ export async function getCalendarEvents(
 ): Promise<CalendarEventRow[]> {
   const { data } = await supabase
     .from("calendar_events")
-    .select("id, title, details, event_date, event_time, event_type")
+    .select("id, title, details, event_date, event_time, event_type, objective_id, habit_id, habit_session_id, completed_at, completed_on")
     .eq("account_id", accountId)
     .gte("event_date", monthStart)
     .lte("event_date", monthEnd)
@@ -40,32 +36,9 @@ export async function getCalendarUndatedEvents(
 ): Promise<CalendarEventRow[]> {
   const { data } = await supabase
     .from("calendar_events")
-    .select("id, title, details, event_date, event_time, event_type")
+    .select("id, title, details, event_date, event_time, event_type, objective_id, habit_id, habit_session_id, completed_at, completed_on")
     .eq("account_id", accountId)
     .is("event_date", null)
     .order("created_at", { ascending: true });
   return (data ?? []) as CalendarEventRow[];
-}
-
-export async function getCalendarEventTypes(
-  supabase: Supabase,
-  accountId: string
-): Promise<CalendarEventTypeRow[]> {
-  const { data } = await supabase
-    .from("calendar_event_types")
-    .select("id, name")
-    .eq("account_id", accountId)
-    .order("name", { ascending: true });
-  return (data ?? []) as CalendarEventTypeRow[];
-}
-
-export async function getCalendarEventTypeUsage(
-  supabase: Supabase,
-  accountId: string
-): Promise<CalendarEventTypeUsageRow[]> {
-  const { data } = await supabase
-    .from("calendar_events")
-    .select("event_type")
-    .eq("account_id", accountId);
-  return (data ?? []) as CalendarEventTypeUsageRow[];
 }

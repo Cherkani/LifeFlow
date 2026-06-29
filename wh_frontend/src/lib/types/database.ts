@@ -385,6 +385,11 @@ export type Database = {
           account_id: string;
           phase_id: string | null;
           project_id: string | null;
+          objective_id: string | null;
+          habit_id: string | null;
+          habit_session_id: string | null;
+          completed_at: string | null;
+          completed_on: string | null;
           title: string;
           details: string | null;
           event_date: string | null;
@@ -398,6 +403,11 @@ export type Database = {
           account_id: string;
           phase_id?: string | null;
           project_id?: string | null;
+          objective_id?: string | null;
+          habit_id?: string | null;
+          habit_session_id?: string | null;
+          completed_at?: string | null;
+          completed_on?: string | null;
           title: string;
           details?: string | null;
           event_date?: string | null;
@@ -411,6 +421,11 @@ export type Database = {
           account_id?: string;
           phase_id?: string | null;
           project_id?: string | null;
+          objective_id?: string | null;
+          habit_id?: string | null;
+          habit_session_id?: string | null;
+          completed_at?: string | null;
+          completed_on?: string | null;
           title?: string;
           details?: string | null;
           event_date?: string | null;

@@ -36,6 +36,11 @@ type CalendarEvent = {
   event_date: string | null;
   event_time: string | null;
   event_type: string;
+  objective_id: string | null;
+  habit_id: string | null;
+  habit_session_id: string | null;
+  completed_at: string | null;
+  completed_on: string | null;
 };
 
 type Objective = { id: string; title: string; image_url: string | null };
@@ -306,9 +311,9 @@ export function ExecutionBoard({
                               <p className="truncate text-xs font-semibold text-[var(--app-text-strong)]">{event.title || "Calendar item"}</p>
                               <p className="text-[10px] uppercase tracking-wide text-[var(--app-text-muted)]">
                                 {getCalendarEventModeLabel(parsed.mode)}
-                                {" · "}
-                                {event.event_type}
+                                {event.objective_id && objectiveById[event.objective_id] ? ` · ${objectiveById[event.objective_id].title}` : ""}
                                 {event.event_time ? ` · ${event.event_time}` : ""}
+                                {event.completed_at ? " · done" : ""}
                               </p>
                               {parsed.details ? <p className="mt-1 text-[10px] text-[var(--app-text-muted)]">{parsed.details}</p> : null}
                             </div>

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { CirclePlus } from "lucide-react";
+import Link from "next/link";
+import type { Route } from "next";
 
 import { createCalendarEventFormAction } from "@/app/(app)/events/actions";
 import { ActionForm } from "@/components/forms/action-form";
@@ -11,12 +13,11 @@ import { ModalShell } from "@/components/ui/modal-shell";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { SubmitButton } from "@/components/forms/submit-button";
-import { EventsTypeField } from "./events-type-field";
 
 type EventsAddEventProps = {
   monthKey: string;
   selectedIso: string;
-  eventTypes: string[];
+  objectives: Array<{ id: string; title: string; measurement_mode: "quantitative" | "qualitative" }>;
 };
 
 function buildEventsHref(month: string, date: string, modal?: string) {
@@ -27,7 +28,7 @@ function buildEventsHref(month: string, date: string, modal?: string) {
   return `/events?${query.toString()}`;
 }
 
-export function EventsAddEvent({ monthKey, selectedIso, eventTypes }: EventsAddEventProps) {
+export function EventsAddEvent({ monthKey, selectedIso, objectives }: EventsAddEventProps) {
   const [isOpen, setIsOpen] = useState(false);
   const closeModalHref = buildEventsHref(monthKey, selectedIso);
 
@@ -43,7 +44,7 @@ export function EventsAddEvent({ monthKey, selectedIso, eventTypes }: EventsAddE
       </button>
 
       {isOpen ? (
-        <ModalShell title="Add Calendar Event" description="Add any dated event with your own custom type." onClose={() => setIsOpen(false)}>
+        <ModalShell title="Add Calendar Event" description="Schedule an event or objective-linked to-do." onClose={() => setIsOpen(false)}>
           <ActionForm
             action={createCalendarEventFormAction}
             className="space-y-4"
@@ -51,6 +52,7 @@ export function EventsAddEvent({ monthKey, selectedIso, eventTypes }: EventsAddE
             refreshOnly
           >
             <input type="hidden" name="returnPath" value={closeModalHref} />
+            <input type="hidden" name="eventType" value="General" />
             <div className="space-y-2">
               <Label htmlFor="eventTitle">Title</Label>
               <Input
@@ -77,8 +79,26 @@ export function EventsAddEvent({ monthKey, selectedIso, eventTypes }: EventsAddE
                 <Label htmlFor="eventTime">Time (optional)</Label>
                 <Input id="eventTime" name="eventTime" type="time" />
               </div>
-              <div className="sm:col-span-2">
-                <EventsTypeField fieldId="eventType" name="eventType" savedTypes={eventTypes} defaultValue={eventTypes[0] ?? "General"} />
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="objectiveId">Objective (for to-dos and milestones)</Label>
+                {objectives.length > 0 ? (
+                  <Select id="objectiveId" name="objectiveId" defaultValue="">
+                    <option value="">No objective</option>
+                    {objectives.map((objective) => (
+                      <option key={objective.id} value={objective.id}>
+                        {objective.title} · {objective.measurement_mode}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  <p className="rounded-lg border border-[#d7e0f1] bg-[#f8fafc] p-3 text-sm text-[#4a5f83]">
+                    No objectives yet. Create one in{" "}
+                    <Link href={"/planning" as Route} className="font-semibold text-[#23406d] underline">
+                      Planner
+                    </Link>{" "}
+                    to sync calendar to-dos into Execution.
+                  </p>
+                )}
               </div>
             </div>
             <div className="space-y-2">

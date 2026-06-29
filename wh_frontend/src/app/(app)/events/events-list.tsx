@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Star, Trash2 } from "lucide-react";
+import { CheckCircle2, Circle, Pencil, Star, Trash2 } from "lucide-react";
 
 import {
   deleteCalendarEventFormAction,
+  toggleCalendarEventDoneFormAction,
   updateCalendarEventFormAction
 } from "@/app/(app)/events/actions";
 import { ActionForm } from "@/components/forms/action-form";
@@ -18,7 +19,6 @@ import {
   getCalendarEventModeLabel,
   parseCalendarEventDetails
 } from "@/lib/calendar-event-mode";
-import { EventsTypeField } from "./events-type-field";
 
 type CalendarEvent = {
   id: string;
@@ -27,6 +27,11 @@ type CalendarEvent = {
   event_date: string | null;
   event_time: string | null;
   event_type: string;
+  objective_id: string | null;
+  habit_id: string | null;
+  habit_session_id: string | null;
+  completed_at: string | null;
+  completed_on: string | null;
 };
 
 type EventsListProps = {
@@ -35,7 +40,7 @@ type EventsListProps = {
   selectedIso: string;
   view?: "scheduled" | "backlog";
   emptyMessage?: string;
-  eventTypes?: string[];
+  objectives: Array<{ id: string; title: string; measurement_mode: "quantitative" | "qualitative" }>;
 };
 
 function formatTime(time: string) {
@@ -60,12 +65,13 @@ export function EventsList({
   selectedIso,
   view = "scheduled",
   emptyMessage,
-  eventTypes = []
+  objectives
 }: EventsListProps) {
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [deletingEvent, setDeletingEvent] = useState<CalendarEvent | null>(null);
   const returnPath = buildEventsHref(monthKey, selectedIso, view);
   const fallbackEmptyMessage = emptyMessage ?? "No events scheduled for this day.";
+  const objectiveById = new Map(objectives.map((objective) => [objective.id, objective]));
 
   return (
     <>
@@ -87,15 +93,51 @@ export function EventsList({
                         <span className="shrink-0 text-xs text-[#4a5f83]">{formatTime(event.event_time)}</span>
                       ) : null}
                       <span className="shrink-0 rounded-full bg-[#edf3ff] px-2 py-0.5 text-xs font-semibold text-[#23406d]">
-                        {event.event_type}
+                        {event.objective_id ? objectiveById.get(event.objective_id)?.title ?? "Objective" : "No objective"}
                       </span>
                       <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#475569]">
                         {getCalendarEventModeLabel(parsed.mode)}
                       </span>
+                      {event.completed_at ? (
+                        <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                          Done
+                        </span>
+                      ) : null}
                     </div>
                     {parsed.details ? <p className="text-xs text-[#4a5f83]">{parsed.details}</p> : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
+                    {parsed.mode !== "event" ? (
+                      <ActionForm action={toggleCalendarEventDoneFormAction} className="inline" refreshOnly>
+                        <input type="hidden" name="returnPath" value={returnPath} />
+                        <input type="hidden" name="eventId" value={event.id} />
+                        <input type="hidden" name="completed" value={event.completed_at ? "false" : "true"} />
+                        <input type="hidden" name="doneOn" value={event.event_date ?? selectedIso} />
+                        {!event.completed_at && objectiveById.get(event.objective_id ?? "")?.measurement_mode === "quantitative" ? (
+                          <input
+                            name="doneMinutes"
+                            type="number"
+                            min={0}
+                            step={1}
+                            placeholder="min"
+                            className="h-7 w-14 rounded-md border border-[#c7d3e8] bg-white px-2 text-xs text-[#0c1d3c]"
+                            aria-label="Done minutes"
+                          />
+                        ) : null}
+                        <button
+                          type="submit"
+                          aria-label={event.completed_at ? "Mark not done" : "Mark done"}
+                          className={[
+                            "inline-flex size-7 items-center justify-center rounded-md transition",
+                            event.completed_at
+                              ? "text-emerald-700 hover:bg-emerald-100"
+                              : "text-[#4a5f83] hover:bg-[#e3ebf9] hover:text-[#0c1d3c]"
+                          ].join(" ")}
+                        >
+                          {event.completed_at ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+                        </button>
+                      </ActionForm>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => setEditingEvent(event)}
@@ -132,7 +174,7 @@ export function EventsList({
           return (
         <ModalShell
           title="Edit Calendar Event"
-          description="Update title, date, type, or details."
+          description="Update title, date, objective, or details."
           onClose={() => setEditingEvent(null)}
         >
           <ActionForm
@@ -143,6 +185,7 @@ export function EventsList({
           >
             <input type="hidden" name="returnPath" value={returnPath} />
             <input type="hidden" name="eventId" value={editingEvent.id} />
+            <input type="hidden" name="eventType" value="General" />
             <div className="space-y-2">
               <Label htmlFor="editEventTitle">Title</Label>
               <Input
@@ -180,8 +223,16 @@ export function EventsList({
                   defaultValue={editingEvent.event_time ?? ""}
                 />
               </div>
-              <div className="sm:col-span-2">
-                <EventsTypeField fieldId="editEventType" name="eventType" savedTypes={eventTypes} defaultValue={editingEvent.event_type} />
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="editObjectiveId">Objective (for to-dos and milestones)</Label>
+                <Select id="editObjectiveId" name="objectiveId" defaultValue={editingEvent.objective_id ?? ""}>
+                  <option value="">No objective</option>
+                  {objectives.map((objective) => (
+                    <option key={objective.id} value={objective.id}>
+                      {objective.title} · {objective.measurement_mode}
+                    </option>
+                  ))}
+                </Select>
               </div>
             </div>
             <div className="space-y-2">

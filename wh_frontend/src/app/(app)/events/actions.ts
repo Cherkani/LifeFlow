@@ -26,7 +26,8 @@ const createEventSchema = z.object({
   eventMode: z.enum(["event", "todo", "milestone"]).default("event"),
   eventDate: optionalDateSchema,
   eventTime: timeSchema,
-  eventType: z.string().trim().min(1).max(60),
+  eventType: z.string().trim().min(1).max(60).default("General"),
+  objectiveId: z.union([z.literal(""), z.string().uuid()]).optional(),
   details: z.string().trim().max(1200).optional()
 });
 
@@ -36,32 +37,37 @@ const updateEventSchema = z.object({
   eventMode: z.enum(["event", "todo", "milestone"]).default("event"),
   eventDate: optionalDateSchema,
   eventTime: timeSchema,
-  eventType: z.string().trim().min(1).max(60),
+  eventType: z.string().trim().min(1).max(60).default("General"),
+  objectiveId: z.union([z.literal(""), z.string().uuid()]).optional(),
   details: z.string().trim().max(1200).optional()
+});
+
+const toggleEventDoneSchema = z.object({
+  eventId: z.string().uuid(),
+  completed: z.enum(["true", "false"]),
+  doneOn: z.union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]).optional(),
+  doneMinutes: z.union([z.literal(""), z.coerce.number().int().min(0).max(100000)]).optional()
 });
 
 const deleteEventSchema = z.object({
   eventId: z.string().uuid()
 });
 
-const createEventTypeSchema = z.object({
-  typeName: z.string().trim().min(1).max(60)
-});
-
-const updateEventTypeSchema = z.object({
-  typeId: z.string().uuid(),
-  currentName: z.string().trim().min(1).max(60),
-  typeName: z.string().trim().min(1).max(60)
-});
-
-const deleteEventTypeSchema = z.object({
-  typeId: z.string().uuid(),
-  typeName: z.string().trim().min(1).max(60)
-});
-
 function getSafeReturnPath(raw: FormDataEntryValue | null) {
   const value = typeof raw === "string" ? raw.trim() : "";
   return value.startsWith("/events") ? value : "/events";
+}
+
+function normalizeOptionalId(value: string | undefined) {
+  return value && value.length > 0 ? value : null;
+}
+
+function todayIso() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export async function createCalendarEventAction(formData: FormData) {
@@ -72,6 +78,7 @@ export async function createCalendarEventAction(formData: FormData) {
     eventDate: formData.get("eventDate"),
     eventTime: formData.get("eventTime"),
     eventType: formData.get("eventType"),
+    objectiveId: formData.get("objectiveId"),
     details: formData.get("details")
   });
 
@@ -81,19 +88,13 @@ export async function createCalendarEventAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
-  await supabase.from("calendar_event_types").upsert(
-    {
-      account_id: account.accountId,
-      name: payload.data.eventType
-    },
-    { onConflict: "account_id,name" }
-  );
   const { error } = await supabase.from("calendar_events").insert({
     account_id: account.accountId,
     title: payload.data.title,
     event_date: payload.data.eventDate,
     event_time: payload.data.eventTime,
     event_type: payload.data.eventType,
+    objective_id: normalizeOptionalId(payload.data.objectiveId),
     details: serializeCalendarEventDetails(payload.data.eventMode, payload.data.details)
   });
 
@@ -122,6 +123,7 @@ export async function updateCalendarEventAction(formData: FormData) {
     eventDate: formData.get("eventDate"),
     eventTime: formData.get("eventTime"),
     eventType: formData.get("eventType"),
+    objectiveId: formData.get("objectiveId"),
     details: formData.get("details")
   });
 
@@ -130,13 +132,6 @@ export async function updateCalendarEventAction(formData: FormData) {
   }
 
   const { supabase, account } = await requireAppContext();
-  await supabase.from("calendar_event_types").upsert(
-    {
-      account_id: account.accountId,
-      name: payload.data.eventType
-    },
-    { onConflict: "account_id,name" }
-  );
   const { error } = await supabase
     .from("calendar_events")
     .update({
@@ -144,6 +139,7 @@ export async function updateCalendarEventAction(formData: FormData) {
       event_date: payload.data.eventDate,
       event_time: payload.data.eventTime,
       event_type: payload.data.eventType,
+      objective_id: normalizeOptionalId(payload.data.objectiveId),
       details: serializeCalendarEventDetails(payload.data.eventMode, payload.data.details)
     })
     .eq("id", payload.data.eventId)
@@ -155,6 +151,158 @@ export async function updateCalendarEventAction(formData: FormData) {
 
   revalidatePath("/events", "layout");
   return { redirectTo: returnPath };
+}
+
+export async function toggleCalendarEventDoneAction(formData: FormData) {
+  const returnPath = getSafeReturnPath(formData.get("returnPath"));
+  const payload = toggleEventDoneSchema.safeParse({
+    eventId: formData.get("eventId"),
+    completed: formData.get("completed"),
+    doneOn: formData.get("doneOn"),
+    doneMinutes: formData.get("doneMinutes")
+  });
+
+  if (!payload.success) {
+    return { redirectTo: returnPath };
+  }
+
+  const { supabase, account } = await requireAppContext();
+  const { data: event } = await supabase
+    .from("calendar_events")
+    .select("id, title, event_date, objective_id, habit_id, habit_session_id")
+    .eq("account_id", account.accountId)
+    .eq("id", payload.data.eventId)
+    .maybeSingle();
+
+  if (!event) {
+    return { redirectTo: returnPath };
+  }
+
+  if (payload.data.completed === "false") {
+    if (event.habit_session_id) {
+      await supabase
+        .from("habit_sessions")
+        .update({ completed: false, actual_minutes: null })
+        .eq("id", event.habit_session_id);
+    }
+
+    await supabase
+      .from("calendar_events")
+      .update({ completed_at: null, completed_on: null })
+      .eq("account_id", account.accountId)
+      .eq("id", event.id);
+
+    revalidatePath("/events", "layout");
+    revalidatePath("/habits", "layout");
+    return { redirectTo: returnPath };
+  }
+
+  const sessionDate = event.event_date ?? (payload.data.doneOn === "" || !payload.data.doneOn ? todayIso() : payload.data.doneOn);
+
+  if (!event.objective_id) {
+    await supabase
+      .from("calendar_events")
+      .update({
+        completed_at: new Date().toISOString(),
+        completed_on: sessionDate
+      })
+      .eq("account_id", account.accountId)
+      .eq("id", event.id);
+
+    revalidatePath("/events", "layout");
+    return { redirectTo: returnPath };
+  }
+
+  const { data: objective } = await supabase
+    .from("habit_objectives")
+    .select("id, measurement_mode")
+    .eq("account_id", account.accountId)
+    .eq("id", event.objective_id)
+    .maybeSingle();
+
+  if (!objective) {
+    return { redirectTo: returnPath };
+  }
+
+  let habitId = event.habit_id;
+  if (!habitId) {
+    const { data: existingHabit } = await supabase
+      .from("habits")
+      .select("id")
+      .eq("account_id", account.accountId)
+      .eq("objective_id", objective.id)
+      .eq("title", event.title ?? "Calendar task")
+      .maybeSingle();
+
+    if (existingHabit?.id) {
+      habitId = existingHabit.id;
+    } else {
+      const { data: newHabit } = await supabase
+        .from("habits")
+        .insert({
+          account_id: account.accountId,
+          objective_id: objective.id,
+          title: event.title ?? "Calendar task",
+          type: objective.measurement_mode === "quantitative" ? "time_tracking" : "fixed_protocol",
+          weekly_target_minutes: null,
+          minimum_minutes: 0,
+          is_active: true,
+          metadata: { source: "calendar" }
+        })
+        .select("id")
+        .single();
+      habitId = newHabit?.id ?? null;
+    }
+  }
+
+  if (!habitId) {
+    return { redirectTo: returnPath };
+  }
+
+  const actualMinutes =
+    payload.data.doneMinutes === "" || typeof payload.data.doneMinutes === "undefined"
+      ? 0
+      : payload.data.doneMinutes;
+
+  const { data: session } = await supabase
+    .from("habit_sessions")
+    .upsert(
+      {
+        habit_id: habitId,
+        session_date: sessionDate,
+        planned_minutes: 0,
+        minimum_minutes: 0,
+        actual_minutes: objective.measurement_mode === "quantitative" ? actualMinutes : 0,
+        completed: true,
+        notes: `Calendar: ${event.title ?? "Task"}`
+      },
+      { onConflict: "habit_id,session_date" }
+    )
+    .select("id")
+    .single();
+
+  await supabase
+    .from("calendar_events")
+    .update({
+      habit_id: habitId,
+      habit_session_id: session?.id ?? event.habit_session_id,
+      completed_at: new Date().toISOString(),
+      completed_on: sessionDate
+    })
+    .eq("account_id", account.accountId)
+    .eq("id", event.id);
+
+  revalidatePath("/events", "layout");
+  revalidatePath("/habits", "layout");
+  revalidatePath("/analytics", "layout");
+  return { redirectTo: returnPath };
+}
+
+export async function toggleCalendarEventDoneFormAction(
+  _prevState: RedirectResult | null,
+  formData: FormData
+): Promise<RedirectResult | null> {
+  return toggleCalendarEventDoneAction(formData);
 }
 
 export async function updateCalendarEventFormAction(
@@ -190,118 +338,4 @@ export async function deleteCalendarEventFormAction(
   formData: FormData
 ): Promise<RedirectResult | null> {
   return deleteCalendarEventAction(formData);
-}
-
-export async function createCalendarEventTypeAction(formData: FormData) {
-  const returnPath = getSafeReturnPath(formData.get("returnPath"));
-  const payload = createEventTypeSchema.safeParse({
-    typeName: formData.get("typeName")
-  });
-
-  if (!payload.success) {
-    return { redirectTo: returnPath };
-  }
-
-  const { supabase, account } = await requireAppContext();
-  await supabase.from("calendar_event_types").upsert(
-    {
-      account_id: account.accountId,
-      name: payload.data.typeName
-    },
-    { onConflict: "account_id,name" }
-  );
-
-  revalidatePath("/events", "layout");
-  return { redirectTo: returnPath };
-}
-
-export async function createCalendarEventTypeFormAction(
-  _prevState: RedirectResult | null,
-  formData: FormData
-): Promise<RedirectResult | null> {
-  return createCalendarEventTypeAction(formData);
-}
-
-export async function updateCalendarEventTypeAction(formData: FormData) {
-  const returnPath = getSafeReturnPath(formData.get("returnPath"));
-  const payload = updateEventTypeSchema.safeParse({
-    typeId: formData.get("typeId"),
-    currentName: formData.get("currentName"),
-    typeName: formData.get("typeName")
-  });
-
-  if (!payload.success) {
-    return { redirectTo: returnPath };
-  }
-
-  const { supabase, account } = await requireAppContext();
-  const nextName = payload.data.typeName;
-  const currentName = payload.data.currentName;
-
-  const { error: typeError } = await supabase
-    .from("calendar_event_types")
-    .update({ name: nextName })
-    .eq("id", payload.data.typeId)
-    .eq("account_id", account.accountId);
-
-  if (typeError) {
-    return { redirectTo: returnPath };
-  }
-
-  if (currentName !== nextName) {
-    await supabase
-      .from("calendar_events")
-      .update({ event_type: nextName })
-      .eq("account_id", account.accountId)
-      .eq("event_type", currentName);
-  }
-
-  revalidatePath("/events", "layout");
-  return { redirectTo: returnPath };
-}
-
-export async function updateCalendarEventTypeFormAction(
-  _prevState: RedirectResult | null,
-  formData: FormData
-): Promise<RedirectResult | null> {
-  return updateCalendarEventTypeAction(formData);
-}
-
-export async function deleteCalendarEventTypeAction(formData: FormData) {
-  const returnPath = getSafeReturnPath(formData.get("returnPath"));
-  const payload = deleteEventTypeSchema.safeParse({
-    typeId: formData.get("typeId"),
-    typeName: formData.get("typeName")
-  });
-
-  if (!payload.success) {
-    return { redirectTo: returnPath };
-  }
-
-  const { supabase, account } = await requireAppContext();
-  const { count } = await supabase
-    .from("calendar_events")
-    .select("*", { count: "exact", head: true })
-    .eq("account_id", account.accountId)
-    .eq("event_type", payload.data.typeName);
-
-  if ((count ?? 0) > 0) {
-    return { redirectTo: returnPath };
-  }
-
-  await supabase
-    .from("calendar_event_types")
-    .delete()
-    .eq("id", payload.data.typeId)
-    .eq("account_id", account.accountId);
-
-  revalidatePath("/events", "layout");
-  return { redirectTo: returnPath };
-}
-
-export async function deleteCalendarEventTypeFormAction(
-  _prevState: RedirectResult | null,
-  formData: FormData
-): Promise<RedirectResult | null> {
-  return deleteCalendarEventTypeAction(formData);
 }

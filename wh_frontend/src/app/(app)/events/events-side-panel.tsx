@@ -13,6 +13,11 @@ type CalendarEvent = {
   event_date: string | null;
   event_time: string | null;
   event_type: string;
+  objective_id: string | null;
+  habit_id: string | null;
+  habit_session_id: string | null;
+  completed_at: string | null;
+  completed_on: string | null;
 };
 
 type EventsSidePanelProps = {
@@ -21,6 +26,7 @@ type EventsSidePanelProps = {
   monthKey: string;
   selectedIso: string;
   selectedDateLabel: string;
+  objectives?: Array<{ id: string; title: string; measurement_mode: "quantitative" | "qualitative" }>;
 };
 
 export function EventsSidePanel({
@@ -28,7 +34,8 @@ export function EventsSidePanel({
   backlogEvents,
   monthKey,
   selectedIso,
-  selectedDateLabel
+  selectedDateLabel,
+  objectives = []
 }: EventsSidePanelProps) {
   const [tab, setTab] = useState<"scheduled" | "backlog">("scheduled");
   const isBacklog = tab === "backlog";
@@ -96,7 +103,7 @@ export function EventsSidePanel({
               </button>
             </div>
             {isBacklog ? (
-              <EventsAddBacklog monthKey={monthKey} selectedIso={selectedIso} />
+              <EventsAddBacklog monthKey={monthKey} selectedIso={selectedIso} objectives={objectives} />
             ) : null}
           </div>
         </div>
@@ -107,6 +114,7 @@ export function EventsSidePanel({
           events={backlogEvents}
           monthKey={monthKey}
           selectedIso={selectedIso}
+          objectives={objectives}
           emptyMessage="No backlog to-dos yet."
         />
       ) : (
@@ -114,6 +122,7 @@ export function EventsSidePanel({
           events={scheduledEvents}
           monthKey={monthKey}
           selectedIso={selectedIso}
+          objectives={objectives}
           emptyMessage="No events scheduled for this day."
         />
       )}
